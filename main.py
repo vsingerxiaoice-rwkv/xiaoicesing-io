@@ -80,9 +80,10 @@ if not isinstance(params, list):
 
 if args.key != 0:
     params = trans_key(params, args.key)
+    key_suffix = '%+dkey' % args.key
     if not args.title:
-        name += f'_{args.key}key'
-    print(f"音调基于原音频{args.key}key")
+        name += key_suffix
+    print(f'音调基于原音频{key_suffix}')
 
 set_hparams(print_hparams=False)
 sample_rate = hparams['audio_sample_rate']
