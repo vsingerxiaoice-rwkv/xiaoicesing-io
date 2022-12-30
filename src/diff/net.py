@@ -18,6 +18,9 @@ class AttrDict(dict):
         super(AttrDict, self).__init__(*args, **kwargs)
         self.__dict__ = self
 
+    def __getattr__(self, item):
+        return self[item]
+
     def override(self, attrs):
         if isinstance(attrs, dict):
             self.__dict__.update(**attrs)
