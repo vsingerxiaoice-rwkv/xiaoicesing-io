@@ -12,7 +12,7 @@
 Run with the command to install extra requirements for exporting the model to ONNX format.
 
 ```bash
-pip install onnx onnxsim  # Used for graph repairing and optimization
+pip install onnx==1.12.0 onnxsim==0.4.10 protobuf==3.13.0  # Used for graph repairing and optimization
 ```
 
 The `onnxruntime` package is required to run inference with ONNX model and ONNXRuntime. See the [official guide](https://onnxruntime.ai/) for instructions to install packages matching your hardware. CUDA, DirectML and default CPU are recommended since the model has been tested on these execution providers.
@@ -24,7 +24,7 @@ Note that the scripts are tested on PyTorch 1.8.
 Run with the command
 
 ```bash
-python onnx/export/export_diff_decoder.py --exp EXP [--target TARGET]
+python onnx/export/export_acoustic.py --exp EXP [--target TARGET]
 ```
 
 where `EXP` is the name of experiment, `TARGET` is the path for the target onnx file.
