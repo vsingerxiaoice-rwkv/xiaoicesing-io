@@ -37,7 +37,7 @@ Note: DPM-Solver acceleration is not currently included, but PNDM is wrapped int
 
 ### 2. Inference with ONNXRuntime
 
-See `onnx/infer/infer_diff_decoder` for details.
+See `onnx/infer/infer_acoustic.py` for details.
 
 #### Issues related to CUDAExecutionProvider
 
