@@ -1,5 +1,5 @@
 import re
-from pypinyin import pinyin, Style
+# from pypinyin import pinyin, Style
 from data_gen.data_gen_utils import PUNCS
 from tts.data_gen.txt_processors.base_text_processor import BaseTxtProcessor
 from utils.text_norm import NSWNormalizer
