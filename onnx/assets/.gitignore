@@ -2,3 +2,4 @@
 *.onnx
 *.npy
 *.wav
+temp/

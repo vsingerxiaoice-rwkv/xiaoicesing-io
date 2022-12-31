@@ -1,11 +1,9 @@
 import os
 import sys
 
-
 root_dir = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 os.environ['PYTHONPATH'] = f'"{root_dir}"'
 sys.path.insert(0, root_dir)
-
 
 import argparse
 import math
@@ -18,13 +16,70 @@ import onnx
 import onnxsim
 import torch
 import torch.nn as nn
-import torch.nn.functional as functional
+import torch.nn.functional as F
 from torch.nn import Linear
 
 from modules.commons.common_layers import Mish
+from modules.naive_frontend.encoder import Encoder
 from src.diff.net import AttrDict
 from utils import load_ckpt
 from utils.hparams import hparams, set_hparams
+from utils.phoneme_utils import build_phoneme_list
+from utils.text_encoder import TokenTextEncoder
+
+
+f0_bin = 256
+f0_max = 1100.0
+f0_min = 50.0
+f0_mel_min = 1127 * math.log(1 + f0_min / 700)
+f0_mel_max = 1127 * math.log(1 + f0_max / 700)
+
+
+def f0_to_coarse(f0):
+    f0_mel = 1127 * (1 + f0 / 700).log()
+    a = (f0_bin - 2) / (f0_mel_max - f0_mel_min)
+    b = f0_mel_min * a - 1.
+    f0_mel = torch.where(f0_mel > 0, f0_mel * a - b, f0_mel)
+    torch.clip_(f0_mel, min=1., max=float(f0_bin - 1))
+    f0_coarse = torch.round(f0_mel).long()
+    return f0_coarse
+
+
+class LengthRegulator(nn.Module):
+    # noinspection PyMethodMayBeStatic
+    def forward(self, dur):
+        token_idx = torch.arange(1, dur.shape[1] + 1, device=dur.device)[None, :, None]
+        dur_cumsum = torch.cumsum(dur, dim=1)
+        dur_cumsum_prev = F.pad(dur_cumsum, (1, -1), mode='constant', value=0)
+        pos_idx = torch.arange(dur.sum(dim=1).max(), device=dur.device)[None, None]
+        token_mask = (pos_idx >= dur_cumsum_prev[:, :, None]) & (pos_idx < dur_cumsum[:, :, None])
+        mel2ph = (token_idx * token_mask).sum(dim=1)
+        return mel2ph
+
+
+class FastSpeech2MIDILess(nn.Module):
+    def __init__(self, dictionary):
+        super().__init__()
+        self.lr = LengthRegulator()
+        self.txt_embed = nn.Embedding(len(dictionary), hparams['hidden_size'], dictionary.pad())
+        self.dur_embed = Linear(1, hparams['hidden_size'])
+        self.encoder = Encoder(self.txt_embed, hparams['hidden_size'], hparams['enc_layers'],
+                               hparams['enc_ffn_kernel_size'], num_heads=hparams['num_heads'])
+        self.pitch_embed = nn.Embedding(300, hparams['hidden_size'], dictionary.pad())
+
+    def forward(self, tokens, durations, f0):
+        durations *= tokens > 0
+        mel2ph = self.lr.forward(durations)
+        f0 *= mel2ph > 0
+        mel2ph = mel2ph[..., None].repeat((1, 1, hparams['hidden_size']))
+        dur_embed = self.dur_embed(durations.float()[:, :, None])
+        encoded = self.encoder(tokens, dur_embed)
+        encoded = F.pad(encoded, (0, 0, 1, 0))
+        encoded = torch.gather(encoded, 1, mel2ph)
+        pitch = f0_to_coarse(f0)
+        pitch_embed = self.pitch_embed(pitch)
+        condition = encoded + pitch_embed
+        return condition
 
 
 def extract(a, t):
@@ -72,25 +127,19 @@ class SinusoidalPosEmb(nn.Module):
         return emb
 
 
-class KaimingNormalConv1d(nn.Conv1d):
-    def __init__(self, *args, **kwargs):
-        super().__init__(*args, **kwargs)
-        nn.init.kaiming_normal_(self.weight)
-
-
 class ResidualBlock(nn.Module):
     def __init__(self, encoder_hidden, residual_channels, dilation):
         super().__init__()
         self.residual_channels = residual_channels
-        self.dilated_conv = KaimingNormalConv1d(
+        self.dilated_conv = nn.Conv1d(
             residual_channels,
             2 * residual_channels,
             3,
             padding=dilation,
             dilation=dilation)
         self.diffusion_projection = Linear(residual_channels, residual_channels)
-        self.conditioner_projection = KaimingNormalConv1d(encoder_hidden, 2 * residual_channels, 1)
-        self.output_projection = KaimingNormalConv1d(residual_channels, 2 * residual_channels, 1)
+        self.conditioner_projection = nn.Conv1d(encoder_hidden, 2 * residual_channels, 1)
+        self.output_projection = nn.Conv1d(residual_channels, 2 * residual_channels, 1)
 
     def forward(self, x, conditioner, diffusion_step):
         diffusion_step = self.diffusion_projection(diffusion_step).unsqueeze(-1)
@@ -121,7 +170,7 @@ class DiffNet(nn.Module):
             residual_channels=hparams['residual_channels'],
             dilation_cycle_length=hparams['dilation_cycle_length'],
         )
-        self.input_projection = KaimingNormalConv1d(in_dims, params.residual_channels, 1)
+        self.input_projection = nn.Conv1d(in_dims, params.residual_channels, 1)
         self.diffusion_embedding = SinusoidalPosEmb(params.residual_channels)
         dim = params.residual_channels
         self.mlp = nn.Sequential(
@@ -133,11 +182,10 @@ class DiffNet(nn.Module):
             ResidualBlock(params.encoder_hidden, params.residual_channels, 2 ** (i % params.dilation_cycle_length))
             for i in range(params.residual_layers)
         ])
-        self.skip_projection = KaimingNormalConv1d(params.residual_channels, params.residual_channels, 1)
-        self.output_projection = KaimingNormalConv1d(params.residual_channels, in_dims, 1)
+        self.skip_projection = nn.Conv1d(params.residual_channels, params.residual_channels, 1)
+        self.output_projection = nn.Conv1d(params.residual_channels, in_dims, 1)
         nn.init.zeros_(self.output_projection.weight)
 
-    # TODO: swap order of `diffusion_steps` and `cond`
     def forward(self, spec, diffusion_step, cond):
         """
 
@@ -149,7 +197,7 @@ class DiffNet(nn.Module):
         x = spec.squeeze(1)
         x = self.input_projection(x)  # [B, residual_channel, T]
 
-        x = functional.relu(x)
+        x = F.relu(x)
         diffusion_step = diffusion_step.float()
         diffusion_step = self.diffusion_embedding(diffusion_step)
         diffusion_step = self.mlp(diffusion_step)
@@ -164,7 +212,7 @@ class DiffNet(nn.Module):
         x = skip / math.sqrt(len(self.residual_layers))
 
         x = self.skip_projection(x)
-        x = functional.relu(x)
+        x = F.relu(x)
         x = self.output_projection(x)  # [B, mel_bins, T]
         return x.unsqueeze(1)
 
@@ -246,7 +294,7 @@ class PLMSNoisePredictor(nn.Module):
 
 
 class MelExtractor(nn.Module):
-    def __init__(self, spec_min, spec_max, keep_bins):
+    def __init__(self):
         super().__init__()
 
     def forward(self, x):
@@ -265,7 +313,7 @@ class GaussianDiffusion(nn.Module):
         self.denoise_fn = DiffNet(out_dims)
         self.naive_noise_predictor = NaiveNoisePredictor()
         self.plms_noise_predictor = PLMSNoisePredictor()
-        self.mel_extractor = MelExtractor(spec_min=spec_min, spec_max=spec_max, keep_bins=hparams['keep_bins'])
+        self.mel_extractor = MelExtractor()
 
         if 'schedule_type' in hparams.keys():
             betas = beta_schedule[hparams['schedule_type']](timesteps)
@@ -301,10 +349,6 @@ class GaussianDiffusion(nn.Module):
         self.register_buffer('spec_min', torch.FloatTensor(spec_min)[None, None, :hparams['keep_bins']])
         self.register_buffer('spec_max', torch.FloatTensor(spec_max)[None, None, :hparams['keep_bins']])
 
-        self.naive_noise_predictor = NaiveNoisePredictor()
-        self.plms_noise_predictor = PLMSNoisePredictor()
-        self.mel_extractor = MelExtractor(spec_min=spec_min, spec_max=spec_max, keep_bins=hparams['keep_bins'])
-
     def build_submodules(self):
         # Move registered buffers into submodules after loading state dict.
         self.naive_noise_predictor.register_buffer('sqrt_recip_alphas_cumprod', self.sqrt_recip_alphas_cumprod)
@@ -326,9 +370,9 @@ class GaussianDiffusion(nn.Module):
         del self.spec_max
 
     def forward(self, condition, speedup):
-        device = condition.device
         condition = condition.transpose(1, 2)  # (1, n_frames, 256) => (1, 256, n_frames)
 
+        device = condition.device
         n_frames = condition.shape[2]
         step_range = torch.arange(0, self.K_step, speedup, dtype=torch.long, device=device).flip(0)
         x = torch.randn((1, 1, self.mel_bins, n_frames), device=device)
@@ -392,19 +436,17 @@ class GaussianDiffusion(nn.Module):
         return mel
 
 
-class DiffDecoder(nn.Module):
-    def __init__(self, device):
-        super().__init__()
-        self.model = build_model()
-        self.model.eval()
-        self.model.to(device)
-
-    def forward(self, condition, speedup):
-        mel = self.model.forward(condition, speedup)  # (1, n_frames, mel_bins)
-        return mel
+def build_fs2_model(device):
+    model = FastSpeech2MIDILess(
+        dictionary=TokenTextEncoder(vocab_list=build_phoneme_list())
+    )
+    model.eval()
+    load_ckpt(model, hparams['work_dir'], 'model.fs2', strict=True)
+    model.to(device)
+    return model
 
 
-def build_model():
+def build_diff_model(device):
     model = GaussianDiffusion(
         out_dims=hparams['audio_num_mel_bins'],
         timesteps=hparams['timesteps'],
@@ -415,7 +457,36 @@ def build_model():
     model.eval()
     load_ckpt(model, hparams['work_dir'], 'model', strict=False)
     model.build_submodules()
+    model.to(device)
     return model
+
+
+class ModuleWrapper(nn.Module):
+    def __init__(self, model, name='model'):
+        super().__init__()
+        self.wrapped_name = name
+        setattr(self, name, model)
+
+    def forward(self, *args, **kwargs):
+        return getattr(self, self.wrapped_name)(*args, **kwargs)
+
+
+class FastSpeech2Wrapper(nn.Module):
+    def __init__(self, model):
+        super().__init__()
+        self.model = ModuleWrapper(model, name='fs2')
+
+    def forward(self, tokens, durations, f0):
+        return self.model(tokens, durations, f0)
+
+
+class DiffusionWrapper(nn.Module):
+    def __init__(self, model):
+        super().__init__()
+        self.model = model
+
+    def forward(self, condition, speedup):
+        return self.model(condition, speedup)
 
 
 def _fix_cast_nodes(graph, logs=None):
@@ -637,6 +708,89 @@ def _remove_unused_values(graph):
     return cleaned_values
 
 
+def _add_prefixes(model,
+                  initializer_prefix=None,
+                  value_info_prefix=None,
+                  node_prefix=None,
+                  dim_prefix=None,
+                  ignored_pattern=None):
+    initializers = set()
+    value_infos = set()
+
+    def _record_initializers_and_value_infos_recursive(subgraph):
+        # Record names in current graph
+        for initializer in subgraph.initializer:
+            if re.match(ignored_pattern, initializer.name):
+                continue
+            initializers.add(initializer.name)
+        for value_info in subgraph.value_info:
+            if re.match(ignored_pattern, value_info.name):
+                continue
+            value_infos.add(value_info.name)
+        for node in subgraph.node:
+            # For 'If' and 'Loop' nodes, do recording recursively
+            if node.op_type == 'If':
+                for attr in node.attribute:
+                    branch = onnx.helper.get_attribute_value(attr)
+                    _record_initializers_and_value_infos_recursive(branch)
+            elif node.op_type == 'Loop':
+                for attr in node.attribute:
+                    if attr.name == 'body':
+                        body = onnx.helper.get_attribute_value(attr)
+                        _record_initializers_and_value_infos_recursive(body)
+
+    def _add_prefixes_recursive(subgraph):
+        # Add prefixes in current graph
+        if initializer_prefix is not None:
+            for initializer in subgraph.initializer:
+                if re.match(ignored_pattern, initializer.name):
+                    continue
+                initializer.name = initializer_prefix + initializer.name
+        for value_info in subgraph.value_info:
+            if dim_prefix is not None:
+                for dim in value_info.type.tensor_type.shape.dim:
+                    if dim.dim_param is None or dim.dim_param == '' or re.match(ignored_pattern, dim.dim_param):
+                        continue
+                    dim.dim_param = dim_prefix + dim.dim_param
+            if value_info_prefix is None or re.match(ignored_pattern, value_info.name):
+                continue
+            value_info.name = value_info_prefix + value_info.name
+        if node_prefix is not None:
+            for node in subgraph.node:
+                if re.match(ignored_pattern, node.name):
+                    continue
+                node.name = node_prefix + node.name
+        for node in subgraph.node:
+            # For 'If' and 'Loop' nodes, rename recursively
+            if node.op_type == 'If':
+                for attr in node.attribute:
+                    branch = onnx.helper.get_attribute_value(attr)
+                    _add_prefixes_recursive(branch)
+            elif node.op_type == 'Loop':
+                for attr in node.attribute:
+                    if attr.name == 'body':
+                        body = onnx.helper.get_attribute_value(attr)
+                        _add_prefixes_recursive(body)
+            # For each node, rename its inputs and outputs
+            for i, input_value in enumerate(node.input):
+                if input_value in initializers and initializer_prefix is not None:
+                    node.input.remove(input_value)
+                    node.input.insert(i, initializer_prefix + input_value)
+                if input_value in value_infos and value_info_prefix is not None:
+                    node.input.remove(input_value)
+                    node.input.insert(i, value_info_prefix + input_value)
+            for i, output_value in enumerate(node.output):
+                if output_value in initializers and initializer_prefix is not None:
+                    node.output.remove(output_value)
+                    node.output.insert(i, initializer_prefix + output_value)
+                if output_value in value_infos and value_info_prefix is not None:
+                    node.output.remove(output_value)
+                    node.output.insert(i, value_info_prefix + output_value)
+
+    _record_initializers_and_value_infos_recursive(model.graph)
+    _add_prefixes_recursive(model.graph)
+
+
 def fix(src, target):
     model = onnx.load(src)
 
@@ -776,13 +930,58 @@ def fix(src, target):
     print('Graph fixed and optimized.')
 
 
-def export(model_path):
+def export(fs2_path, diff_path):
     set_hparams(print_hparams=False)
+    if hparams.get('use_midi', True):
+        raise NotImplementedError('Only checkpoints of MIDI-less mode are supported.')
     device = 'cuda' if torch.cuda.is_available() else 'cpu'
-    decoder = DiffDecoder(device)
-    n_frames = 10
+    fs2 = FastSpeech2Wrapper(
+        model=build_fs2_model(device)
+    )
+    diffusion = DiffusionWrapper(
+        model=build_diff_model(device)
+    )
 
     with torch.no_grad():
+        tokens = torch.tensor([[3]], dtype=torch.long, device=device)
+        durations = torch.tensor([[1]], dtype=torch.long, device=device)
+        f0 = torch.tensor([[440.]], dtype=torch.float32, device=device)
+        print('Exporting FastSpeech2...')
+        torch.onnx.export(
+            fs2,
+            (
+                tokens,
+                durations,
+                f0
+            ),
+            fs2_path,
+            input_names=[
+                'tokens',
+                'durations',
+                'f0'
+            ],
+            output_names=[
+                'condition'
+            ],
+            dynamic_axes={
+                'tokens': {
+                    1: 'n_tokens'
+                },
+                'durations': {
+                    1: 'n_tokens'
+                },
+                'f0': {
+                    1: 'n_frames'
+                }
+            },
+            opset_version=11
+        )
+        model = onnx.load(fs2_path)
+        model, check = onnxsim.simplify(model, include_subgraph=True)
+        assert check, 'Simplified ONNX model could not be validated'
+        onnx.save(model, fs2_path)
+
+        n_frames = 10
         shape = (1, 1, hparams['audio_num_mel_bins'], n_frames)
         noise_t = torch.randn(shape, device=device)
         noise_list = torch.randn((3, *shape), device=device)
@@ -791,17 +990,17 @@ def export(model_path):
         speedup = (torch.rand((), device=device) * step / 10.).long()
         step_prev = torch.maximum(step - speedup, torch.tensor(0, dtype=torch.long, device=device))
 
-        print('Tracing modules...')
-        decoder.model.denoise_fn = torch.jit.trace(
-            decoder.model.denoise_fn,
+        print('Tracing GaussianDiffusion submodules...')
+        diffusion.model.denoise_fn = torch.jit.trace(
+            diffusion.model.denoise_fn,
             (
                 noise_t,
                 step,
                 condition
             )
         )
-        decoder.model.naive_noise_predictor = torch.jit.trace(
-            decoder.model.naive_noise_predictor,
+        diffusion.model.naive_noise_predictor = torch.jit.trace(
+            diffusion.model.naive_noise_predictor,
             (
                 noise_t,
                 noise_t,
@@ -809,8 +1008,8 @@ def export(model_path):
             ),
             check_trace=False
         )
-        decoder.model.plms_noise_predictor = torch.jit.trace_module(
-            decoder.model.plms_noise_predictor,
+        diffusion.model.plms_noise_predictor = torch.jit.trace_module(
+            diffusion.model.plms_noise_predictor,
             {
                 'forward': (
                     noise_t,
@@ -836,25 +1035,25 @@ def export(model_path):
                 ),
             }
         )
-        decoder.model.mel_extractor = torch.jit.trace(
-            decoder.model.mel_extractor,
+        diffusion.model.mel_extractor = torch.jit.trace(
+            diffusion.model.mel_extractor,
             (
                 noise_t
             )
         )
 
-        decoder = torch.jit.script(decoder)
+        diffusion = torch.jit.script(diffusion)
         condition = torch.rand((1, n_frames, hparams['hidden_size']), device=device)
         speedup = torch.tensor(10, dtype=torch.long, device=device)
-        dummy = decoder.forward(condition, speedup)
+        dummy = diffusion.forward(condition, speedup)
 
         torch.onnx.export(
-            decoder,
+            diffusion,
             (
                 condition,
                 speedup
             ),
-            model_path,
+            diff_path,
             input_names=[
                 'condition',
                 'speedup'
@@ -875,8 +1074,40 @@ def export(model_path):
         print('PyTorch ONNX export finished.')
 
 
+def merge(fs2_path, diff_path, target_path):
+    fs2_model = onnx.load(fs2_path)
+    diff_model = onnx.load(diff_path)
+
+    # Add prefixes to names inside the model graph.
+    print('Adding prefixes to models...')
+    _add_prefixes(
+        fs2_model, initializer_prefix='fs2.', value_info_prefix='fs2.',
+        node_prefix='Enc_', ignored_pattern=r'model\.fs2\.'
+    )
+    _add_prefixes(
+        fs2_model, dim_prefix='enc__', ignored_pattern=r'(n_tokens)|(n_frames)'
+    )
+    _add_prefixes(
+        diff_model, initializer_prefix='diffusion.', value_info_prefix='diffusion.',
+        node_prefix='Dec_', ignored_pattern=r'model.'
+    )
+    _add_prefixes(
+        diff_model, dim_prefix='dec__', ignored_pattern='n_frames'
+    )
+    # Official onnx API does not consider sub-graphs.
+    # onnx.compose.add_prefix(fs2_model, prefix='fs2.', inplace=True)
+    # onnx.compose.add_prefix(diff_model, prefix='diffusion.', inplace=True)
+
+    merged_model = onnx.compose.merge_models(
+        fs2_model, diff_model, io_map=[('condition', 'condition')],
+        prefix1='', prefix2='', name=fs2_model.graph.name, doc_string=''
+    )
+    print('FastSpeech2 and GaussianDiffusion models merged.')
+    onnx.save(merged_model, target_path)
+
+
 if __name__ == '__main__':
-    parser = argparse.ArgumentParser(description='Export diffusion decoder to ONNX')
+    parser = argparse.ArgumentParser(description='Export DiffSinger acoustic model to ONNX')
     parser.add_argument('--exp', type=str, required=True, help='Experiment to export')
     parser.add_argument('--target', required=False, type=str, help='Path of the target ONNX model')
     args = parser.parse_args()
@@ -896,13 +1127,17 @@ if __name__ == '__main__':
         exp
     ]
 
-    path = f'onnx/assets/{exp}.onnx' if not target else target
-    export(path)
-    fix(path, path)
+    diff_model_path = f'onnx/assets/{exp}.onnx' if not target else target
+    os.makedirs(f'onnx/assets/temp', exist_ok=True)
+    fs2_model_path = f'onnx/assets/temp/fs2.onnx'
+    export(fs2_path=fs2_model_path, diff_path=diff_model_path)
+    fix(diff_model_path, diff_model_path)
+    merge(fs2_path=fs2_model_path, diff_path=diff_model_path, target_path=diff_model_path)
+    os.remove(fs2_model_path)
 
     os.chdir(cwd)
     if args.target:
         log_path = os.path.abspath(args.target)
     else:
-        log_path = path
+        log_path = diff_model_path
     print(f'| export \'model\' to \'{log_path}\'.')
