@@ -1100,8 +1100,9 @@ def merge(fs2_path, diff_path, target_path):
 
     merged_model = onnx.compose.merge_models(
         fs2_model, diff_model, io_map=[('condition', 'condition')],
-        prefix1='', prefix2='', name=fs2_model.graph.name, doc_string=''
+        prefix1='', prefix2='', doc_string=''
     )
+    merged_model.graph.name = fs2_model.graph.name
     print('FastSpeech2 and GaussianDiffusion models merged.')
     onnx.save(merged_model, target_path)
 
