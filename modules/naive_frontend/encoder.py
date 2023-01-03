@@ -38,7 +38,13 @@ class ParameterEncoder(nn.Module):
         self.txt_embed = Embedding(len(dictionary), hparams['hidden_size'], dictionary.pad())
         self.dur_embed = Linear(1, hparams['hidden_size'])
         self.encoder = Encoder(self.txt_embed, hparams['hidden_size'], hparams['enc_layers'], hparams['enc_ffn_kernel_size'], num_heads=hparams['num_heads'])
-        self.pitch_embed = Embedding(300, hparams['hidden_size'], dictionary.pad())
+        self.f0_embed_type = hparams.get('f0_embed_type', 'discrete')
+        if self.f0_embed_type == 'discrete':
+            self.pitch_embed = Embedding(300, hparams['hidden_size'], dictionary.pad())
+        elif self.f0_embed_type == 'continuous':
+            self.pitch_embed = Linear(1, hparams['hidden_size'])
+        else:
+            raise ValueError('f0_embed_type must be \'discrete\' or \'continuous\'.')
     
     def forward(self, txt_tokens, mel2ph=None, spk_embed_id=None,
                 ref_mels=None, f0=None, uv=None, energy=None, skip_decoder=False,
@@ -60,8 +66,12 @@ class ParameterEncoder(nn.Module):
         
         pitch_padding = (mel2ph == 0)
         f0_denorm = denorm_f0(f0, uv, hparams, pitch_padding=pitch_padding)
-        pitch = f0_to_coarse(f0_denorm)
-        pitch_embed = self.pitch_embed(pitch)
+        if self.f0_embed_type == 'discrete':
+            pitch = f0_to_coarse(f0_denorm)
+            pitch_embed = self.pitch_embed(pitch)
+        else:
+            f0_mel = (1 + f0_denorm / 700).log()
+            pitch_embed = self.pitch_embed(f0_mel[:, :, None])
         
         ret = {'decoder_inp': decoder_inp + pitch_embed, 'f0_denorm': f0_denorm}
         return ret

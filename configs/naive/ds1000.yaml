@@ -40,6 +40,7 @@ test_prefixes: [
 use_uv: false
 #num_valid_plots: 0
 use_midi: false
+f0_embed_type: discrete
 diff_loss_type: l2
 task_cls: src.naive_task.NaiveTask
 
