@@ -17,7 +17,7 @@ import onnxsim
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
-from torch.nn import Linear
+from torch.nn import Linear, Embedding
 
 from modules.commons.common_layers import Mish
 from modules.naive_frontend.encoder import Encoder
@@ -65,7 +65,13 @@ class FastSpeech2MIDILess(nn.Module):
         self.dur_embed = Linear(1, hparams['hidden_size'])
         self.encoder = Encoder(self.txt_embed, hparams['hidden_size'], hparams['enc_layers'],
                                hparams['enc_ffn_kernel_size'], num_heads=hparams['num_heads'])
-        self.pitch_embed = nn.Embedding(300, hparams['hidden_size'], dictionary.pad())
+        self.f0_embed_type = hparams.get('f0_embed_type', 'discrete')
+        if self.f0_embed_type == 'discrete':
+            self.pitch_embed = Embedding(300, hparams['hidden_size'], dictionary.pad())
+        elif self.f0_embed_type == 'continuous':
+            self.pitch_embed = Linear(1, hparams['hidden_size'])
+        else:
+            raise ValueError('f0_embed_type must be \'discrete\' or \'continuous\'.')
 
     def forward(self, tokens, durations, f0):
         durations *= tokens > 0
@@ -76,8 +82,12 @@ class FastSpeech2MIDILess(nn.Module):
         encoded = self.encoder(tokens, dur_embed)
         encoded = F.pad(encoded, (0, 0, 1, 0))
         encoded = torch.gather(encoded, 1, mel2ph)
-        pitch = f0_to_coarse(f0)
-        pitch_embed = self.pitch_embed(pitch)
+        if self.f0_embed_type == 'discrete':
+            pitch = f0_to_coarse(f0)
+            pitch_embed = self.pitch_embed(pitch)
+        else:
+            f0_mel = (1 + f0 / 700).log()
+            pitch_embed = self.pitch_embed(f0_mel[:, :, None])
         condition = encoded + pitch_embed
         return condition
 
