@@ -39,7 +39,7 @@ torchmetrics==0.5.0
 tensorboard==2.11.0
 tensorboard-plugin-wit==1.8.1
 protobuf==3.13.0
-# yaml
+PyYAML
 
 # It is recommended to install PyTorch manually.
 # See instructions at https://pytorch.org/get-started/previous-versions/
