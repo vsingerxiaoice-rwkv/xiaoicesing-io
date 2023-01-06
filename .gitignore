@@ -10,6 +10,7 @@ infer_out/
 *.onnx
 data/
 checkpoints/
+venv/
 
 .vscode
 WPy64-38100
