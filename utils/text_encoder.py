@@ -193,7 +193,7 @@ class TokenTextEncoder(TextEncoder):
         sentence = s
         tokens = sentence.strip().split()
         if self._replace_oov is not None:
-            tokens = [t if t in self._token_to_id else self._replace_oov
+            tokens = [t if t in self._token_to_id else self._replace_oov # Tokens that are not in the dictionary will be replaced with ",", which will result in "KeyError: ','"
                         for t in tokens]
         ret = [self._token_to_id[tok] for tok in tokens]
         return ret[::-1] if self._reverse else ret
