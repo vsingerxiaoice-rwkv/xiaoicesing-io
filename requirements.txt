@@ -15,11 +15,8 @@ audioread==3.0.0
 backcall==0.2.0
 blinker==1.4
 brotlipy==0.7.0
-# onnxruntime
 scipy==1.9.3
 numpy==1.23.5
-# onnx
-# onnxsim
 librosa==0.9.1
 matplotlib==3.6.2
 torchcrepe==0.0.17
@@ -39,11 +36,11 @@ torchmetrics==0.5.0
 tensorboard==2.11.0
 tensorboard-plugin-wit==1.8.1
 protobuf==3.13.0
-PyYAML
+PyYAML==5.3.1
+pypinyin==0.39.0
 
 # It is recommended to install PyTorch manually.
 # See instructions at https://pytorch.org/get-started/previous-versions/
 # torch==1.8.2
 # torchaudio==0.8.2
 # torchvision==0.9.2
-
