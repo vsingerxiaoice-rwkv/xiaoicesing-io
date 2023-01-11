@@ -96,7 +96,6 @@ predictor_layers: 5
 dilation_cycle_length: 4  # *
 rel_pos: true
 dur_predictor_layers: 5  # *
-max_updates: 250000
 gaussian_start: true
 pndm_speedup: 10
 
@@ -113,3 +112,6 @@ num_sanity_val_steps: 1
 max_sentences: 48
 val_check_interval: 2000
 num_valid_plots: 10
+max_updates: 320000
+permanent_ckpt_start: 120000
+permanent_ckpt_interval: 40000

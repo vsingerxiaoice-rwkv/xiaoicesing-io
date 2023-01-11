@@ -283,13 +283,16 @@ class GradientAccumulationScheduler:
 
 class LatestModelCheckpoint(ModelCheckpoint):
     def __init__(self, filepath, monitor='val_loss', verbose=0, num_ckpt_keep=5,
-                 save_weights_only=False, mode='auto', period=1, prefix='model', save_best=True):
+                 permanent_ckpt_start=0, permanent_ckpt_interval=-1, save_weights_only=False,
+                 mode='auto', period=1, prefix='model', save_best=True):
         super(ModelCheckpoint, self).__init__()
         self.monitor = monitor
         self.verbose = verbose
         self.filepath = filepath
         os.makedirs(filepath, exist_ok=True)
         self.num_ckpt_keep = num_ckpt_keep
+        self.permanent_ckpt_start = permanent_ckpt_start
+        self.permanent_ckpt_interval = permanent_ckpt_interval
         self.save_best = save_best
         self.save_weights_only = save_weights_only
         self.period = period
@@ -322,7 +325,7 @@ class LatestModelCheckpoint(ModelCheckpoint):
 
     def get_all_ckpts(self):
         return sorted(glob.glob(f'{self.filepath}/{self.prefix}_ckpt_steps_*.ckpt'),
-                      key=lambda x: -int(re.findall('.*steps\_(\d+)\.ckpt', x)[0]))
+                      key=lambda x: -int(re.findall(r'.*steps_(\d+)\.ckpt', x)[0]))
 
     def on_epoch_end(self, epoch, logs=None):
         logs = logs or {}
@@ -335,9 +338,12 @@ class LatestModelCheckpoint(ModelCheckpoint):
                 logging.info(f'Epoch {epoch:05d}@{self.task.global_step}: saving model to {filepath}')
             self._save_model(filepath)
             for old_ckpt in self.get_all_ckpts()[self.num_ckpt_keep:]:
-                # TODO: test filesystem calls
+                if self.permanent_ckpt_interval > 0:
+                    ckpt_steps = int(re.findall(r'.*steps_(\d+)\.ckpt', old_ckpt)[0])
+                    if ckpt_steps >= self.permanent_ckpt_start and ckpt_steps % self.permanent_ckpt_interval == 0:
+                        # Skip permanent checkpoints
+                        continue
                 os.remove(old_ckpt)
-                # subprocess.check_call(f'del "{old_ckpt}"', shell=True)
                 if self.verbose > 0:
                     logging.info(f'Delete ckpt: {os.path.basename(old_ckpt)}')
             current = logs.get(self.monitor)

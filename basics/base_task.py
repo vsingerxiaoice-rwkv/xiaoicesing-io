@@ -24,6 +24,7 @@ log_format = '%(asctime)s %(message)s'
 logging.basicConfig(stream=sys.stdout, level=logging.INFO,
                     format=log_format, datefmt='%m/%d %I:%M:%S %p')
 
+
 class BaseTask(nn.Module):
     '''
         Base class for training tasks.
@@ -46,6 +47,7 @@ class BaseTask(nn.Module):
         3. *validation_end* and *_validation_end*:
             postprocess the validation output.
     '''
+
     def __init__(self, *args, **kwargs):
         # dataset configs
         super(BaseTask, self).__init__(*args, **kwargs)
@@ -196,30 +198,32 @@ class BaseTask(nn.Module):
         np.random.seed(hparams['seed'])
         task = cls()
         work_dir = hparams['work_dir']
-        trainer = BaseTrainer(checkpoint_callback=LatestModelCheckpoint(
-                                  filepath=work_dir,
-                                  verbose=True,
-                                  monitor='val_loss',
-                                  mode='min',
-                                  num_ckpt_keep=hparams['num_ckpt_keep'],
-                                  save_best=hparams['save_best'],
-                                  period=1 if hparams['save_ckpt'] else 100000
-                              ),
-                              logger=TensorBoardLogger(
-                                  save_dir=work_dir,
-                                  name='lightning_logs',
-                                  version='lastest'
-                              ),
-                              gradient_clip_val=hparams['clip_grad_norm'],
-                              val_check_interval=hparams['val_check_interval'],
-                              row_log_interval=hparams['log_interval'],
-                              max_updates=hparams['max_updates'],
-                              num_sanity_val_steps=hparams['num_sanity_val_steps'] if not hparams[
-                                  'validate'] else 10000,
-                              accumulate_grad_batches=hparams['accumulate_grad_batches'])
+        trainer = BaseTrainer(
+            checkpoint_callback=LatestModelCheckpoint(
+                filepath=work_dir,
+                verbose=True,
+                monitor='val_loss',
+                mode='min',
+                num_ckpt_keep=hparams['num_ckpt_keep'],
+                permanent_ckpt_start=hparams.get('permanent_ckpt_start', 0),
+                permanent_ckpt_interval=hparams.get('permanent_ckpt_interval', -1),
+                save_best=hparams['save_best'],
+                period=1 if hparams['save_ckpt'] else 100000
+            ),
+            logger=TensorBoardLogger(
+                save_dir=work_dir,
+                name='lightning_logs',
+                version='lastest'
+            ),
+            gradient_clip_val=hparams['clip_grad_norm'],
+            val_check_interval=hparams['val_check_interval'],
+            row_log_interval=hparams['log_interval'],
+            max_updates=hparams['max_updates'],
+            num_sanity_val_steps=hparams['num_sanity_val_steps'] if not hparams['validate'] else 10000,
+            accumulate_grad_batches=hparams['accumulate_grad_batches'])
         if not hparams['infer']:  # train
             # copy_code = input(f'{hparams["save_codes"]} code backup? y/n: ') == 'y'
-            copy_code = True # backup code every time
+            copy_code = True  # backup code every time
             if copy_code:
                 t = datetime.now().strftime('%Y%m%d%H%M%S')
                 code_dir = f'{work_dir}/codes/{t}'
