@@ -1,5 +1,6 @@
 base_config:
   - configs/basics/fs2.yaml
+task_cls: tts.tasks.pe.PitchExtractionTask
 
 max_frames: 8000
 audio_sample_rate: 24000
@@ -24,7 +25,6 @@ test_num: 523
 valid_num: 348
 
 pitch_type: frame
-task_cls: tts.tasks.pe.PitchExtractionTask
 pitch_extractor_conv_layers: 2
 
 
