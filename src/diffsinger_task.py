@@ -57,7 +57,7 @@ class DiffSingerTask(DiffSpeechTask):
             loss_type=hparams['diff_loss_type'],
             spec_min=hparams['spec_min'], spec_max=hparams['spec_max'],
         )
-        if hparams['fs2_ckpt'] != '':
+        if hparams.get('fs2_ckpt', '') != '':
             utils.load_ckpt(self.model.fs2, hparams['fs2_ckpt'], 'model', strict=True)
             # self.model.fs2.decoder = None
             for k, v in self.model.fs2.named_parameters():

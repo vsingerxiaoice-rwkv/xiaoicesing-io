@@ -1,9 +1,19 @@
 # task
-base_config: configs/config_base.yaml
 task_cls: ''
+work_dir: '' # experiment directory.
+infer: false # infer
+seed: 1234
+debug: false
+save_codes:
+  - configs
+  - modules
+  - src
+  - utils
+
 #############
 # dataset
 #############
+sort_by_len: true
 raw_data_dir: ''
 processed_data_dir: ''
 binary_data_dir: ''
@@ -78,6 +88,18 @@ clip_grad_norm: 1
 ###########
 # train and eval
 ###########
+load_ckpt: ''
+save_ckpt: true
+save_best: false
+num_ckpt_keep: 3
+accumulate_grad_batches: 1
+log_interval: 100
+num_sanity_val_steps: 5  # steps of validation at the beginning
+check_val_every_n_epoch: 10
+val_check_interval: 2000
+max_epochs: 1000
+max_updates: 160000
+test_input_dir: ''
 max_tokens: 30000
 max_sentences: 100000
 max_eval_sentences: 1

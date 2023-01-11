@@ -1,6 +1,18 @@
 base_config:
-  - configs/popcs_ds_beta6.yaml
-  - configs/midi/cascade/opencs/opencpop_statis.yaml
+  - configs/basics/fs2.yaml
+
+task_cls: src.naive_task.NaiveTask
+datasets: [
+  'opencpop',
+]
+num_spk: 1
+test_prefixes: [
+    '2044',
+    '2086',
+    '2092',
+    '2093',
+    '2100',
+]
 
 audio_sample_rate: 44100
 audio_num_mel_bins: 128
@@ -18,48 +30,46 @@ binarization_args:
   with_spk_embed: false
   with_align: true
 raw_data_dir: 'data/raw/opencpop/segments'
-processed_data_dir: 'xxx'
+processed_data_dir: ''
 binary_data_dir: 'data/binary/opencpop-naive-dp'
 binarizer_cls: data_gen.opencpop.OpencpopBinarizer
 g2p_dictionary: dictionaries/opencpop-strict.txt
+pitch_extractor: 'parselmouth'
+pitch_type: frame
 spec_min: [-5]
 spec_max: [0]
 keep_bins: 128
-
-num_spk: 1
-test_prefixes: [
-    '2044',
-    '2086',
-    '2092',
-    '2093',
-    '2100',
-]
+mel_vmin: -6. #-6.
+mel_vmax: 1.5
+wav2spec_eps: 1e-6
 
 #pe_enable: true
 #pe_ckpt: 'checkpoints/0102_xiaoma_pe'
 use_uv: false
-#num_valid_plots: 0
 use_midi: false
+use_spk_embed: false
+use_spk_id: false
 f0_embed_type: discrete
-diff_loss_type: l2
-task_cls: src.naive_task.NaiveTask
 
 K_step: 1000
 timesteps: 1000
 max_beta: 0.02
+predictor_layers: 5
+rel_pos: true
+gaussian_start: true
+pndm_speedup: 10
+hidden_size: 256
+residual_layers: 20
+residual_channels: 384
+dilation_cycle_length: 4  # *
+diff_decoder_type: 'wavenet'
+diff_loss_type: l2
+schedule_type: 'linear'
+
 lr: 0.0004
 decay_steps: 50000
 max_tokens: 80000
-predictor_layers: 5
-dilation_cycle_length: 4  # *
-rel_pos: true
-max_updates: 250000
-gaussian_start: true
-pndm_speedup: 10
-
-#hidden_size: 256
-residual_layers: 20
-residual_channels: 384
 max_sentences: 48
 val_check_interval: 2000
-
+num_valid_plots: 10
+max_updates: 250000

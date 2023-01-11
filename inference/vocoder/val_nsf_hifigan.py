@@ -15,7 +15,7 @@ from utils.hparams import set_hparams, hparams
 sys.argv = [
     'inference/svs/ds_cascade.py',
     '--config',
-    'configs/midi/cascade/opencs/ds1000.yaml',
+    'configs/acoustic/nomidi.yaml',
 ]
 
 
