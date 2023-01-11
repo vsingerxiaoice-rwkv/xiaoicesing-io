@@ -24,12 +24,12 @@ pip install -r requirements.txt
 
 ```sh
 export PYTHONPATH=.
-CUDA_VISIBLE_DEVICES=0 python data_gen/binarize.py --config configs/midi/cascade/opencs/ds1000.yaml
+CUDA_VISIBLE_DEVICES=0 python data_gen/binarize.py --config configs/acoustic/nomidi.yaml
 ```
 ### 2. Training
 
 ```sh
-CUDA_VISIBLE_DEVICES=0 python run.py --config configs/midi/cascade/opencs/ds1000.yaml --exp_name $MY_DS_EXP_NAME --reset  
+CUDA_VISIBLE_DEVICES=0 python run.py --config configs/acoustic/nomidi.yaml --exp_name $MY_DS_EXP_NAME --reset  
 ```
 ### 3. Inference
 

@@ -1,7 +1,5 @@
 base_config:
   - tts/configs/base.yaml
-  - tts/configs/base_zh.yaml
-
 
 datasets: []
 test_prefixes: []
@@ -11,6 +9,7 @@ valid_num: 0
 pre_align_cls: data_gen.pre_align.SingingPreAlign
 binarizer_cls: data_gen.singing.SingingBinarizer
 pre_align_args:
+  txt_processor: zh_g2pM
   use_tone: false # for ZH
   forced_align: mfa
   use_sox: true

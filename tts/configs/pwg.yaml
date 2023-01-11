@@ -1,4 +1,5 @@
-base_config: tts/configs/base.yaml
+base_config:
+  - tts/configs/base.yaml
 task_cls: src.vocoder.pwg.PwgTask
 
 binarization_args:

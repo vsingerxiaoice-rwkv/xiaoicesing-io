@@ -1,3 +1,34 @@
+base_config:
+  - configs/base.yaml
+
+task_cls: src.diffsinger_task.DiffSingerMIDITask
+datasets: [
+  'opencpop',
+]
+
+raw_data_dir: 'data/raw/opencpop/segments'
+processed_data_dir: 'xxx'
+binarizer_cls: data_gen.opencpop.OpencpopBinarizer
+binary_data_dir: 'data/binary/opencpop-midi-dp'
+test_prefixes: [
+    '2044',
+    '2086',
+    '2092',
+    '2093',
+    '2100',
+]
+
+#switch_midi2f0_step: 174000
+use_midi: true  #  for midi exp
+use_gt_dur: false  # for further midi exp
+lambda_ph_dur: 1.0
+lambda_sent_dur: 1.0
+lambda_word_dur: 1.0
+predictor_grad: 0.1
+dur_predictor_layers: 5  # *
+mel_vmin: -6. #-6.
+mel_vmax: 1.5
+wav2spec_eps: 1e-6
 spec_min: [-6., -6., -6., -6., -6., -6., -6., -6., -6., -6., -6., -6.,
            -6., -6., -6., -6., -6., -6., -6., -6., -6., -6., -6., -6.,
            -6., -6., -6., -6., -6., -6., -6., -6., -6., -6., -6., -6.,
@@ -22,20 +53,27 @@ spec_max: [-7.9453e-01, -8.1116e-01, -6.1631e-01, -3.0679e-01, -1.3863e-01,
            -1.0024e+00, -1.0304e+00, -1.0579e+00, -1.0188e+00, -1.0500e+00,
            -1.0842e+00, -1.0923e+00, -1.1223e+00, -1.2381e+00, -1.6467e+00]
 
-mel_vmin: -6. #-6.
-mel_vmax: 1.5
-wav2spec_eps: 1e-6
+fs2_ckpt: ''  #
+#num_valid_plots: 0
 
-raw_data_dir: 'data/raw/opencpop/segments'
-processed_data_dir: 'xxx'
-binary_data_dir: 'data/binary/opencpop-midi-dp'
-datasets: [
-  'opencpop',
-]
-test_prefixes: [
-    '2044',
-    '2086',
-    '2092',
-    '2093',
-    '2100',
-]
+# for diffusion schedule
+timesteps: 1000
+K_step: 1000
+max_beta: 0.02
+max_tokens: 36000
+max_updates: 320000
+gaussian_start: True
+pndm_speedup: 40
+
+use_pitch_embed: false
+use_gt_f0: false  #  for midi exp
+
+lambda_f0: 0.
+lambda_uv: 0.
+dilation_cycle_length: 4  # *
+rel_pos: true
+predictor_layers: 5
+pe_enable: true
+pe_ckpt: 'checkpoints/0102_xiaoma_pe'
+
+
