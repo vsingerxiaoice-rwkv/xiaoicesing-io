@@ -1,16 +1,6 @@
 base_config:
-  - tts/configs/base.yaml
-task_cls: src.vocoder.hifigan.HifiGanTask
-resblock: "1"
-adam_b1: 0.8
-adam_b2: 0.99
-upsample_rates: [ 8,8,2,2 ]
-upsample_kernel_sizes: [ 16,16,4,4 ]
-upsample_initial_channel: 128
-resblock_kernel_sizes: [ 3,7,11 ]
-resblock_dilation_sizes: [ [ 1,3,5 ], [ 1,3,5 ], [ 1,3,5 ] ]
-
-lambda_mel: 45.0
+  - configs/basics/base.yaml
+task_cls: src.vocoder.pwg.PwgTask
 
 binarization_args:
   with_wav: true
@@ -21,8 +11,8 @@ test_input_dir: ''
 ###########
 # train and eval
 ###########
-max_samples: 8192
-max_sentences: 16
+max_samples: 25600
+max_sentences: 5
 max_eval_sentences: 1
 max_updates: 1000000
 val_check_interval: 2000
@@ -46,7 +36,6 @@ format: "hdf5"           # Feature file format. "npy" or "hdf5" is supported.
 #         GENERATOR NETWORK ARCHITECTURE SETTING          #
 ###########################################################
 generator_params:
-  lr: 0.0002            # Generator's learning rate.
   in_channels: 1        # Number of input channels.
   out_channels: 1       # Number of output channels.
   kernel_size: 3        # Kernel size of dilated convolution.
@@ -57,7 +46,7 @@ generator_params:
   skip_channels: 64     # Number of channels in skip conv.
   aux_channels: 80      # Number of channels for auxiliary feature conv.
   # Must be the same as num_mels.
-  aux_context_window: 0 # Context window size for auxiliary feature.
+  aux_context_window: 2 # Context window size for auxiliary feature.
   # If set to 2, previous 2 and future 2 frames will be considered.
   dropout: 0.0          # Dropout rate. 0.0 means no dropout applied.
   use_weight_norm: true # Whether to use weight norm.
@@ -111,7 +100,7 @@ generator_scheduler_params:
   # At each step size, lr will be multiplied by this parameter.
 generator_grad_norm: 10    # Generator's gradient norm.
 discriminator_optimizer_params:
-  lr: 0.0002            # Discriminator's learning rate.
+  lr: 0.00005            # Discriminator's learning rate.
   eps: 1.0e-6            # Discriminator's epsilon.
   weight_decay: 0.0      # Discriminator's weight decay coefficient.
 discriminator_scheduler_params:

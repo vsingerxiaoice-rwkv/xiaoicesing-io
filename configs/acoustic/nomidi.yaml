@@ -1,5 +1,5 @@
 base_config:
-  - tts/configs/fs2.yaml
+  - configs/basics/fs2.yaml
 
 audio_sample_rate: 44100
 audio_num_mel_bins: 128

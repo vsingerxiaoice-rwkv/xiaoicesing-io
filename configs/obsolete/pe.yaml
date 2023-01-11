@@ -1,5 +1,5 @@
 base_config:
-  - tts/configs/fs2.yaml
+  - configs/basics/fs2.yaml
 
 max_frames: 8000
 audio_sample_rate: 24000

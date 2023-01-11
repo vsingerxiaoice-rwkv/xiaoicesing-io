@@ -1,15 +1,11 @@
 base_config:
-  - configs/base.yaml
+  - configs/basics/fs2.yaml
 
 task_cls: src.diffsinger_task.DiffSingerMIDITask
 datasets: [
   'opencpop',
 ]
-
-raw_data_dir: 'data/raw/opencpop/segments'
-processed_data_dir: 'xxx'
-binarizer_cls: data_gen.opencpop.OpencpopBinarizer
-binary_data_dir: 'data/binary/opencpop-midi-dp'
+num_spk: 1
 test_prefixes: [
     '2044',
     '2086',
@@ -18,9 +14,55 @@ test_prefixes: [
     '2100',
 ]
 
+test_num: 0
+valid_num: 0
+
+pre_align_cls: data_gen.pre_align.SingingPreAlign
+pre_align_args:
+  txt_processor: zh_g2pM
+  use_tone: false # for ZH
+  forced_align: mfa
+  use_sox: true
+max_frames: 8000
+
+audio_sample_rate: 24000
+hop_size: 128            # Hop size.
+fft_size: 512           # FFT size.
+win_size: 512           # FFT size.
+fmin: 30
+fmax: 12000
+min_level_db: -120
+
+vocoder: src.vocoders.hifigan.HifiGAN
+vocoder_ckpt: checkpoints/0109_hifigan_bigpopcs_hop128
+use_nsf: true
+
+binarizer_cls: data_gen.opencpop.OpencpopBinarizer
+binarization_args:
+  with_wav: true
+  with_spk_embed: false
+  with_align: true
+raw_data_dir: 'data/raw/opencpop/segments'
+processed_data_dir: 'xxx'
+binary_data_dir: 'data/binary/opencpop-midi-dp'
+save_f0: true
+
+pitch_extractor: 'parselmouth'
+pitch_type: frame
+# config for experiments
+use_spk_embed: false
+num_valid_plots: 10
+lr: 0.001
+
+content_cond_steps: [ ] # [ 0, 10000 ]
+spk_cond_steps: [ ] # [ 0, 10000 ]
+
 #switch_midi2f0_step: 174000
 use_midi: true  #  for midi exp
 use_gt_dur: false  # for further midi exp
+use_spk_id: false
+use_pitch_embed: false
+
 lambda_ph_dur: 1.0
 lambda_sent_dur: 1.0
 lambda_word_dur: 1.0
@@ -65,15 +107,30 @@ max_updates: 320000
 gaussian_start: True
 pndm_speedup: 40
 
-use_pitch_embed: false
+diff_loss_type: l1
+diff_decoder_type: 'wavenet'
+schedule_type: 'linear'
+
+mel_loss: "ssim:0.5|l1:0.5"
+hidden_size: 256
+residual_layers: 20
+residual_channels: 256
+decay_steps: 50000
+keep_bins: 80
+
 use_gt_f0: false  #  for midi exp
 
 lambda_f0: 0.
 lambda_uv: 0.
+lambda_energy: 0.0
 dilation_cycle_length: 4  # *
 rel_pos: true
 predictor_layers: 5
 pe_enable: true
 pe_ckpt: 'checkpoints/0102_xiaoma_pe'
 
-
+# train and eval
+# max_updates: 200000
+gen_tgt_spk_id: -1
+max_sentences: 48
+num_sanity_val_steps: 1
