@@ -15,6 +15,8 @@ from src.vocoders.base_vocoder import VOCODERS
 from tts.data_gen.txt_processors.zh_g2pM import get_all_vowels
 from utils.hparams import hparams
 
+vowels = get_all_vowels()
+
 
 class File2Batch:
     '''
@@ -22,39 +24,34 @@ class File2Batch:
     '''
 
     @staticmethod
-    def file2temporary_dict():
+    def file2temporary_dict(raw_data_dir, ds_id):
         '''
             read from file, store data in temporary dicts
         '''
-        raw_data_dir = hparams['raw_data_dir']
         # meta_midi = json.load(open(os.path.join(raw_data_dir, 'meta.json')))   # [list of dict]
         utterance_labels = open(os.path.join(raw_data_dir, 'transcriptions.txt'), encoding='utf-8').readlines()
 
         all_temp_dict = {}
         for utterance_label in utterance_labels:
             song_info = utterance_label.split('|')
-            item_name = raw_item_name = song_info[0]
-            temp_dict = {}
+            item_name = song_info[0]
+            temp_dict = {
+                'wav_fn': f'{raw_data_dir}/wavs/{item_name}.wav',
+                'txt': song_info[1],
+                'ph': song_info[2],
+                'word_boundary': np.array([1 if x in vowels + ['AP', 'SP'] else 0 for x in song_info[2].split()]),
+                'ph_durs': [float(x) for x in song_info[5].split(" ")],
+                'pitch_midi': np.array([note_to_midi(x.split("/")[0]) if x != 'rest' else 0
+                                        for x in song_info[3].split(" ")]),
+                'midi_dur': np.array([float(x) for x in song_info[4].split(" ")]),
+                'is_slur': np.array([int(x) for x in song_info[6].split(" ")]),
+                'spk_id': hparams['speakers'][ds_id]
+            }
 
-            temp_dict['wav_fn'] = f'{raw_data_dir}/wavs/{item_name}.wav'
-            temp_dict['txt'] = song_info[1]
-
-            temp_dict['ph'] = song_info[2]
-            # self.item2wdb[item_name] = list(np.nonzero([1 if x in ALL_YUNMU + ['AP', 'SP'] else 0 for x in song_info[2].split()])[0])
-            vowels = get_all_vowels()
-            temp_dict['word_boundary'] = np.array(
-                [1 if x in vowels + ['AP', 'SP'] else 0 for x in song_info[2].split()])
-            temp_dict['ph_durs'] = [float(x) for x in song_info[5].split(" ")]
-
-            temp_dict['pitch_midi'] = np.array([note_to_midi(x.split("/")[0]) if x != 'rest' else 0
-                                                for x in song_info[3].split(" ")])
-            temp_dict['midi_dur'] = np.array([float(x) for x in song_info[4].split(" ")])
-            temp_dict['is_slur'] = np.array([int(x) for x in song_info[6].split(" ")])
-            temp_dict['spk_id'] = 'opencpop'
             assert temp_dict['pitch_midi'].shape == temp_dict['midi_dur'].shape == temp_dict['is_slur'].shape, \
                 (temp_dict['pitch_midi'].shape, temp_dict['midi_dur'].shape, temp_dict['is_slur'].shape)
 
-            all_temp_dict[item_name] = temp_dict
+            all_temp_dict[f'{ds_id}:{item_name}'] = temp_dict
 
         return all_temp_dict
 
@@ -104,7 +101,7 @@ class File2Batch:
                 wav, mel = VOCODERS[hparams['vocoder'].split('.')[-1]].wav2spec(temp_dict['wav_fn'])
         processed_input = {
             'item_name': item_name, 'mel': mel, 'wav': wav,
-            'sec': len(mel)*hparams["hop_size"]/hparams["audio_sample_rate"], 'len': mel.shape[0]
+            'sec': len(mel) * hparams["hop_size"] / hparams["audio_sample_rate"], 'len': mel.shape[0]
         }
         processed_input = {**temp_dict, **processed_input}  # merge two dicts
         try:

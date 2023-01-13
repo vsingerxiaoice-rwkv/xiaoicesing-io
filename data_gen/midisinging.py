@@ -8,20 +8,20 @@ MIDISINGING_ITEM_ATTRIBUTES = SINGING_ITEM_ATTRIBUTES + ['pitch_midi', 'midi_dur
 
 
 class MidiSingingBinarizer(SingingBinarizer):
-    def __init__(self, processed_data_dir=None, item_attributes=MIDISINGING_ITEM_ATTRIBUTES):
-        super().__init__(processed_data_dir, item_attributes)
+    def __init__(self, raw_data_dir=None, item_attributes=MIDISINGING_ITEM_ATTRIBUTES):
+        super().__init__(raw_data_dir, item_attributes)
 
-    def load_meta_data(self, processed_data_dir, ds_id):
+    def load_meta_data(self, raw_data_dir, ds_id):
         '''
             NOTE: this function is *isolated* from other scripts, which means
                   it may not be compatible with the current version.
         '''
         return
-        meta_midi = json.load(open(os.path.join(processed_data_dir, 'meta.json'), encoding='utf-8'))   # [list of dict]
+        meta_midi = json.load(open(os.path.join(raw_data_dir, 'meta.json'), encoding='utf-8'))   # [list of dict]
 
         for song_item in meta_midi:
             item_name = raw_item_name = song_item['item_name']
-            if len(self.processed_data_dirs) > 1:
+            if len(self.raw_data_dirs) > 1:
                 item_name = f'ds{ds_id}_{item_name}'
             
             item = {}
@@ -37,7 +37,7 @@ class MidiSingingBinarizer(SingingBinarizer):
             item['midi_dur'] = song_item['notes_dur']
             item['is_slur'] = song_item['is_slur']
             item['spk_id'] = 'pop-cs'
-            if len(self.processed_data_dirs) > 1:
+            if len(self.raw_data_dirs) > 1:
                 self.item2spk[item_name] = f"ds{ds_id}_{self.item2spk[item_name]}"
             
             self.items[item_name] = item
