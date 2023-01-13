@@ -11,7 +11,7 @@ import numpy as np
 import pandas as pd
 
 class ZhBinarizer(BaseBinarizer):
-    def __init__(self, processed_data_dir=None):
+    def __init__(self, raw_data_dir=None):
         # use force_align
         self.forced_align = self.pre_align_args['forced_align']
         self.tg_dir = None
@@ -20,23 +20,23 @@ class ZhBinarizer(BaseBinarizer):
         if self.forced_align == 'kaldi':
             self.tg_dir = 'kaldi_outputs'
         
-        super().__init__(processed_data_dir)
+        super().__init__(raw_data_dir)
         
-    def load_meta_data(self, processed_data_dir, ds_id):
-        self.meta_df = pd.read_csv(f"{processed_data_dir}/metadata_phone.csv", dtype=str)
+    def load_meta_data(self, raw_data_dir, ds_id):
+        self.meta_df = pd.read_csv(f"{raw_data_dir}/metadata_phone.csv", dtype=str)
         for r_idx, r in self.meta_df.iterrows():
             item_name = raw_item_name = r['item_name']
-            if len(self.processed_data_dirs) > 1:
+            if len(self.raw_data_dirs) > 1:
                 item_name = f'ds{ds_id}_{item_name}'
             item = {}
             item['txt'] = r['txt']
             item['ph'] = r['ph']
             item['wav_fn'] = os.path.join(hparams['raw_data_dir'], 'wavs', os.path.basename(r['wav_fn']).split('_')[1])
             item['spk_id'] = r.get('spk', 'SPK1')
-            if len(self.processed_data_dirs) > 1:
+            if len(self.raw_data_dirs) > 1:
                 item['spk_id'] = f"ds{ds_id}_{self.item2spk[item_name]}"
             if self.tg_dir is not None:
-                item['tg_fn'] = f"{processed_data_dir}/{self.tg_dir}/{raw_item_name}.TextGrid"
+                item['tg_fn'] = f"{raw_data_dir}/{self.tg_dir}/{raw_item_name}.TextGrid"
             self.items[item_name] = item
 
     def load_ph_set(self, ph_set):
