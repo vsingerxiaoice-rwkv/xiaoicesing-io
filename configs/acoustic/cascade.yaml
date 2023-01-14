@@ -62,8 +62,6 @@ spec_min: [-5]
 spec_max: [0]
 keep_bins: 128
 mel_loss: "ssim:0.5|l1:0.5"
-lambda_uv: 0.0
-lambda_energy: 0.0
 use_spk_id: false
 
 #switch_midi2f0_step: 174000
@@ -71,14 +69,14 @@ use_midi: true  #  for midi exp
 use_spk_embed: false
 use_gt_f0: false  #  for midi exp
 use_gt_dur: false  # for further midi exp
-lambda_f0: 1.0
 use_uv: false
-#lambda_uv: 1.0
-#lambda_energy: 0.1
-lambda_ph_dur: 0.3
-lambda_sent_dur: 3.0
-lambda_word_dur: 1.0
-predictor_grad: 0.1
+lambda_f0: 0.0
+lambda_uv: 0.0
+lambda_energy: 0.0
+lambda_ph_dur: 0.0
+lambda_sent_dur: 0.0
+lambda_word_dur: 0.0
+predictor_grad: 0.0
 #pe_enable: true
 #pe_ckpt: 'checkpoints/0102_xiaoma_pe'
 pitch_loss: l2
