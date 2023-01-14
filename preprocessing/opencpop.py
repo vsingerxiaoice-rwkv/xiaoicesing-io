@@ -45,7 +45,7 @@ class File2Batch:
                                         for x in song_info[3].split(" ")]),
                 'midi_dur': np.array([float(x) for x in song_info[4].split(" ")]),
                 'is_slur': np.array([int(x) for x in song_info[6].split(" ")]),
-                'spk_id': hparams['speakers'][ds_id]
+                'spk_id': ds_id
             }
 
             assert temp_dict['pitch_midi'].shape == temp_dict['midi_dur'].shape == temp_dict['is_slur'].shape, \
