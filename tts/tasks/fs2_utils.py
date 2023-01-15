@@ -62,7 +62,7 @@ class FastSpeechDataset(BaseDataset):
         item = self._get_item(index)
         max_frames = hparams['max_frames']
         spec = torch.Tensor(item['mel'])[:max_frames]
-        energy = (spec.exp() ** 2).sum(-1).sqrt()
+        # energy = (spec.exp() ** 2).sum(-1).sqrt()
         mel2ph = torch.LongTensor(item['mel2ph'])[:max_frames] if 'mel2ph' in item else None
         f0, uv = norm_interp_f0(item["f0"][:max_frames], hparams)
         phone = torch.LongTensor(item['phone'][:hparams['max_input_tokens']])
@@ -75,12 +75,13 @@ class FastSpeechDataset(BaseDataset):
             "txt_token": phone,
             "mel": spec,
             "pitch": pitch,
-            "energy": energy,
             "f0": f0,
             "uv": uv,
             "mel2ph": mel2ph,
             "mel_nonpadding": spec.abs().sum(-1) > 0,
         }
+        if self.hparams['use_energy_embed']:
+            sample['energy'] = item['energy']
         if self.hparams['use_spk_embed']:
             sample["spk_embed"] = torch.Tensor(item['spk_embed'])
         if self.hparams['use_spk_id']:

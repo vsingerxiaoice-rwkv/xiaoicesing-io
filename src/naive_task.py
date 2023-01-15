@@ -19,7 +19,7 @@ class NaiveTask(DiffSingerMIDITask):
         mel2ph = sample['mel2ph'] # [B, T_s]
         f0 = sample['f0']
         uv = sample['uv']
-        energy = sample['energy']
+        energy = sample.get('energy')
 
         spk_embed = sample.get('spk_embed') if not hparams['use_spk_id'] else sample.get('spk_ids')
         output = model(txt_tokens, mel2ph=mel2ph, spk_embed=spk_embed,
@@ -38,7 +38,7 @@ class NaiveTask(DiffSingerMIDITask):
         txt_tokens = sample['txt_tokens']  # [B, T_t]
 
         target = sample['mels']  # [B, T_s, 80]
-        energy = sample['energy']
+        energy = sample.get('energy')
         # fs2_mel = sample['fs2_mels']
         spk_embed = sample.get('spk_embed') if not hparams['use_spk_id'] else sample.get('spk_ids')
         mel2ph = sample['mel2ph']

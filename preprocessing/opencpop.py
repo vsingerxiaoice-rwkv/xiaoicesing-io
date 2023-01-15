@@ -140,7 +140,6 @@ class File2Batch:
         f0 = utils.collate_1d([s['f0'] for s in samples], 0.0)
         pitch = utils.collate_1d([s['pitch'] for s in samples])
         uv = utils.collate_1d([s['uv'] for s in samples])
-        energy = utils.collate_1d([s['energy'] for s in samples], 0.0)
         mel2ph = utils.collate_1d([s['mel2ph'] for s in samples], 0.0) \
             if samples[0]['mel2ph'] is not None else None
         mels = utils.collate_2d([s['mel'] for s in samples], 0.0)
@@ -157,12 +156,12 @@ class File2Batch:
             'mels': mels,
             'mel_lengths': mel_lengths,
             'mel2ph': mel2ph,
-            'energy': energy,
             'pitch': pitch,
             'f0': f0,
             'uv': uv,
         }
-
+        if hparams['use_energy_embed']:
+            batch['energy'] = utils.collate_1d([s['energy'] for s in samples], 0.0)
         if hparams['use_spk_embed']:
             spk_embed = torch.stack([s['spk_embed'] for s in samples])
             batch['spk_embed'] = spk_embed
