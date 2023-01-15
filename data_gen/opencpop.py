@@ -24,10 +24,10 @@ from utils.hparams import hparams
 class OpencpopBinarizer(MidiSingingBinarizer):
     def split_train_test_set(self, item_names):
         item_names = set(deepcopy(item_names))
-        prefixes = set(deepcopy(hparams['test_prefixes']))
+        prefixes = set([str(pr) for pr in hparams['test_prefixes']])
         test_item_names = set()
         # Add prefixes that specified speaker index and matches exactly item name to test set
-        for prefix in hparams['test_prefixes']:
+        for prefix in deepcopy(prefixes):
             if prefix in item_names:
                 test_item_names.add(prefix)
                 prefixes.remove(prefix)
