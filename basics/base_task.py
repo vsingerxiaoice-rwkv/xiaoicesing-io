@@ -220,20 +220,24 @@ class BaseTask(nn.Module):
             row_log_interval=hparams['log_interval'],
             max_updates=hparams['max_updates'],
             num_sanity_val_steps=hparams['num_sanity_val_steps'] if not hparams['validate'] else 10000,
-            accumulate_grad_batches=hparams['accumulate_grad_batches'])
+            accumulate_grad_batches=hparams['accumulate_grad_batches']
+        )
         if not hparams['infer']:  # train
             # copy_code = input(f'{hparams["save_codes"]} code backup? y/n: ') == 'y'
             copy_code = True  # backup code every time
             if copy_code:
                 t = datetime.now().strftime('%Y%m%d%H%M%S')
                 code_dir = f'{work_dir}/codes/{t}'
-                # TODO: test filesystem calls
                 os.makedirs(code_dir, exist_ok=True)
-                # subprocess.check_call(f'mkdir "{code_dir}"', shell=True)
                 for c in hparams['save_codes']:
                     shutil.copytree(c, code_dir, dirs_exist_ok=True)
-                    # subprocess.check_call(f'xcopy "{c}" "{code_dir}/" /s /e /y', shell=True)
                 print(f"| Copied codes to {code_dir}.")
+            # Copy spk_map.json to work dir
+            spk_map = os.path.join(work_dir, 'spk_map.json')
+            spk_map_orig = os.path.join(hparams['binary_data_dir'], 'spk_map.json')
+            if not os.path.exists(spk_map) and os.path.exists(spk_map_orig):
+                shutil.copy(spk_map_orig, spk_map)
+                print(f"| Copied spk map to {spk_map}.")
             trainer.checkpoint_callback.task = task
             trainer.fit(task)
         else:
