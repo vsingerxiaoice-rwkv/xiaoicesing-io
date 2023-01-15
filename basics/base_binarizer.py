@@ -174,8 +174,7 @@ class BaseBinarizer:
                     f0s.append(item['f0'])
         else:
             # code for single cpu processing
-            for i in tqdm(reversed(range(len(args))), total=len(args)):
-                a = args[i]
+            for a in tqdm(args):
                 item = self.process_item(*a)
                 if item is None:
                     continue
