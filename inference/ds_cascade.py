@@ -124,7 +124,7 @@ class DiffSingerCascadeInfer(BaseSVSInfer):
         ph = [item['ph']]
         txt_tokens = torch.LongTensor(item['ph_token'])[None, :].to(self.device)
         txt_lengths = torch.LongTensor([txt_tokens.shape[1]]).to(self.device)
-        spk_ids = torch.LongTensor([item['spk_id']]).to(self.device)
+        spk_ids = torch.LongTensor([item['spk_id']]).to(self.device) if hparams['use_spk_id'] else None
 
         pitch_midi = torch.LongTensor(item['pitch_midi'])[None, :hparams['max_frames']].to(self.device)
         midi_dur = torch.FloatTensor(item['midi_dur'])[None, :hparams['max_frames']].to(self.device)
