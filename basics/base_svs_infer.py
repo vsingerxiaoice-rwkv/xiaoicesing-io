@@ -2,21 +2,16 @@
 import os
 
 import torch
-import numpy as np
-from src.vocoders.base_vocoder import VOCODERS
+from pypinyin import lazy_pinyin
 
-from utils import load_ckpt
+from src.vocoders.base_vocoder import VOCODERS
 from utils.hparams import set_hparams, hparams
-import librosa
-import glob
-import re
 from utils.phoneme_utils import build_g2p_dictionary, build_phoneme_list
 from utils.text_encoder import TokenTextEncoder
-from pypinyin import pinyin, lazy_pinyin, Style
 
 
 class BaseSVSInfer:
-    '''
+    """
         Base class for SVS inference models.
         1. *example_run* and *infer_once*:
             the overall pipeline;
@@ -33,7 +28,8 @@ class BaseSVSInfer:
             pass it to the pre-built vocoder);
         3. *preprocess_input*:
             how to preprocess user input.
-    '''
+    """
+
     def __init__(self, hparams, device=None, load_model=True, load_vocoder=True):
         if device is None:
             device = 'cuda' if torch.cuda.is_available() else 'cpu'
@@ -67,14 +63,15 @@ class BaseSVSInfer:
         return vocoder
 
     def run_vocoder(self, c, **kwargs):
-        y = self.vocoder.spec2wav_torch(c,**kwargs)
+        y = self.vocoder.spec2wav_torch(c, **kwargs)
         return y[None]
 
     def preprocess_word_level_input(self, inp):
         # Pypinyin can't solve polyphonic words
         text_raw = inp['text'].replace('最长', '最常').replace('长睫毛', '常睫毛') \
             .replace('那么长', '那么常').replace('多长', '多常') \
-            .replace('很长', '很常')  # We hope someone could provide a better g2p module for us by opening pull requests.
+            .replace('很长',
+                     '很常')  # We hope someone could provide a better g2p module for us by opening pull requests.
 
         # lyric
         pinyins = lazy_pinyin(text_raw, strict=False)
@@ -86,14 +83,10 @@ class BaseSVSInfer:
         note_per_word_lst = [x.strip() for x in inp['notes'].split('|') if x.strip() != '']
         mididur_per_word_lst = [x.strip() for x in inp['notes_duration'].split('|') if x.strip() != '']
 
-        if len(note_per_word_lst) == len(ph_per_word_lst) == len(mididur_per_word_lst):
-            print('Pass word-notes check.')
-        else:
-            print('The number of words does\'t match the number of notes\' windows. ',
-                  'You should split the note(s) for each word by | mark.')
-            print(ph_per_word_lst, note_per_word_lst, mididur_per_word_lst)
-            print(len(ph_per_word_lst), len(note_per_word_lst), len(mididur_per_word_lst))
-            return None
+        if not len(note_per_word_lst) == len(ph_per_word_lst) == len(mididur_per_word_lst):
+            raise RuntimeError('The number of words does\'t match the number of notes\' windows: '
+                               f'{len(ph_per_word_lst)} {len(note_per_word_lst)} {len(mididur_per_word_lst)}\n',
+                               'You should split the note(s) for each word by | mark.')
 
         note_lst = []
         ph_lst = []
@@ -132,13 +125,10 @@ class BaseSVSInfer:
                     is_slur.append(1)
         ph_seq = ' '.join(ph_lst)
 
-        if len(ph_lst) == len(note_lst) == len(midi_dur_lst):
-            print(len(ph_lst), len(note_lst), len(midi_dur_lst))
-            print('Pass word-notes check.')
-        else:
-            print('The number of words does\'t match the number of notes\' windows. ',
-                  'You should split the note(s) for each word by | mark.')
-            return None
+        if not len(ph_lst) == len(note_lst) == len(midi_dur_lst):
+            raise RuntimeError('The number of words does\'t match the number of notes\' windows: '
+                               f'{len(ph_lst)} {len(note_lst)} {len(midi_dur_lst)}\n',
+                               'You should split the note(s) for each word by | mark.')
         return ph_seq, note_lst, midi_dur_lst, is_slur
 
     def preprocess_input(self, inp, input_type):
@@ -168,26 +158,25 @@ class BaseSVSInfer:
         from utils.audio import save_wav
         save_wav(out, target, hparams['audio_sample_rate'])
 
-
 # if __name__ == '__main__':
-    # debug
-    # a = BaseSVSInfer(hparams)
-    # a.preprocess_input({'text': '你 说 你 不 SP 懂 为 何 在 这 时 牵 手 AP',
-    #                     'notes': 'D#4/Eb4 | D#4/Eb4 | D#4/Eb4 | D#4/Eb4 | rest | D#4/Eb4 | D4 | D4 | D4 | D#4/Eb4 | F4 | D#4/Eb4 | D4 | rest',
-    #                     'notes_duration': '0.113740 | 0.329060 | 0.287950 | 0.133480 | 0.150900 | 0.484730 | 0.242010 | 0.180820 | 0.343570 | 0.152050 | 0.266720 | 0.280310 | 0.633300 | 0.444590'
-    #                     })
+# debug
+# a = BaseSVSInfer(hparams)
+# a.preprocess_input({'text': '你 说 你 不 SP 懂 为 何 在 这 时 牵 手 AP',
+#                     'notes': 'D#4/Eb4 | D#4/Eb4 | D#4/Eb4 | D#4/Eb4 | rest | D#4/Eb4 | D4 | D4 | D4 | D#4/Eb4 | F4 | D#4/Eb4 | D4 | rest',
+#                     'notes_duration': '0.113740 | 0.329060 | 0.287950 | 0.133480 | 0.150900 | 0.484730 | 0.242010 | 0.180820 | 0.343570 | 0.152050 | 0.266720 | 0.280310 | 0.633300 | 0.444590'
+#                     })
 
-    # b = {
-    #     'text': '小酒窝长睫毛AP是你最美的记号',
-    #     'notes': 'C#4/Db4 | F#4/Gb4 | G#4/Ab4 | A#4/Bb4 F#4/Gb4 | F#4/Gb4 C#4/Db4 | C#4/Db4 | rest | C#4/Db4 | A#4/Bb4 | G#4/Ab4 | A#4/Bb4 | G#4/Ab4 | F4 | C#4/Db4',
-    #     'notes_duration': '0.407140 | 0.376190 | 0.242180 | 0.509550 0.183420 | 0.315400 0.235020 | 0.361660 | 0.223070 | 0.377270 | 0.340550 | 0.299620 | 0.344510 | 0.283770 | 0.323390 | 0.360340'
-    # }
-    # c = {
-    #     'text': '小酒窝长睫毛AP是你最美的记号',
-    #     'ph_seq': 'x iao j iu w o ch ang ang j ie ie m ao AP sh i n i z ui m ei d e j i h ao',
-    #     'note_seq': 'C#4/Db4 C#4/Db4 F#4/Gb4 F#4/Gb4 G#4/Ab4 G#4/Ab4 A#4/Bb4 A#4/Bb4 F#4/Gb4 F#4/Gb4 F#4/Gb4 C#4/Db4 C#4/Db4 C#4/Db4 rest C#4/Db4 C#4/Db4 A#4/Bb4 A#4/Bb4 G#4/Ab4 G#4/Ab4 A#4/Bb4 A#4/Bb4 G#4/Ab4 G#4/Ab4 F4 F4 C#4/Db4 C#4/Db4',
-    #     'note_dur_seq': '0.407140 0.407140 0.376190 0.376190 0.242180 0.242180 0.509550 0.509550 0.183420 0.315400 0.315400 0.235020 0.361660 0.361660 0.223070 0.377270 0.377270 0.340550 0.340550 0.299620 0.299620 0.344510 0.344510 0.283770 0.283770 0.323390 0.323390 0.360340 0.360340',
-    #     'is_slur_seq': '0 0 0 0 0 0 0 0 1 0 0 1 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0'
-    # }  # input like Opencpop dataset.
-    # a.preprocess_input(b)
-    # a.preprocess_input(c, input_type='phoneme')
+# b = {
+#     'text': '小酒窝长睫毛AP是你最美的记号',
+#     'notes': 'C#4/Db4 | F#4/Gb4 | G#4/Ab4 | A#4/Bb4 F#4/Gb4 | F#4/Gb4 C#4/Db4 | C#4/Db4 | rest | C#4/Db4 | A#4/Bb4 | G#4/Ab4 | A#4/Bb4 | G#4/Ab4 | F4 | C#4/Db4',
+#     'notes_duration': '0.407140 | 0.376190 | 0.242180 | 0.509550 0.183420 | 0.315400 0.235020 | 0.361660 | 0.223070 | 0.377270 | 0.340550 | 0.299620 | 0.344510 | 0.283770 | 0.323390 | 0.360340'
+# }
+# c = {
+#     'text': '小酒窝长睫毛AP是你最美的记号',
+#     'ph_seq': 'x iao j iu w o ch ang ang j ie ie m ao AP sh i n i z ui m ei d e j i h ao',
+#     'note_seq': 'C#4/Db4 C#4/Db4 F#4/Gb4 F#4/Gb4 G#4/Ab4 G#4/Ab4 A#4/Bb4 A#4/Bb4 F#4/Gb4 F#4/Gb4 F#4/Gb4 C#4/Db4 C#4/Db4 C#4/Db4 rest C#4/Db4 C#4/Db4 A#4/Bb4 A#4/Bb4 G#4/Ab4 G#4/Ab4 A#4/Bb4 A#4/Bb4 G#4/Ab4 G#4/Ab4 F4 F4 C#4/Db4 C#4/Db4',
+#     'note_dur_seq': '0.407140 0.407140 0.376190 0.376190 0.242180 0.242180 0.509550 0.509550 0.183420 0.315400 0.315400 0.235020 0.361660 0.361660 0.223070 0.377270 0.377270 0.340550 0.340550 0.299620 0.299620 0.344510 0.344510 0.283770 0.283770 0.323390 0.323390 0.360340 0.360340',
+#     'is_slur_seq': '0 0 0 0 0 0 0 0 1 0 0 1 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0'
+# }  # input like Opencpop dataset.
+# a.preprocess_input(b)
+# a.preprocess_input(c, input_type='phoneme')

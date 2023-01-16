@@ -259,7 +259,6 @@ class GaussianDiffusion(nn.Module):
                 x = torch.randn(shape, device=device)
             '''
             t = self.K_step
-            print('===> gaussion start.')
             shape = (cond.shape[0], 1, self.mel_bins, cond.shape[2])
             x = torch.randn(shape, device=device)
             if hparams.get('pndm_speedup') and hparams['pndm_speedup'] > 1:
