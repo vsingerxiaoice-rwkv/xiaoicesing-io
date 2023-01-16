@@ -48,6 +48,7 @@ class BaseSVSInfer:
             if hparams['use_spk_id']:
                 with open(os.path.join(hparams['work_dir'], 'spk_map.json'), 'r', encoding='utf8') as f:
                     self.spk_map = json.load(f)
+                assert isinstance(self.spk_map, dict) and len(self.spk_map) > 0, 'Invalid or empty speaker map!'
             self.model = self.build_model()
             self.model.eval()
             self.model.to(self.device)

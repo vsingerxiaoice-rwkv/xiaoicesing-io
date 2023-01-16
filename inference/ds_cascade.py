@@ -70,8 +70,10 @@ class DiffSingerCascadeInfer(BaseSVSInfer):
         if hparams['use_spk_id']:
             spk_name = inp.get('spk_name')
             if spk_name is None:
-                spk_name = self.spk_map.keys()[0]
-                print(f'Using speaker \'{spk_name}\'.')
+                for name in self.spk_map.keys():
+                    spk_name = name
+                    break
+            print(f'Using speaker \'{spk_name}\'')
             assert spk_name in self.spk_map, f'Invalid speaker \'{spk_name}\'.'
             spk_id = self.spk_map[spk_name]
         else:
@@ -122,7 +124,7 @@ class DiffSingerCascadeInfer(BaseSVSInfer):
         ph = [item['ph']]
         txt_tokens = torch.LongTensor(item['ph_token'])[None, :].to(self.device)
         txt_lengths = torch.LongTensor([txt_tokens.shape[1]]).to(self.device)
-        spk_ids = torch.LongTensor(item['spk_id'])[None, :].to(self.device)
+        spk_ids = torch.LongTensor([item['spk_id']]).to(self.device)
 
         pitch_midi = torch.LongTensor(item['pitch_midi'])[None, :hparams['max_frames']].to(self.device)
         midi_dur = torch.FloatTensor(item['midi_dur'])[None, :hparams['max_frames']].to(self.device)
@@ -170,7 +172,7 @@ class DiffSingerCascadeInfer(BaseSVSInfer):
         txt_tokens = sample['txt_tokens']  # [B, T_t]
         spk_id = sample.get('spk_ids')
         with torch.no_grad():
-            output = self.model(txt_tokens, spk_id=spk_id, ref_mels=None, infer=True,
+            output = self.model(txt_tokens, spk_embed=spk_id, ref_mels=None, infer=True,
                                 pitch_midi=sample['pitch_midi'], midi_dur=sample['midi_dur'],
                                 is_slur=sample['is_slur'], mel2ph=sample['mel2ph'], f0=sample['log2f0'])
             mel_out = output['mel_out']  # [B, T,80]
