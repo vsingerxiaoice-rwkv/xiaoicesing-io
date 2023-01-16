@@ -1,4 +1,5 @@
 # coding=utf8
+import json
 import os
 
 import torch
@@ -44,7 +45,9 @@ class BaseSVSInfer:
             phone_list = build_phoneme_list()
             self.ph_encoder = TokenTextEncoder(vocab_list=phone_list, replace_oov=',')
             self.pinyin2phs = build_g2p_dictionary()
-            self.spk_map = {'opencpop': 0}
+            if hparams['use_spk_id']:
+                with open(os.path.join(hparams['work_dir'], 'spk_map.json'), 'r', encoding='utf8') as f:
+                    self.spk_map = json.load(f)
             self.model = self.build_model()
             self.model.eval()
             self.model.to(self.device)

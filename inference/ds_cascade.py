@@ -67,10 +67,15 @@ class DiffSingerCascadeInfer(BaseSVSInfer):
         """
 
         item_name = inp.get('item_name', '<ITEM_NAME>')
-        spk_name = inp.get('spk_name', 'opencpop')
-
-        # single spk
-        spk_id = self.spk_map[spk_name]
+        if hparams['use_spk_id']:
+            spk_name = inp.get('spk_name')
+            if spk_name is None:
+                spk_name = self.spk_map.keys()[0]
+                print(f'Using speaker \'{spk_name}\'.')
+            assert spk_name in self.spk_map, f'Invalid speaker \'{spk_name}\'.'
+            spk_id = self.spk_map[spk_name]
+        else:
+            spk_id = None
 
         # get ph seq, note lst, midi dur lst, is slur lst.
         if input_type == 'word':
