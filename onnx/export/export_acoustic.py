@@ -1132,10 +1132,9 @@ if __name__ == '__main__':
     exp = args.exp
     sys.argv = [
         'inference/ds_cascade.py',
-        '--config',
-        f'checkpoints/{exp}/config.yaml',
         '--exp_name',
-        exp
+        exp,
+        '--infer'
     ]
 
     diff_model_path = f'onnx/assets/{exp}.onnx' if not target else target
