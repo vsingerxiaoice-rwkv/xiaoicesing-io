@@ -76,9 +76,12 @@ class ParameterEncoder(nn.Module):
             pitch_embed = self.pitch_embed(f0_mel[:, :, None])
         
         if hparams['use_spk_id']:
-            spk_embed = self.spk_embed(spk_embed_id)[:, None, :]
+            if infer:
+                spk_embed = kwarg.get('spk_mix_embed')
+            else:
+                spk_embed = self.spk_embed(spk_embed_id)[:, None, :]
         else:
             spk_embed = 0
-        
+
         ret = {'decoder_inp': decoder_inp + pitch_embed + spk_embed, 'f0_denorm': f0_denorm}
         return ret

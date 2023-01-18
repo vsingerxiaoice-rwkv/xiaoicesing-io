@@ -68,16 +68,18 @@ class DiffSingerCascadeInfer(BaseSVSInfer):
 
         item_name = inp.get('item_name', '<ITEM_NAME>')
         if hparams['use_spk_id']:
-            spk_name = inp.get('spk_name')
-            if spk_name is None:
+            spk_mix = inp.get('spk_mix')
+            if spk_mix is None:
                 for name in self.spk_map.keys():
-                    spk_name = name
+                    spk_mix = {name: 1.0}
                     break
-            print(f'Using speaker \'{spk_name}\'')
-            assert spk_name in self.spk_map, f'Invalid speaker \'{spk_name}\'.'
-            spk_id = self.spk_map[spk_name]
+            if len(spk_mix) == 1:
+                print(f'Using speaker \'{list(spk_mix.keys())[0]}\'')
+            else:
+                print_mix = '|'.join([f'{n}:{"%.3f" % spk_mix[n]}' for n in spk_mix])
+                print(f'Using speaker mix \'{print_mix}\'')
         else:
-            spk_id = None
+            spk_mix = None
 
         # get ph seq, note lst, midi dur lst, is slur lst.
         if input_type == 'word':
@@ -108,7 +110,7 @@ class DiffSingerCascadeInfer(BaseSVSInfer):
             return None
 
         ph_token = self.ph_encoder.encode(ph_seq)
-        item = {'item_name': item_name, 'text': inp['text'], 'ph': ph_seq, 'spk_id': spk_id,
+        item = {'item_name': item_name, 'text': inp['text'], 'ph': ph_seq, 'spk_mix': spk_mix,
                 'ph_token': ph_token, 'pitch_midi': np.asarray(midis), 'midi_dur': np.asarray(midi_dur_lst),
                 'is_slur': np.asarray(is_slur), 'ph_dur': None, 'f0_timestep': 0., 'f0_seq': None}
         item['ph_len'] = len(item['ph_token'])
@@ -124,8 +126,11 @@ class DiffSingerCascadeInfer(BaseSVSInfer):
         ph = [item['ph']]
         txt_tokens = torch.LongTensor(item['ph_token'])[None, :].to(self.device)
         txt_lengths = torch.LongTensor([txt_tokens.shape[1]]).to(self.device)
-        spk_ids = torch.LongTensor([item['spk_id']]).to(self.device) if hparams['use_spk_id'] else None
-
+        if hparams['use_spk_id']:
+            spk_mix_map = item['spk_mix']
+            spk_mixes = {torch.LongTensor([self.spk_map[n]]).to(self.device): spk_mix_map[n] for n in spk_mix_map}
+        else:
+            spk_mixes = None
         pitch_midi = torch.LongTensor(item['pitch_midi'])[None, :hparams['max_frames']].to(self.device)
         midi_dur = torch.FloatTensor(item['midi_dur'])[None, :hparams['max_frames']].to(self.device)
         is_slur = torch.LongTensor(item['is_slur'])[None, :hparams['max_frames']].to(self.device)
@@ -158,7 +163,7 @@ class DiffSingerCascadeInfer(BaseSVSInfer):
             'ph': ph,
             'txt_tokens': txt_tokens,
             'txt_lengths': txt_lengths,
-            'spk_ids': spk_ids,
+            'spk_mixes': spk_mixes,
             'pitch_midi': pitch_midi,
             'midi_dur': midi_dur,
             'is_slur': is_slur,
@@ -170,9 +175,15 @@ class DiffSingerCascadeInfer(BaseSVSInfer):
     def forward_model(self, inp, return_mel=False):
         sample = self.input_to_batch(inp)
         txt_tokens = sample['txt_tokens']  # [B, T_t]
-        spk_id = sample.get('spk_ids')
         with torch.no_grad():
-            output = self.model(txt_tokens, spk_embed=spk_id, ref_mels=None, infer=True,
+            if hparams['use_spk_id']:
+                spk_mixes = sample['spk_mixes']
+                spk_mix_embed = [self.model.fs2.spk_embed(spk_id)[:, None, :] * spk_mixes[spk_id] for spk_id in
+                                 spk_mixes]
+                spk_mix_embed = torch.stack(spk_mix_embed, dim=1).sum(dim=1)
+            else:
+                spk_mix_embed = None
+            output = self.model(txt_tokens, spk_mix_embed=spk_mix_embed, ref_mels=None, infer=True,
                                 pitch_midi=sample['pitch_midi'], midi_dur=sample['midi_dur'],
                                 is_slur=sample['is_slur'], mel2ph=sample['mel2ph'], f0=sample['log2f0'])
             mel_out = output['mel_out']  # [B, T,80]
