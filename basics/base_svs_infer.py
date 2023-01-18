@@ -49,6 +49,7 @@ class BaseSVSInfer:
                 with open(os.path.join(hparams['work_dir'], 'spk_map.json'), 'r', encoding='utf8') as f:
                     self.spk_map = json.load(f)
                 assert isinstance(self.spk_map, dict) and len(self.spk_map) > 0, 'Invalid or empty speaker map!'
+                assert len(self.spk_map) == len(set(self.spk_map.values())), 'Duplicate speaker id in speaker map!'
             self.model = self.build_model()
             self.model.eval()
             self.model.to(self.device)
