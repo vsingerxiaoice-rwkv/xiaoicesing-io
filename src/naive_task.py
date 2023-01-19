@@ -21,14 +21,19 @@ class NaiveTask(DiffSingerMIDITask):
         uv = sample['uv']
         energy = sample.get('energy')
 
-        if hparams['use_spk_id']:
-            spk_embed = model.fs2.spk_embed(sample['spk_ids'])[:, None, :]
-        elif hparams['use_spk_embed']:
-            spk_embed = sample['spk_embed']
+        if infer:
+            if hparams['use_spk_id']:
+                spk_embed = model.fs2.spk_embed(sample['spk_ids'])[:, None, :]
+            elif hparams['use_spk_embed']:
+                spk_embed = sample['spk_embed']
+            else:
+                spk_embed = None
+            output = model(txt_tokens, mel2ph=mel2ph, spk_mix_embed=spk_embed,
+                           ref_mels=target, f0=f0, uv=uv, energy=energy, infer=infer)
         else:
-            spk_embed = None
-        output = model(txt_tokens, mel2ph=mel2ph, spk_embed=spk_embed,
-                       ref_mels=target, f0=f0, uv=uv, energy=energy, infer=infer)
+            spk_embed = sample.get('spk_ids') if hparams['use_spk_id'] else sample.get('spk_embed')
+            output = model(txt_tokens, mel2ph=mel2ph, spk_embed=spk_embed,
+                           ref_mels=target, f0=f0, uv=uv, energy=energy, infer=infer)
 
         losses = {}
         if 'diff_loss' in output:
