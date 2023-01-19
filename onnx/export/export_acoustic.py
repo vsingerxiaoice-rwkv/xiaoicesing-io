@@ -942,8 +942,10 @@ def fix(src, target):
 
 def export(fs2_path, diff_path):
     set_hparams(print_hparams=False)
-    if hparams.get('use_midi', True):
+    if hparams.get('use_midi', True) or not hparams['use_pitch_embed']:
         raise NotImplementedError('Only checkpoints of MIDI-less mode are supported.')
+    if hparams['use_spk_id']:
+        raise NotImplementedError('Multi-speaker combined models are not currently supported.')
     device = 'cuda' if torch.cuda.is_available() else 'cpu'
     fs2 = FastSpeech2Wrapper(
         model=build_fs2_model(device)
