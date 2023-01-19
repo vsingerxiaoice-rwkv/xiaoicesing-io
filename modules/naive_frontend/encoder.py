@@ -77,7 +77,12 @@ class ParameterEncoder(nn.Module):
         
         if hparams['use_spk_id']:
             if infer:
+                # spk_embed_0 = self.spk_embed(torch.LongTensor([0]).to(decoder_inp.device))[:, None, :]  # (1, 1, 256)
+                # spk_embed_1 = self.spk_embed(torch.LongTensor([1]).to(decoder_inp.device))[:, None, :]
+                # spk_embed_2 = self.spk_embed(torch.LongTensor([2]).to(decoder_inp.device))[:, None, :]
                 spk_embed = kwarg.get('spk_mix_embed')
+                # mix_ratio = (torch.arange(0, nframes, dtype=torch.float32, device=decoder_inp.device) / nframes)[None, :, None]
+                # spk_embed = spk_embed_2 * mix_ratio.flip(1) + spk_embed_0 * mix_ratio
             else:
                 spk_embed = self.spk_embed(spk_embed_id)[:, None, :]
         else:
