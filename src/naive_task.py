@@ -62,9 +62,17 @@ class NaiveTask(DiffSingerMIDITask):
         outputs['nsamples'] = sample['nsamples']
         outputs = utils.tensors_to_scalars(outputs)
         if batch_idx < hparams['num_valid_plots']:
+            if hparams['use_spk_id']:
+                spk_embed = self.model.fs2.spk_embed(sample['spk_ids'])[:, None, :]
+            elif hparams['use_spk_embed']:
+                spk_embed = sample['spk_embed']
+            else:
+                spk_embed = None
             model_out = self.model(
-                txt_tokens, spk_embed=spk_embed, mel2ph=mel2ph, f0=f0, uv=None, energy=energy, ref_mels=None, infer=True,
-                pitch_midi=sample['pitch_midi'], midi_dur=sample.get('midi_dur'), is_slur=sample.get('is_slur'))
+                txt_tokens, spk_mix_embed=spk_embed, mel2ph=mel2ph, f0=f0, uv=None, energy=energy,
+                ref_mels=None, pitch_midi=sample['pitch_midi'], midi_dur=sample.get('midi_dur'),
+                is_slur=sample.get('is_slur'), infer=True
+            )
 
             if hparams.get('pe_enable') is not None and hparams['pe_enable']:
                 gt_f0 = self.pe(sample['mels'])['f0_denorm_pred']  # pe predict from GT mel
