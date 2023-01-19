@@ -45,6 +45,8 @@ class ParameterEncoder(nn.Module):
             self.pitch_embed = Linear(1, hparams['hidden_size'])
         else:
             raise ValueError('f0_embed_type must be \'discrete\' or \'continuous\'.')
+        if hparams.get('use_spk_id', False):
+            self.spk_embed = Embedding(hparams['num_spk'], hparams['hidden_size'])
     
     def forward(self, txt_tokens, mel2ph=None, spk_embed_id=None,
                 ref_mels=None, f0=None, uv=None, energy=None, skip_decoder=False,
@@ -73,5 +75,13 @@ class ParameterEncoder(nn.Module):
             f0_mel = (1 + f0_denorm / 700).log()
             pitch_embed = self.pitch_embed(f0_mel[:, :, None])
         
-        ret = {'decoder_inp': decoder_inp + pitch_embed, 'f0_denorm': f0_denorm}
+        if hparams['use_spk_id']:
+            if infer:
+                spk_embed = kwarg.get('spk_mix_embed')
+            else:
+                spk_embed = self.spk_embed(spk_embed_id)[:, None, :]
+        else:
+            spk_embed = 0
+
+        ret = {'decoder_inp': decoder_inp + pitch_embed + spk_embed, 'f0_denorm': f0_denorm}
         return ret

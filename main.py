@@ -14,6 +14,7 @@ from inference.ds_e2e import DiffSingerE2EInfer
 from utils.audio import save_wav
 from utils.hparams import set_hparams, hparams
 from utils.slur_utils import merge_slurs
+from utils.spk_utils import parse_commandline_spk_mix
 
 sys.path.insert(0, '/')
 root_dir = os.path.dirname(os.path.abspath(__file__))
@@ -22,6 +23,7 @@ os.environ['PYTHONPATH'] = f'"{root_dir}"'
 parser = argparse.ArgumentParser(description='Run DiffSinger inference')
 parser.add_argument('proj', type=str, help='Path to the input file')
 parser.add_argument('--exp', type=str, required=False, help='Selection of model')
+parser.add_argument('--spk', type=str, required=False, help='Speaker name or mix of speakers')
 parser.add_argument('--out', type=str, required=False, help='Path of the output folder')
 parser.add_argument('--title', type=str, required=False, help='Title of output file')
 parser.add_argument('--num', type=int, required=False, default=1, help='Number of runs')
@@ -57,7 +59,6 @@ if not os.path.exists(f'{root_dir}/checkpoints/{exp}'):
                                                             'Please specify \'--exp\' as the folder name or prefix.'
 else:
     print(f'| found ckpt by name: {exp}')
-
 
 out = args.out
 if not out:
@@ -106,6 +107,8 @@ if len(params) > 0:
         warnings.filterwarnings(action='default')
         infer_ins = DiffSingerE2EInfer(hparams, load_vocoder=not args.mel)
 
+spk_mix = parse_commandline_spk_mix(args.spk) if hparams['use_spk_id'] and args.spk is not None else None
+
 
 def infer_once(path: str, save_mel=False):
     if save_mel:
@@ -144,6 +147,9 @@ def infer_once(path: str, save_mel=False):
         else:
             torch.manual_seed(torch.seed() & 0xffff_ffff)
             torch.cuda.manual_seed_all(torch.seed() & 0xffff_ffff)
+
+        if spk_mix is not None:
+            param['spk_mix'] = spk_mix
 
         if not hparams.get('use_midi', False):
             merge_slurs(param)

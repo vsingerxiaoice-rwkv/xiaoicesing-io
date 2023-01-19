@@ -41,10 +41,24 @@ class BaseBinarizer:
         3. load_ph_set:
             the phoneme set.
     '''
-    def __init__(self, processed_data_dir=None, item_attributes=BASE_ITEM_ATTRIBUTES):
-        if processed_data_dir is None:
-            processed_data_dir = hparams['processed_data_dir']
-        self.processed_data_dirs = processed_data_dir.split(",")
+    def __init__(self, data_dir=None, item_attributes=None):
+        if item_attributes is None:
+            item_attributes = BASE_ITEM_ATTRIBUTES
+        if data_dir is None:
+            data_dir = hparams['raw_data_dir']
+
+        if 'speakers' not in hparams:
+            speakers = hparams['datasets']
+            hparams['speakers'] = hparams['datasets']
+        else:
+            speakers = hparams['speakers']
+        assert isinstance(speakers, list), 'Speakers must be a list'
+        assert len(speakers) == len(set(speakers)), 'Speakers cannot contain duplicate names'
+
+        self.raw_data_dirs = data_dir if isinstance(data_dir, list) else [data_dir]
+        assert len(speakers) == len(self.raw_data_dirs), \
+            'Number of raw data dirs must equal number of speaker names!'
+
         self.binarization_args = hparams['binarization_args']
         self.pre_align_args = hparams['pre_align_args']
         
@@ -53,21 +67,21 @@ class BaseBinarizer:
         self.item_attributes = item_attributes
 
         # load each dataset
-        for ds_id, processed_data_dir in enumerate(self.processed_data_dirs):
-            self.load_meta_data(processed_data_dir, ds_id)
+        for ds_id, data_dir in enumerate(self.raw_data_dirs):
+            self.load_meta_data(data_dir, ds_id)
             if ds_id == 0:
                 # check program correctness
                 assert all([attr in self.item_attributes for attr in list(self.items.values())[0].keys()])
         self.item_names = sorted(list(self.items.keys()))
         
         if self.binarization_args['shuffle']:
-            random.seed(1234)
+            random.seed(hparams['seed'])
             random.shuffle(self.item_names)
         
         # set default get_pitch algorithm
         self.get_pitch_algorithm = get_pitch_parselmouth
 
-    def load_meta_data(self, processed_data_dir, ds_id):
+    def load_meta_data(self, raw_data_dir, ds_id):
         raise NotImplementedError
 
     @property
@@ -83,12 +97,8 @@ class BaseBinarizer:
         raise NotImplementedError
 
     def build_spk_map(self):
-        spk_map = set()
-        for item_name in self.item_names:
-            spk_name = self.items[item_name]['spk_id']
-            spk_map.add(spk_name)
-        spk_map = {x: i for i, x in enumerate(sorted(list(spk_map)))}
-        assert len(spk_map) == 0 or len(spk_map) <= hparams['num_spk'], len(spk_map)
+        spk_map = {x: i for i, x in enumerate(hparams['speakers'])}
+        assert len(spk_map) <= hparams['num_spk'], 'Actual number of speakers should be smaller than num_spk!'
         return spk_map
 
     def item_name2spk_id(self, item_name):
@@ -164,8 +174,7 @@ class BaseBinarizer:
                     f0s.append(item['f0'])
         else:
             # code for single cpu processing
-            for i in tqdm(reversed(range(len(args))), total=len(args)):
-                a = args[i]
+            for a in tqdm(args):
                 item = self.process_item(*a)
                 if item is None:
                     continue
