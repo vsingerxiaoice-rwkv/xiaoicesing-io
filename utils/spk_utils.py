@@ -7,7 +7,7 @@ def parse_commandline_spk_mix(mix: str) -> dict:
     :param mix: Input like "opencpop" or "opencpop|qixuan" or "opencpop:0.5|qixuan:0.5"
     :return: A dict whose keys are speaker names and values are proportions
     """
-    name_pattern = r'[0-9A-Za-z_]+'
+    name_pattern = r'[0-9A-Za-z_-]+'
     proportion_pattern = r'\d+(\.\d+)?'
     single_pattern = rf'{name_pattern}(:{proportion_pattern})?'
     assert re.fullmatch(rf'{single_pattern}(\|{single_pattern})*', mix) is not None, f'Invalid mix pattern: {mix}'
