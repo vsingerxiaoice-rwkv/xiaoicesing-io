@@ -70,9 +70,12 @@ class DiffSingerCascadeInfer(BaseSVSInfer):
                     assert name in self.spk_map, f'Speaker \'{name}\' not found.'
             if len(spk_mix) == 1:
                 print(f'Using speaker \'{list(spk_mix.keys())[0]}\'')
+            elif any([isinstance(val, list) for val in spk_mix.values()]):
+                print_mix = '|'.join(spk_mix.keys())
+                print(f'Using dynamic speaker mix \'{print_mix}\'')
             else:
                 print_mix = '|'.join([f'{n}:{"%.3f" % spk_mix[n]}' for n in spk_mix])
-                print(f'Using speaker mix \'{print_mix}\'')
+                print(f'Using static speaker mix \'{print_mix}\'')
         else:
             spk_mix = None
 
@@ -105,6 +108,7 @@ class DiffSingerCascadeInfer(BaseSVSInfer):
             item['ph_dur'] = ph_dur
             item['f0_timestep'] = f0_timestep
             item['f0_seq'] = f0_seq
+            item['spk_mix_timestep'] = inp.get('spk_mix_timestep')
         return item
 
     def input_to_batch(self, item):
@@ -115,7 +119,37 @@ class DiffSingerCascadeInfer(BaseSVSInfer):
         txt_lengths = torch.LongTensor([txt_tokens.shape[1]]).to(self.device)
         if hparams['use_spk_id']:
             spk_mix_map = item['spk_mix']
-            spk_mixes = {torch.LongTensor([self.spk_map[n]]).to(self.device) : spk_mix_map[n] for n in spk_mix_map}
+            dynamic_mix = any([isinstance(val, list) for val in spk_mix_map.values()])
+            max_length = max([len(val) for val in spk_mix_map.values()]) if dynamic_mix else 0
+            if dynamic_mix:
+                mix_value_list = []
+                for spk_name in spk_mix_map:
+                    if isinstance(spk_mix_map[spk_name], list):
+                        mix_seq = spk_mix_map[spk_name] + \
+                                  [spk_mix_map[spk_name][-1]] * (max_length - len(spk_mix_map[spk_name]))
+                    else:
+                        mix_seq = [spk_mix_map[spk_name]] * max_length
+                    timestep = item['spk_mix_timestep']
+                    t_max = (max_length - 1) * timestep
+                    dt = hparams['hop_size'] / hparams['audio_sample_rate']
+                    mix_value_list.append(np.interp(np.arange(0, t_max, dt), timestep * np.arange(max_length), mix_seq))
+                mix_value_ndarray = np.stack(mix_value_list, axis=0)
+                assert np.all(mix_value_ndarray >= 0), 'All proportion values of speaker mix should be non-negative.'
+                frame_sum = mix_value_ndarray.sum(axis=0)[None, :]
+                assert np.all(frame_sum > 0), 'Proportions of speaker mix on some frames sum to zero.'
+                mix_value_list = list(mix_value_ndarray / frame_sum)
+                spk_mixes = {
+                    torch.LongTensor([self.spk_map[n]]).to(self.device) : torch.FloatTensor(mix_value_list[i][None, :, None]).to(self.device)
+                    for i, n in enumerate(spk_mix_map.keys())
+                }
+            else:
+                assert all([val >= 0 for val in spk_mix_map.values()]), 'All proportion values of speaker mix should be non-negative.'
+                proportion_sum = sum(spk_mix_map.values())
+                assert proportion_sum > 0, 'Proportions of speaker mix sum to zero.'
+                spk_mixes = {
+                    torch.LongTensor([self.spk_map[n]]).to(self.device) : spk_mix_map[n] / proportion_sum
+                    for n in spk_mix_map
+                }
         else:
             spk_mixes = None
         pitch_midi = torch.LongTensor(item['pitch_midi'])[None, :hparams['max_frames']].to(self.device)

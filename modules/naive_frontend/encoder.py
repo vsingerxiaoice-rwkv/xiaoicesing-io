@@ -77,7 +77,12 @@ class ParameterEncoder(nn.Module):
         
         if hparams['use_spk_id']:
             if infer:
-                spk_embed = kwarg.get('spk_mix_embed')
+                spk_embed = kwarg.get('spk_mix_embed')  # (1, t, 256)
+                mix_frames = spk_embed.size(1)
+                if mix_frames > nframes:
+                    spk_embed = spk_embed[:, :nframes, :]
+                elif mix_frames > 1:
+                    spk_embed = torch.cat((spk_embed, spk_embed[:, -1:, :].repeat(1, nframes - mix_frames, 1)), dim=1)
             else:
                 spk_embed = self.spk_embed(spk_embed_id)[:, None, :]
         else:
