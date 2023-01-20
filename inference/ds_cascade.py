@@ -65,6 +65,9 @@ class DiffSingerCascadeInfer(BaseSVSInfer):
                 for name in self.spk_map.keys():
                     spk_mix = {name: 1.0}
                     break
+            else:
+                for name in spk_mix:
+                    assert name in self.spk_map, f'Speaker \'{name}\' not found.'
             if len(spk_mix) == 1:
                 print(f'Using speaker \'{list(spk_mix.keys())[0]}\'')
             else:
