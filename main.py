@@ -150,6 +150,14 @@ def infer_once(path: str, save_mel=False):
 
         if spk_mix is not None:
             param['spk_mix'] = spk_mix
+        elif 'spk_mix' in param:
+            param_spk_mix = param['spk_mix']
+            for spk_name in param_spk_mix:
+                values = str(param_spk_mix[spk_name]).split()
+                if len(values) == 1:
+                    param_spk_mix[spk_name] = float(values[0])
+                else:
+                    param_spk_mix[spk_name] = [float(v) for v in values]
 
         if not hparams.get('use_midi', False):
             merge_slurs(param)
