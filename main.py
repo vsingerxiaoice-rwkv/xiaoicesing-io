@@ -109,6 +109,21 @@ if len(params) > 0:
 
 spk_mix = parse_commandline_spk_mix(args.spk) if hparams['use_spk_id'] and args.spk is not None else None
 
+for param in params:
+    if spk_mix is not None:
+        param['spk_mix'] = spk_mix
+    elif 'spk_mix' in param:
+        param_spk_mix = param['spk_mix']
+        for spk_name in param_spk_mix:
+            values = str(param_spk_mix[spk_name]).split()
+            if len(values) == 1:
+                param_spk_mix[spk_name] = float(values[0])
+            else:
+                param_spk_mix[spk_name] = [float(v) for v in values]
+
+    if not hparams.get('use_midi', False):
+        merge_slurs(param)
+
 
 def infer_once(path: str, save_mel=False):
     if save_mel:
@@ -148,19 +163,6 @@ def infer_once(path: str, save_mel=False):
             torch.manual_seed(torch.seed() & 0xffff_ffff)
             torch.cuda.manual_seed_all(torch.seed() & 0xffff_ffff)
 
-        if spk_mix is not None:
-            param['spk_mix'] = spk_mix
-        elif 'spk_mix' in param:
-            param_spk_mix = param['spk_mix']
-            for spk_name in param_spk_mix:
-                values = str(param_spk_mix[spk_name]).split()
-                if len(values) == 1:
-                    param_spk_mix[spk_name] = float(values[0])
-                else:
-                    param_spk_mix[spk_name] = [float(v) for v in values]
-
-        if not hparams.get('use_midi', False):
-            merge_slurs(param)
         if save_mel:
             mel, f0 = infer_ins.infer_once(param, return_mel=True)
             result.append({
