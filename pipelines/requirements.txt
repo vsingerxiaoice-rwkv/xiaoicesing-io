@@ -5,3 +5,5 @@ pyyaml
 soundfile
 sox
 textgrid
+biopython==1.78
+sqlalchemy==1.4.46
