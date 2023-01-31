@@ -1,5 +1,7 @@
+import json
 import os
 import sys
+import warnings
 
 root_dir = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 os.environ['PYTHONPATH'] = f'"{root_dir}"'
@@ -21,10 +23,12 @@ from torch.nn import Linear, Embedding
 
 from modules.commons.common_layers import Mish
 from modules.naive_frontend.encoder import Encoder
+from src.diff.diffusion import beta_schedule
 from src.diff.net import AttrDict
 from utils import load_ckpt
 from utils.hparams import hparams, set_hparams
 from utils.phoneme_utils import build_phoneme_list
+from utils.spk_utils import parse_commandline_spk_mix
 from utils.text_encoder import TokenTextEncoder
 
 
@@ -33,6 +37,8 @@ f0_max = 1100.0
 f0_min = 50.0
 f0_mel_min = 1127 * math.log(1 + f0_min / 700)
 f0_mel_max = 1127 * math.log(1 + f0_max / 700)
+
+frozen_spk_embed = None
 
 
 def f0_to_coarse(f0):
@@ -61,7 +67,7 @@ class FastSpeech2MIDILess(nn.Module):
     def __init__(self, dictionary):
         super().__init__()
         self.lr = LengthRegulator()
-        self.txt_embed = nn.Embedding(len(dictionary), hparams['hidden_size'], dictionary.pad())
+        self.txt_embed = Embedding(len(dictionary), hparams['hidden_size'], dictionary.pad())
         self.dur_embed = Linear(1, hparams['hidden_size'])
         self.encoder = Encoder(self.txt_embed, hparams['hidden_size'], hparams['enc_layers'],
                                hparams['enc_ffn_kernel_size'], num_heads=hparams['num_heads'])
@@ -72,8 +78,10 @@ class FastSpeech2MIDILess(nn.Module):
             self.pitch_embed = Linear(1, hparams['hidden_size'])
         else:
             raise ValueError('f0_embed_type must be \'discrete\' or \'continuous\'.')
+        if hparams['use_spk_id']:
+            self.spk_embed = Embedding(hparams['num_spk'], hparams['hidden_size'])
 
-    def forward(self, tokens, durations, f0):
+    def forward(self, tokens, durations, f0, spk_embed=None):
         durations *= tokens > 0
         mel2ph = self.lr.forward(durations)
         f0 *= mel2ph > 0
@@ -89,38 +97,16 @@ class FastSpeech2MIDILess(nn.Module):
             f0_mel = (1 + f0 / 700).log()
             pitch_embed = self.pitch_embed(f0_mel[:, :, None])
         condition = encoded + pitch_embed
+        if hparams['use_spk_id']:
+            if frozen_spk_embed is not None:
+                condition += frozen_spk_embed
+            else:
+                condition += spk_embed
         return condition
 
 
 def extract(a, t):
     return a[t].reshape((1, 1, 1, 1))
-
-
-def linear_beta_schedule(timesteps, max_beta=hparams.get('max_beta', 0.01)):
-    """
-    linear schedule
-    """
-    betas = np.linspace(1e-4, max_beta, timesteps)
-    return betas
-
-
-def cosine_beta_schedule(timesteps, s=0.008):
-    """
-    cosine schedule
-    as proposed in https://openreview.net/forum?id=-NEXDKk8gZ
-    """
-    steps = timesteps + 1
-    x = np.linspace(0, steps, steps)
-    alphas_cumprod = np.cos(((x / steps) + s) / (1 + s) * np.pi * 0.5) ** 2
-    alphas_cumprod = alphas_cumprod / alphas_cumprod[0]
-    betas = 1 - (alphas_cumprod[1:] / alphas_cumprod[:-1])
-    return np.clip(betas, a_min=0, a_max=0.999)
-
-
-beta_schedule = {
-    "cosine": cosine_beta_schedule,
-    "linear": linear_beta_schedule,
-}
 
 
 class SinusoidalPosEmb(nn.Module):
@@ -198,7 +184,6 @@ class DiffNet(nn.Module):
 
     def forward(self, spec, diffusion_step, cond):
         """
-
         :param spec: [B, 1, M, T]
         :param diffusion_step: [B, 1]
         :param cond: [B, M, T]
@@ -212,15 +197,12 @@ class DiffNet(nn.Module):
         diffusion_step = self.diffusion_embedding(diffusion_step)
         diffusion_step = self.mlp(diffusion_step)
 
-        # Avoid ConstantOfShape op
-        x, skip = self.residual_layers[0](x, cond, diffusion_step)
-        # noinspection PyTypeChecker
-        for layer in self.residual_layers[1:]:
-            x, skip_connection = layer.forward(x, cond, diffusion_step)
-            skip += skip_connection
+        skip = []
+        for layer in self.residual_layers:
+            x, skip_connection = layer(x, cond, diffusion_step)
+            skip.append(skip_connection)
 
-        x = skip / math.sqrt(len(self.residual_layers))
-
+        x = torch.sum(torch.stack(skip), dim=0) / math.sqrt(len(self.residual_layers))
         x = self.skip_projection(x)
         x = F.relu(x)
         x = self.output_projection(x)  # [B, mel_bins, T]
@@ -325,10 +307,7 @@ class GaussianDiffusion(nn.Module):
         self.plms_noise_predictor = PLMSNoisePredictor()
         self.mel_extractor = MelExtractor()
 
-        if 'schedule_type' in hparams.keys():
-            betas = beta_schedule[hparams['schedule_type']](timesteps)
-        else:
-            betas = cosine_beta_schedule(timesteps)
+        betas = beta_schedule[hparams.get('schedule_type', 'cosine')](timesteps)
 
         # Below are buffers for state_dict to load into.
         alphas = 1. - betas
@@ -486,8 +465,8 @@ class FastSpeech2Wrapper(nn.Module):
         super().__init__()
         self.model = ModuleWrapper(model, name='fs2')
 
-    def forward(self, tokens, durations, f0):
-        return self.model(tokens, durations, f0)
+    def forward(self, tokens, durations, f0, spk_embed=None):
+        return self.model(tokens, durations, f0, spk_embed=spk_embed)
 
 
 class DiffusionWrapper(nn.Module):
@@ -940,12 +919,20 @@ def fix(src, target):
     print('Graph fixed and optimized.')
 
 
-def export(fs2_path, diff_path):
+def _perform_speaker_mix(spk_embedding: nn.Embedding, spk_map: dict, spk_mix_map: dict, device):
+    for spk_name in spk_mix_map:
+        assert spk_name in spk_map, f'Speaker \'{spk_name}\' not found.'
+    spk_mix_embed = [spk_embedding(torch.LongTensor([spk_map[spk_name]]).to(device)) for spk_name in spk_mix_map]
+    spk_mix_embed = torch.stack(spk_mix_embed, dim=1).sum(dim=1)
+    return spk_mix_embed
+
+
+def export(fs2_path, diff_path, spk_export_list=None, frozen_spk=None):
     set_hparams(print_hparams=False)
     if hparams.get('use_midi', True) or not hparams['use_pitch_embed']:
         raise NotImplementedError('Only checkpoints of MIDI-less mode are supported.')
-    if hparams['use_spk_id']:
-        raise NotImplementedError('Multi-speaker combined models are not currently supported.')
+
+    # Build models to export
     device = 'cuda' if torch.cuda.is_available() else 'cpu'
     fs2 = FastSpeech2Wrapper(
         model=build_fs2_model(device)
@@ -955,37 +942,61 @@ def export(fs2_path, diff_path):
     )
 
     with torch.no_grad():
+        # Export speakers and speaker mixes
+        global frozen_spk_embed
+        if hparams['use_spk_id']:
+            if spk_export_list is None and frozen_spk is None:
+                warnings.warn('Combined models cannot run without speaker keys. '
+                              'Did you forget to export at least one speaker via the \'--spk\' argument, '
+                              'or freeze one speaker via the \'--freeze_spk\' argument?', category=UserWarning)
+                warnings.filterwarnings(action='default')
+            with open(os.path.join(hparams['work_dir'], 'spk_map.json'), 'r', encoding='utf8') as f:
+                spk_map = json.load(f)
+            if frozen_spk is not None:
+                frozen_spk_embed = _perform_speaker_mix(fs2.model.fs2.spk_embed, spk_map,
+                                                        parse_commandline_spk_mix(frozen_spk), device)
+            elif spk_export_list is not None:
+                for spk in spk_export_list:
+                    np.save(spk['path'], _perform_speaker_mix(
+                        fs2.model.fs2.spk_embed, spk_map, parse_commandline_spk_mix(spk['mix']), device
+                    ).cpu().numpy())
+
+        # Export PyTorch modules
+        n_frames = 10
         tokens = torch.tensor([[3]], dtype=torch.long, device=device)
-        durations = torch.tensor([[1]], dtype=torch.long, device=device)
-        f0 = torch.tensor([[440.]], dtype=torch.float32, device=device)
+        durations = torch.tensor([[n_frames]], dtype=torch.long, device=device)
+        f0 = torch.tensor([[440.] * n_frames], dtype=torch.float32, device=device)
+        kwargs = {}
+        arguments = (tokens, durations, f0, kwargs)
+        input_names = ['tokens', 'durations', 'f0']
+        dynamix_axes = {
+            'tokens': {
+                1: 'n_tokens'
+            },
+            'durations': {
+                1: 'n_tokens'
+            },
+            'f0': {
+                1: 'n_frames'
+            }
+        }
+        if hparams['use_spk_id'] and frozen_spk is None:
+            # noinspection PyTypedDict
+            kwargs['spk_embed'] = torch.rand((1, n_frames, hparams['hidden_size']), dtype=torch.float32, device=device)
+            input_names.append('spk_embed')
+            dynamix_axes['spk_embed'] = {
+                1: 'n_frames'
+            }
         print('Exporting FastSpeech2...')
         torch.onnx.export(
             fs2,
-            (
-                tokens,
-                durations,
-                f0
-            ),
+            arguments,
             fs2_path,
-            input_names=[
-                'tokens',
-                'durations',
-                'f0'
-            ],
+            input_names=input_names,
             output_names=[
                 'condition'
             ],
-            dynamic_axes={
-                'tokens': {
-                    1: 'n_tokens'
-                },
-                'durations': {
-                    1: 'n_tokens'
-                },
-                'f0': {
-                    1: 'n_frames'
-                }
-            },
+            dynamic_axes=dynamix_axes,
             opset_version=11
         )
         model = onnx.load(fs2_path)
@@ -993,7 +1004,6 @@ def export(fs2_path, diff_path):
         assert check, 'Simplified ONNX model could not be validated'
         onnx.save(model, fs2_path)
 
-        n_frames = 10
         shape = (1, 1, hparams['audio_num_mel_bins'], n_frames)
         noise_t = torch.randn(shape, device=device)
         noise_list = torch.randn((3, *shape), device=device)
@@ -1120,18 +1130,32 @@ def merge(fs2_path, diff_path, target_path):
 
 
 if __name__ == '__main__':
-    parser = argparse.ArgumentParser(description='Export DiffSinger acoustic model to ONNX')
-    parser.add_argument('--exp', type=str, required=True, help='Experiment to export')
-    parser.add_argument('--target', required=False, type=str, help='Path of the target ONNX model')
+    parser = argparse.ArgumentParser(description='Export DiffSinger acoustic model to ONNX format.')
+    parser.add_argument('--exp', type=str, required=True, help='experiment to export')
+    parser.add_argument('--target', required=False, type=str, help='path of the target ONNX model')
+    group = parser.add_mutually_exclusive_group()
+    group.add_argument('--spk', required=False, type=str, action='append',
+                        help='(for combined models) speakers or speaker mixes to export')
+    group.add_argument('--freeze_spk', required=False, type=str,
+                        help='(for combined models) speaker or speaker mix to freeze into the model')
+    parser.add_argument('--out', required=False, type=str, help='output directory for ONNX models and speaker keys')
     args = parser.parse_args()
 
-    cwd = os.getcwd()
-    if args.target:
-        target = os.path.join(cwd, args.target)
-    else:
-        target = None
-    os.chdir(root_dir)
+    # Deprecation for --target argument
+    assert args.target is None, 'The \'--target\' argument is deprecated. ' \
+                                'Please use the \'--out\' argument to specified the output directory if needed.'
+
+    # Temporarily disable --spk argument
+    if args.spk is not None:
+        raise NotImplementedError('Exporting speakers or speaker mixes is not supported yet.')
+
     exp = args.exp
+    cwd = os.getcwd()
+    if args.out:
+        out = os.path.join(cwd, args.out) if not os.path.isabs(args.out) else args.out
+    else:
+        out = f'onnx/assets/{exp}'
+    os.chdir(root_dir)
     sys.argv = [
         'inference/ds_cascade.py',
         '--exp_name',
@@ -1139,17 +1163,55 @@ if __name__ == '__main__':
         '--infer'
     ]
 
-    diff_model_path = f'onnx/assets/{exp}.onnx' if not target else target
-    os.makedirs(f'onnx/assets/temp', exist_ok=True)
-    fs2_model_path = f'onnx/assets/temp/fs2.onnx'
-    export(fs2_path=fs2_model_path, diff_path=diff_model_path)
+    os.makedirs(f'onnx/temp', exist_ok=True)
+    diff_model_path = f'onnx/temp/diffusion.onnx'
+    fs2_model_path = f'onnx/temp/fs2.onnx'
+    spk_name_pattern = r'[0-9A-Za-z_-]+'
+    spk_export_paths = None
+    frozen_spk_name = None
+    frozen_spk_mix = None
+    if args.spk is not None:
+        spk_export_paths = []
+        for spk_export in args.spk:
+            assert '=' in spk_export or '|' not in spk_export, \
+                'You must specify an alias with \'<NAME>=\' for each speaker mix.'
+            if '=' in spk_export:
+                alias, mix = spk_export.split('=', maxsplit=1)
+                assert re.fullmatch(spk_name_pattern, alias) is not None, f'Invalid alias \'{alias}\' for speaker mix.'
+                spk_export_paths.append({'mix': mix, 'path': f'onnx/assets/temp/{alias}.npy'})
+            else:
+                assert re.fullmatch(spk_name_pattern, spk_export) is not None, \
+                    f'Invalid alias \'{spk_export}\' for speaker mix.'
+                spk_export_paths.append({'mix': spk_export, 'path': f'onnx/assets/temp/{spk_export}.npy'})
+    elif args.freeze_spk is not None:
+        assert '=' in args.freeze_spk or '|' not in args.freeze_spk, \
+            'You must specify an alias with \'NAME=\' for each speaker mix.'
+        if '=' in args.freeze_spk:
+            alias, mix = args.freeze_spk.split('=', maxsplit=1)
+            assert re.fullmatch(spk_name_pattern, alias) is not None, f'Invalid alias \'{alias}\' for speaker mix.'
+            frozen_spk_name = alias
+            frozen_spk_mix = mix
+        else:
+            assert re.fullmatch(spk_name_pattern, args.freeze_spk) is not None, \
+                f'Invalid alias \'{args.freeze_spk}\' for speaker mix.'
+            frozen_spk_name = args.freeze_spk
+            frozen_spk_mix = args.freeze_spk
+
+    if frozen_spk_name is None:
+        target_model_path = f'{out}/{exp}.onnx'
+    else:
+        target_model_path = f'{out}/{exp}.{frozen_spk_name}.onnx'
+    os.makedirs(out, exist_ok=True)
+    export(fs2_path=fs2_model_path, diff_path=diff_model_path,
+           spk_export_list=spk_export_paths, frozen_spk=frozen_spk_mix)
     fix(diff_model_path, diff_model_path)
-    merge(fs2_path=fs2_model_path, diff_path=diff_model_path, target_path=diff_model_path)
+    merge(fs2_path=fs2_model_path, diff_path=diff_model_path, target_path=target_model_path)
     os.remove(fs2_model_path)
+    os.remove(diff_model_path)
 
     os.chdir(cwd)
     if args.target:
-        log_path = os.path.abspath(args.target)
+        log_path = os.path.abspath(args.out)
     else:
-        log_path = diff_model_path
+        log_path = out
     print(f'| export \'model\' to \'{log_path}\'.')
