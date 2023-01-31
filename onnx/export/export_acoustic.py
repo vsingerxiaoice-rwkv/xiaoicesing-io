@@ -1174,7 +1174,7 @@ if __name__ == '__main__':
         spk_export_paths = []
         for spk_export in args.spk:
             assert '=' in spk_export or '|' not in spk_export, \
-                'You must specify an alias with \'<NAME>=\' for each speaker mix.'
+                'You must specify an alias with \'NAME=\' for each speaker mix.'
             if '=' in spk_export:
                 alias, mix = spk_export.split('=', maxsplit=1)
                 assert re.fullmatch(spk_name_pattern, alias) is not None, f'Invalid alias \'{alias}\' for speaker mix.'
