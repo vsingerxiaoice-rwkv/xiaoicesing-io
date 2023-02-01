@@ -1,5 +1,4 @@
 import shutil
-from ast import Not
 import os
 os.environ["OMP_NUM_THREADS"] = "1"
 
@@ -84,10 +83,13 @@ class BaseBinarizer:
     def load_meta_data(self, raw_data_dir, ds_id):
         raise NotImplementedError
 
+    def split_train_test_set(self, item_names):
+        raise NotImplementedError
+
     @property
     def train_item_names(self):
         raise NotImplementedError
-        
+
     @property
     def valid_item_names(self):
         raise NotImplementedError

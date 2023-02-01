@@ -1,6 +1,21 @@
-import glob
+"""
+    item: one piece of data
+    item_name: data id
+    wavfn: wave file path
+    txt: lyrics
+    ph: phoneme
+    tgfn: text grid file path (unused)
+    spk: dataset name
+    wdb: word boundary
+    ph_durs: phoneme durations
+    midi: pitch as midi notes
+    midi_dur: midi duration
+    is_slur: keep singing upon note changes
+"""
+
+import logging
 import os.path
-import re
+from copy import deepcopy
 
 import matplotlib.pyplot as plt
 
@@ -8,19 +23,18 @@ from basics.base_binarizer import BaseBinarizer, BASE_ITEM_ATTRIBUTES
 from utils.hparams import hparams
 from utils.phoneme_utils import build_phoneme_list
 
-SINGING_ITEM_ATTRIBUTES = BASE_ITEM_ATTRIBUTES + ['f0_fn']
+ACOUSTIC_ITEM_ATTRIBUTES = BASE_ITEM_ATTRIBUTES + \
+                           ['f0_fn', 'pitch_midi', 'midi_dur', 'is_slur', 'ph_durs', 'word_boundary']
 
-
-class SingingBinarizer(BaseBinarizer):
-    def __init__(self, raw_data_dir=None, item_attributes=SINGING_ITEM_ATTRIBUTES):
-        super().__init__(raw_data_dir, item_attributes)
-
+class AcousticBinarizer(BaseBinarizer):
+    def __init__(self):
+        super().__init__(item_attributes=ACOUSTIC_ITEM_ATTRIBUTES)
         self.item_names = sorted(list(self.items.keys()))
         self._train_item_names, self._test_item_names = self.split_train_test_set(self.item_names)
 
-    def split_train_test_set(self, item_names):
-        raise NotImplementedError
-
+    def load_meta_data(self, raw_data_dir, ds_id):
+        from preprocessing.opencpop import File2Batch
+        self.items.update(File2Batch.file2temporary_dict(raw_data_dir, ds_id))
     @property
     def train_item_names(self):
         return self._train_item_names
@@ -33,27 +47,39 @@ class SingingBinarizer(BaseBinarizer):
     def test_item_names(self):
         return self._test_item_names
 
-    def load_meta_data(self, raw_data_dir, ds_id):
-        wav_suffix = '_wf0.wav'
-        txt_suffix = '.txt'
-        ph_suffix = '_ph.txt'
-        tg_suffix = '.TextGrid'
-        all_wav_pieces = glob.glob(f'{raw_data_dir}/*/*{wav_suffix}')
+    def get_align(self, meta_data, mel, phone_encoded, res):
+        raise NotImplementedError()
 
-        for piece_path in all_wav_pieces:
-            item = {}
-
-            item['txt'] = open(f'{piece_path.replace(wav_suffix, txt_suffix)}', encoding='utf-8').readline()
-            item['ph'] = open(f'{piece_path.replace(wav_suffix, ph_suffix)}', encoding='utf-8').readline()
-            item['wav_fn'] = piece_path
-            item['spk_id'] = re.split('[-#]', piece_path.split('/')[-2])[0]
-            item['tg_fn'] = piece_path.replace(wav_suffix, tg_suffix)
-            item_name = piece_path[len(raw_data_dir) + 1:].replace('/', '-')[:-len(wav_suffix)]
-            if len(self.raw_data_dirs) > 1:
-                item_name = f'ds{ds_id}_{item_name}'
-                item['spk_id'] = f"ds{ds_id}_{item['spk_id']}"
-            
-            self.items[item_name] = item
+    def split_train_test_set(self, item_names):
+        item_names = set(deepcopy(item_names))
+        prefixes = set([str(pr) for pr in hparams['test_prefixes']])
+        test_item_names = set()
+        # Add prefixes that specified speaker index and matches exactly item name to test set
+        for prefix in deepcopy(prefixes):
+            if prefix in item_names:
+                test_item_names.add(prefix)
+                prefixes.remove(prefix)
+        # Add prefixes that exactly matches item name without speaker id to test set
+        for prefix in deepcopy(prefixes):
+            for name in item_names:
+                if name.split(':')[-1] == prefix:
+                    test_item_names.add(name)
+                    prefixes.remove(prefix)
+        # Add names with one of the remaining prefixes to test set
+        for prefix in deepcopy(prefixes):
+            for name in item_names:
+                if name.startswith(prefix):
+                    test_item_names.add(name)
+                    prefixes.remove(prefix)
+        for prefix in prefixes:
+            for name in item_names:
+                if name.split(':')[-1].startswith(prefix):
+                    test_item_names.add(name)
+        test_item_names = sorted(list(test_item_names))
+        train_item_names = [x for x in item_names if x not in set(test_item_names)]
+        logging.info("train {}".format(len(train_item_names)))
+        logging.info("test {}".format(len(test_item_names)))
+        return train_item_names, test_item_names
 
     def generate_summary(self, phone_set: set):
         # Group by phonemes.
@@ -116,9 +142,3 @@ class SingingBinarizer(BaseBinarizer):
             raise AssertionError('transcriptions and dictionary mismatch.\n'
                                  f' (+) {sorted(unrecognizable_phones)}\n'
                                  f' (-) {sorted(missing_phones)}')
-
-
-if __name__ == "__main__":
-    # NOTE: this line is *isolated* from other scripts, which means
-    # it may not be compatible with the current version.
-    SingingBinarizer().process()

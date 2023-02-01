@@ -32,10 +32,10 @@ binarization_args:
   with_wav: false
   with_spk_embed: false
   with_align: true
-raw_data_dir: 'data/raw/opencpop/segments'
+raw_data_dir: 'data/opencpop/raw'
 processed_data_dir: ''
-binary_data_dir: 'data/binary/opencpop-naive-dp'
-binarizer_cls: data_gen.opencpop.OpencpopBinarizer
+binary_data_dir: 'data/opencpop/binary'
+binarizer_cls: data_gen.acoustic.AcousticBinarizer
 g2p_dictionary: dictionaries/opencpop-strict.txt
 pitch_extractor: 'parselmouth'
 pitch_type: frame

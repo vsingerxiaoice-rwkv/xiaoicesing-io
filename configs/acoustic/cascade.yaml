@@ -38,14 +38,14 @@ vocoder: NsfHifiGAN
 vocoder_ckpt: checkpoints/nsf_hifigan/model
 use_nsf: true
 
-binarizer_cls: data_gen.opencpop.OpencpopBinarizer
+binarizer_cls: data_gen.acoustic.AcousticBinarizer
 binarization_args:
   with_wav: false
   with_spk_embed: false
   with_align: true
-raw_data_dir: 'data/raw/opencpop/segments'
-processed_data_dir: 'xxx'
-binary_data_dir: 'data/binary/opencpop-midi-dp'
+raw_data_dir: 'data/opencpop/raw'
+processed_data_dir: ''
+binary_data_dir: 'data/opencpop/binary'
 g2p_dictionary: dictionaries/opencpop-strict.txt
 mel_vmin: -6. #-6.
 mel_vmax: 1.5
