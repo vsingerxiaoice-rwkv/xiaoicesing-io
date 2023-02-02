@@ -922,7 +922,10 @@ def fix(src, target):
 def _perform_speaker_mix(spk_embedding: nn.Embedding, spk_map: dict, spk_mix_map: dict, device):
     for spk_name in spk_mix_map:
         assert spk_name in spk_map, f'Speaker \'{spk_name}\' not found.'
-    spk_mix_embed = [spk_embedding(torch.LongTensor([spk_map[spk_name]]).to(device)) for spk_name in spk_mix_map]
+    spk_mix_embed = [
+        spk_embedding(torch.LongTensor([spk_map[spk_name]]).to(device)) * spk_mix_map[spk_name]
+        for spk_name in spk_mix_map
+    ]
     spk_mix_embed = torch.stack(spk_mix_embed, dim=1).sum(dim=1)
     return spk_mix_embed
 
