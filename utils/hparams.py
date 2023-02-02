@@ -1,5 +1,7 @@
 import argparse
+import multiprocessing
 import os
+import re
 import shutil
 
 import yaml
@@ -106,12 +108,14 @@ def set_hparams(config='', exp_name='', hparams_str='', print_hparams=True, glob
     ckpt_dictionary = os.path.join(hparams_['work_dir'], os.path.basename(dictionary))
     if args_work_dir != '' and (not os.path.exists(ckpt_config_path) or args.reset) and not args.infer:
         os.makedirs(hparams_['work_dir'], exist_ok=True)
-        with open(ckpt_config_path, 'w', encoding='utf-8') as f:
-            hparams_non_recursive = hparams_.copy()
-            hparams_non_recursive['base_config'] = []
-            yaml.safe_dump(hparams_non_recursive, f, allow_unicode=True, encoding='utf-8')
-        if hparams_.get('reset_phone_dict') or not os.path.exists(ckpt_dictionary):
-            shutil.copy(dictionary, ckpt_dictionary)
+        if not bool(re.match(r'Process-\d+', multiprocessing.current_process().name)):
+            # Only the main process will save the config file and dictionary
+            with open(ckpt_config_path, 'w', encoding='utf-8') as f:
+                hparams_non_recursive = hparams_.copy()
+                hparams_non_recursive['base_config'] = []
+                yaml.safe_dump(hparams_non_recursive, f, allow_unicode=True, encoding='utf-8')
+            if hparams_.get('reset_phone_dict') or not os.path.exists(ckpt_dictionary):
+                shutil.copy(dictionary, ckpt_dictionary)
 
     ckpt_dictionary_exists = os.path.exists(ckpt_dictionary)
     if not os.path.exists(dictionary) and not ckpt_dictionary_exists:
