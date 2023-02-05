@@ -68,7 +68,7 @@ class ParameterEncoder(nn.Module):
 
         if hparams.get('use_stretch_embed'):
             stretch = self.stretch_regulator(dur, mel2ph)
-            stretch_embed = self.stretch_embed(stretch)
+            stretch_embed = self.stretch_embed(stretch[:, :, None])
         else:
             stretch_embed = 0
         
