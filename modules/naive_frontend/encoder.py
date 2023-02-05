@@ -4,7 +4,7 @@ import torch
 import torch.nn as nn
 from torch.nn import functional as F
 from modules.commons.common_layers import Embedding, Linear
-from modules.fastspeech.tts_modules import FastspeechEncoder, mel2ph_to_dur
+from modules.fastspeech.tts_modules import FastspeechEncoder, StretchRegulator, mel2ph_to_dur
 
 class Encoder(FastspeechEncoder):
     def forward_embedding(self, txt_tokens, dur_embed):
@@ -38,6 +38,7 @@ class ParameterEncoder(nn.Module):
         self.txt_embed = Embedding(len(dictionary), hparams['hidden_size'], dictionary.pad())
         self.dur_embed = Linear(1, hparams['hidden_size'])
         self.encoder = Encoder(self.txt_embed, hparams['hidden_size'], hparams['enc_layers'], hparams['enc_ffn_kernel_size'], num_heads=hparams['num_heads'])
+
         self.f0_embed_type = hparams.get('f0_embed_type', 'discrete')
         if self.f0_embed_type == 'discrete':
             self.pitch_embed = Embedding(300, hparams['hidden_size'], dictionary.pad())
@@ -45,6 +46,11 @@ class ParameterEncoder(nn.Module):
             self.pitch_embed = Linear(1, hparams['hidden_size'])
         else:
             raise ValueError('f0_embed_type must be \'discrete\' or \'continuous\'.')
+
+        if hparams.get('use_stretch_embed'):
+            self.stretch_regulator = StretchRegulator()
+            self.stretch_embed = Linear(1, hparams['hidden_size'])
+
         if hparams.get('use_spk_id', False):
             self.spk_embed = Embedding(hparams['num_spk'], hparams['hidden_size'])
     
@@ -59,6 +65,12 @@ class ParameterEncoder(nn.Module):
         decoder_inp = F.pad(encoder_out, [0, 0, 1, 0])
         mel2ph_ = mel2ph[..., None].repeat([1, 1, encoder_out.shape[-1]])
         decoder_inp = torch.gather(decoder_inp, 1, mel2ph_)
+
+        if hparams.get('use_stretch_embed'):
+            stretch = self.stretch_regulator(dur, mel2ph)
+            stretch_embed = self.stretch_embed(stretch)
+        else:
+            stretch_embed = 0
         
         nframes = mel2ph.size(1)
         delta_l = nframes - f0.size(1)
@@ -88,5 +100,5 @@ class ParameterEncoder(nn.Module):
         else:
             spk_embed = 0
 
-        ret = {'decoder_inp': decoder_inp + pitch_embed + spk_embed, 'f0_denorm': f0_denorm}
+        ret = {'decoder_inp': decoder_inp + stretch_embed + pitch_embed + spk_embed, 'f0_denorm': f0_denorm}
         return ret

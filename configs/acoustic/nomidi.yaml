@@ -55,6 +55,7 @@ save_f0: true
 max_frames: 8000
 use_uv: false
 use_midi: false
+use_stretch_embed: false
 use_spk_embed: false
 use_spk_id: false
 use_gt_f0: false  #  for midi exp
