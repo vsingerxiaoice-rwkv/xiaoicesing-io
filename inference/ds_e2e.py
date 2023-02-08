@@ -73,7 +73,7 @@ class DiffSingerE2EInfer(BaseSVSInfer):
         spk_name = inp.get('spk_name', 'opencpop')
 
         # single spk
-        spk_id = self.spk_map[spk_name]
+        spk_id = 0
 
         # get ph seq, note lst, midi dur lst, is slur lst.
         if input_type == 'word':
