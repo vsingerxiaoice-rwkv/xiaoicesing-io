@@ -10,6 +10,7 @@ from librosa.util import normalize
 from librosa.filters import mel as librosa_mel_fn
 from scipy.io.wavfile import read
 import soundfile as sf
+import torch.nn.functional as F
 
 def load_wav_to_torch(full_path, target_sr=None, return_empty_on_exception=False):
     sampling_rate = None
@@ -69,7 +70,7 @@ class STFT():
         self.mel_basis = {}
         self.hann_window = {}
     
-    def get_mel(self, y, center=False):
+    def get_mel(self, y, keyshift=0, center=False):
         sampling_rate = self.target_sr
         n_mels     = self.n_mels
         n_fft      = self.n_fft
@@ -79,25 +80,40 @@ class STFT():
         fmax       = self.fmax
         clip_val   = self.clip_val
         
+        factor = 2 ** (keyshift / 12)       
+        n_fft_new = int(np.round(n_fft * factor))
+        win_size_new = int(np.round(win_size * factor))
+        
         if torch.min(y) < -1.:
             print('min value is ', torch.min(y))
         if torch.max(y) > 1.:
             print('max value is ', torch.max(y))
         
-        if fmax not in self.mel_basis:
+        mel_basis_key = str(fmax)+'_'+str(y.device)
+        if mel_basis_key not in self.mel_basis:
             mel = librosa_mel_fn(sr=sampling_rate, n_fft=n_fft, n_mels=n_mels, fmin=fmin, fmax=fmax)
-            self.mel_basis[str(fmax)+'_'+str(y.device)] = torch.from_numpy(mel).float().to(y.device)
-            self.hann_window[str(y.device)] = torch.hann_window(self.win_size).to(y.device)
+            self.mel_basis[mel_basis_key] = torch.from_numpy(mel).float().to(y.device)
         
-        y = torch.nn.functional.pad(y.unsqueeze(1), (int((n_fft-hop_length)/2), int((n_fft-hop_length)/2)), mode='reflect')
+        keyshift_key = str(keyshift)+'_'+str(y.device)
+        if keyshift_key not in self.hann_window:
+            self.hann_window[keyshift_key] = torch.hann_window(win_size_new).to(y.device)
+        
+        y = torch.nn.functional.pad(y.unsqueeze(1), (int((win_size_new-hop_length)/2), int((win_size_new-hop_length)/2)), mode='reflect')
         y = y.squeeze(1)
         
-        spec = torch.stft(y, n_fft, hop_length=hop_length, win_length=win_size, window=self.hann_window[str(y.device)],
-                          center=center, pad_mode='reflect', normalized=False, onesided=True)
+        spec = torch.stft(y, n_fft_new, hop_length=hop_length, win_length=win_size_new, window=self.hann_window[keyshift_key],
+                          center=center, pad_mode='reflect', normalized=False, onesided=True, return_complex=False)
         # print(111,spec)
         spec = torch.sqrt(spec.pow(2).sum(-1)+(1e-9))
+        if keyshift != 0:
+            size = n_fft // 2 + 1
+            resize = spec.size(1)
+            if resize < size:
+                spec = F.pad(spec, (0, 0, 0, size-resize))
+            spec = spec[:, :size, :]
+            
         # print(222,spec)
-        spec = torch.matmul(self.mel_basis[str(fmax)+'_'+str(y.device)], spec)
+        spec = torch.matmul(self.mel_basis[mel_basis_key], spec)
         # print(333,spec)
         spec = dynamic_range_compression_torch(spec, clip_val=clip_val)
         # print(444,spec)
