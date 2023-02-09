@@ -82,7 +82,7 @@ class NsfHifiGAN(BaseVocoder):
         return wav_out
 
     @staticmethod
-    def wav2spec(inp_path, device=None):
+    def wav2spec(inp_path, keyshift=0, device=None):
         if device is None:
             device = 'cuda' if torch.cuda.is_available() else 'cpu'
         sampling_rate = hparams['audio_sample_rate']
@@ -95,7 +95,7 @@ class NsfHifiGAN(BaseVocoder):
         stft = STFT(sampling_rate, num_mels, n_fft, win_size, hop_size, fmin, fmax)
         with torch.no_grad():
             wav_torch, _ = load_wav_to_torch(inp_path, target_sr=stft.target_sr)
-            mel_torch = stft.get_mel(wav_torch.unsqueeze(0).to(device)).squeeze(0).T
+            mel_torch = stft.get_mel(wav_torch.unsqueeze(0).to(device), keyshift=keyshift).squeeze(0).T
             # log mel to log10 mel
             mel_torch = 0.434294 * mel_torch
             return wav_torch.cpu().numpy(), mel_torch.cpu().numpy()
