@@ -59,6 +59,7 @@ class BaseBinarizer:
             'Number of raw data dirs must equal number of speaker names!'
 
         self.binarization_args = hparams['binarization_args']
+        self.augmentation_args = hparams.get('augmentation_args', {})
         self.pre_align_args = hparams['pre_align_args']
         
         self.items = {}
@@ -143,52 +144,92 @@ class BaseBinarizer:
         self.phone_encoder = self._phone_encoder()
         self.process_data_split('valid')
         self.process_data_split('test')
-        self.process_data_split('train')
+        self.process_data_split('train', apply_augmentation=len(self.augmentation_args) > 0)
 
-    def process_data_split(self, prefix, multiprocess=False):
+    def process_data_split(self, prefix, multiprocess=False, apply_augmentation=False):
         data_dir = hparams['binary_data_dir']
         args = []
         builder = IndexedDatasetBuilder(f'{data_dir}/{prefix}')
         lengths = []
         f0s = []
         total_sec = 0
+        total_raw_sec = 0
+
         if self.binarization_args['with_spk_embed']:
             voice_encoder = VoiceEncoder().cuda()
 
         for item_name, meta_data in self.meta_data_iterator(prefix):
             args.append([item_name, meta_data, self.binarization_args])
-        
+
+        aug_map = {}
+        if apply_augmentation:
+            """
+            Code for all types of data augmentation should be added here.
+            """
+            all_item_names = [item_name for item_name, _ in self.meta_data_iterator(prefix)]
+            if 'random_pitch_shifting' in self.augmentation_args:
+                from augmentation.pitch_shift import PitchShiftAugmentation
+                aug_args = self.augmentation_args['random_pitch_shifting']
+                key_shift_min, key_shift_max = aug_args['range']
+                assert hparams.get('use_key_shift_embed', False), \
+                    'Random pitch shifting augmentation requires use_key_shift_embed == True.'
+                assert key_shift_min < 0 < key_shift_max, \
+                    'Random pitch shifting augmentation must have a range where min < 0 < max.'
+
+                aug_ins = PitchShiftAugmentation(self.raw_data_dirs, aug_args)
+                scale = aug_args['scale']
+                aug_item_names = all_item_names * int(scale) \
+                            + random.sample(all_item_names, int(len(all_item_names) * (scale - int(scale))))
+
+                for aug_item_name in aug_item_names:
+                    rand = random.random() * 2 - 1
+                    if rand < 0:
+                        key_shift = key_shift_min * abs(rand)
+                    else:
+                        key_shift = key_shift_max * rand
+                    aug_task = {
+                        'func': aug_ins.process_item,
+                        'kwargs': {'key_shift': key_shift}
+                    }
+                    if aug_item_name in aug_map:
+                        aug_map[aug_item_name].append(aug_task)
+                    else:
+                        aug_map[aug_item_name] = [aug_task]
+
+        def postprocess(item_):
+            nonlocal total_sec, total_raw_sec
+            if item_ is None:
+                return
+            item_['spk_embed'] = voice_encoder.embed_utterance(item_['wav']) \
+                if self.binarization_args['with_spk_embed'] else None
+            if not self.binarization_args['with_wav'] and 'wav' in item_:
+                del item_['wav']
+            builder.add_item(item_)
+            lengths.append(item_['len'])
+            total_sec += item_['sec']
+            total_raw_sec += item_['sec']
+            if item_.get('f0') is not None:
+                f0s.append(item_['f0'])
+
+            for task in aug_map.get(item_['item_name'], []):
+                aug_item = task['func'](item_, **task['kwargs'])
+                builder.add_item(aug_item)
+                lengths.append(aug_item['len'])
+                total_sec += aug_item['sec']
+                if aug_item.get('f0') is not None:
+                    f0s.append(aug_item['f0'])
+
         if multiprocess:
             # code for parallel processing
             num_workers = int(os.getenv('N_PROC', os.cpu_count() // 3))
             for f_id, (_, item) in enumerate(
                     zip(tqdm(meta_data), chunked_multiprocess_run(self.process_item, args, num_workers=num_workers))):
-                if item is None:
-                    continue
-                item['spk_embed'] = voice_encoder.embed_utterance(item['wav']) \
-                    if self.binarization_args['with_spk_embed'] else None
-                if not self.binarization_args['with_wav'] and 'wav' in item:
-                    del item['wav']
-                builder.add_item(item)
-                lengths.append(item['len'])
-                total_sec += item['sec']
-                if item.get('f0') is not None:
-                    f0s.append(item['f0'])
+                postprocess(item)
         else:
             # code for single cpu processing
             for a in tqdm(args):
                 item = self.process_item(*a)
-                if item is None:
-                    continue
-                item['spk_embed'] = voice_encoder.embed_utterance(item['wav']) \
-                    if self.binarization_args['with_spk_embed'] else None
-                if not self.binarization_args['with_wav'] and 'wav' in item:
-                    del item['wav']
-                builder.add_item(item)
-                lengths.append(item['len'])
-                total_sec += item['sec']
-                if item.get('f0') is not None:
-                    f0s.append(item['f0'])
+                postprocess(item)
         
         builder.finalize()
         np.save(f'{data_dir}/{prefix}_lengths.npy', lengths)
@@ -196,7 +237,12 @@ class BaseBinarizer:
             f0s = np.concatenate(f0s, 0)
             f0s = f0s[f0s != 0]
             np.save(f'{data_dir}/{prefix}_f0s_mean_std.npy', [np.mean(f0s).item(), np.std(f0s).item()])
-        print(f"| {prefix} total duration: {total_sec:.3f}s")
+
+        if apply_augmentation:
+            print(f'| {prefix} total duration (before augmentation): {total_raw_sec:.2f}s')
+            print(f'| {prefix} total duration (after augmentation): {total_sec:.2f}s ({total_sec / total_raw_sec:.2f}x)')
+        else:
+            print(f'| {prefix} total duration: {total_raw_sec:.2f}s')
 
     def process_item(self, item_name, meta_data, binarization_args):
         from preprocessing.opencpop import File2Batch

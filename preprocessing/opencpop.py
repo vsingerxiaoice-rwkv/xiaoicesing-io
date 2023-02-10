@@ -115,6 +115,8 @@ class File2Batch:
                     raise BinarizationError(f"Empty phoneme")
                 if binarization_args['with_align']:
                     get_align(temp_dict, mel, phone_encoded)
+            if hparams.get('use_key_shift_embed', False):
+                processed_input['key_shift'] = 0.
         except BinarizationError as e:
             print(f"| Skip item ({e}). item_name: {item_name}, wav_fn: {temp_dict['wav_fn']}")
             return None
@@ -159,6 +161,8 @@ class File2Batch:
         }
         if hparams['use_energy_embed']:
             batch['energy'] = utils.collate_1d([s['energy'] for s in samples], 0.0)
+        if hparams.get('use_key_shift_embed', False):
+            batch['key_shift'] = torch.FloatTensor([s['key_shift'] for s in samples])
         if hparams['use_spk_embed']:
             spk_embed = torch.stack([s['spk_embed'] for s in samples])
             batch['spk_embed'] = spk_embed
