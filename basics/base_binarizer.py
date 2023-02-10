@@ -144,7 +144,7 @@ class BaseBinarizer:
         self.phone_encoder = self._phone_encoder()
         self.process_data_split('valid')
         self.process_data_split('test')
-        self.process_data_split('train', multiprocess=True, apply_augmentation=len(self.augmentation_args) > 0)
+        self.process_data_split('train', apply_augmentation=len(self.augmentation_args) > 0)
 
     def process_data_split(self, prefix, multiprocess=False, apply_augmentation=False):
         data_dir = hparams['binary_data_dir']
