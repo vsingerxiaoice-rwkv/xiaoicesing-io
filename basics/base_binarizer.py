@@ -144,7 +144,7 @@ class BaseBinarizer:
         self.phone_encoder = self._phone_encoder()
         self.process_data_split('valid')
         self.process_data_split('test')
-        self.process_data_split('train', apply_augmentation=len(self.augmentation_args) > 0)
+        self.process_data_split('train', multiprocess=True, apply_augmentation=len(self.augmentation_args) > 0)
 
     def process_data_split(self, prefix, multiprocess=False, apply_augmentation=False):
         data_dir = hparams['binary_data_dir']
@@ -221,9 +221,11 @@ class BaseBinarizer:
 
         if multiprocess:
             # code for parallel processing
-            num_workers = int(os.getenv('N_PROC', os.cpu_count() // 3))
-            for f_id, (_, item) in enumerate(
-                    zip(tqdm(meta_data), chunked_multiprocess_run(self.process_item, args, num_workers=num_workers))):
+            num_workers = int(os.getenv('N_PROC', hparams.get('ds_workers', os.cpu_count() // 3)))
+            for item in tqdm(
+                chunked_multiprocess_run(self.process_item, args, num_workers=num_workers),
+                total=len(list(self.meta_data_iterator(prefix)))
+            ):
                 postprocess(item)
         else:
             # code for single cpu processing
