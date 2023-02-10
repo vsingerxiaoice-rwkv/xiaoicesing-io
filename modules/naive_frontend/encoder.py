@@ -94,7 +94,7 @@ class ParameterEncoder(nn.Module):
                 elif mix_frames > 1:
                     spk_embed = torch.cat((spk_embed, spk_embed[:, -1:, :].repeat(1, nframes - mix_frames, 1)), dim=1)
             else:
-                spk_embed = self.spk_embed(spk_embed_id)[:, None, :]  # (b,) => (b, 256) => (b, 1, 256)
+                spk_embed = self.spk_embed(spk_embed_id)[:, None, :]
         else:
             spk_embed = 0
 
