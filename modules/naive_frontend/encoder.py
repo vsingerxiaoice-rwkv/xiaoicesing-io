@@ -81,7 +81,7 @@ class ParameterEncoder(nn.Module):
             pitch_embed = self.pitch_embed(f0_mel[:, :, None])
 
         if hparams.get('use_key_shift_embed', False):
-            key_shift_embed = self.key_shift_embed(kwarg.get('key_shift'))[:, None, :]
+            key_shift_embed = self.key_shift_embed(kwarg.get('key_shift')[:, None, None])
         else:
             key_shift_embed = 0
         
