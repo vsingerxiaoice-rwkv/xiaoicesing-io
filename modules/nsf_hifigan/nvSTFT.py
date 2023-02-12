@@ -110,7 +110,7 @@ class STFT():
             resize = spec.size(1)
             if resize < size:
                 spec = F.pad(spec, (0, 0, 0, size-resize))
-            spec = spec[:, :size, :]
+            spec = spec[:, :size, :] * win_size / win_size_new
             
         # print(222,spec)
         spec = torch.matmul(self.mel_basis[mel_basis_key], spec)
