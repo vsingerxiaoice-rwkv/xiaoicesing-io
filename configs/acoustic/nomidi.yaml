@@ -33,7 +33,7 @@ binarization_args:
   with_spk_embed: false
   with_align: true
   shuffle: true
-augmentation_args:
+#augmentation_args:
 #  random_pitch_shifting:
 #    range: [-5., 5.]
 #    scale: 1.0
