@@ -161,40 +161,7 @@ class BaseBinarizer:
         for item_name, meta_data in self.meta_data_iterator(prefix):
             args.append([item_name, meta_data, self.binarization_args])
 
-        aug_map = {}
-        if apply_augmentation:
-            """
-            Code for all types of data augmentation should be added here.
-            """
-            all_item_names = [item_name for item_name, _ in self.meta_data_iterator(prefix)]
-            if 'random_pitch_shifting' in self.augmentation_args:
-                from augmentation.pitch_shift import PitchShiftAugmentation
-                aug_args = self.augmentation_args['random_pitch_shifting']
-                key_shift_min, key_shift_max = aug_args['range']
-                assert hparams.get('use_key_shift_embed', False), \
-                    'Random pitch shifting augmentation requires use_key_shift_embed == True.'
-                assert key_shift_min < 0 < key_shift_max, \
-                    'Random pitch shifting augmentation must have a range where min < 0 < max.'
-
-                aug_ins = PitchShiftAugmentation(self.raw_data_dirs, aug_args)
-                scale = aug_args['scale']
-                aug_item_names = all_item_names * int(scale) \
-                            + random.sample(all_item_names, int(len(all_item_names) * (scale - int(scale))))
-
-                for aug_item_name in aug_item_names:
-                    rand = random.random() * 2 - 1
-                    if rand < 0:
-                        key_shift = key_shift_min * abs(rand)
-                    else:
-                        key_shift = key_shift_max * rand
-                    aug_task = {
-                        'func': aug_ins.process_item,
-                        'kwargs': {'key_shift': key_shift}
-                    }
-                    if aug_item_name in aug_map:
-                        aug_map[aug_item_name].append(aug_task)
-                    else:
-                        aug_map[aug_item_name] = [aug_task]
+        aug_map = self.arrange_data_augmentation(prefix) if apply_augmentation else {}
 
         def postprocess(item_):
             nonlocal total_sec, total_raw_sec
@@ -245,6 +212,71 @@ class BaseBinarizer:
             print(f'| {prefix} total duration (after augmentation): {total_sec:.2f}s ({total_sec / total_raw_sec:.2f}x)')
         else:
             print(f'| {prefix} total duration: {total_raw_sec:.2f}s')
+
+    def arrange_data_augmentation(self, prefix):
+        """
+        Code for all types of data augmentation should be added here.
+        """
+        aug_map = {}
+        all_item_names = [item_name for item_name, _ in self.meta_data_iterator(prefix)]
+        if self.augmentation_args.get('random_pitch_shifting') is not None:
+            from augmentation.pitch_shift import PitchShiftAugmentation
+            aug_args = self.augmentation_args['random_pitch_shifting']
+            key_shift_min, key_shift_max = aug_args['range']
+            assert hparams.get('use_key_shift_embed', False), \
+                'Random pitch shifting augmentation requires use_key_shift_embed == True.'
+            assert key_shift_min < 0 < key_shift_max, \
+                'Random pitch shifting augmentation must have a range where min < 0 < max.'
+
+            aug_ins = PitchShiftAugmentation(self.raw_data_dirs, aug_args)
+            scale = aug_args['scale']
+            aug_item_names = all_item_names * int(scale) \
+                             + random.sample(all_item_names, int(len(all_item_names) * (scale - int(scale))))
+
+            for aug_item_name in aug_item_names:
+                rand = random.random() * 2 - 1
+                if rand < 0:
+                    key_shift = key_shift_min * abs(rand)
+                else:
+                    key_shift = key_shift_max * rand
+                aug_task = {
+                    'func': aug_ins.process_item,
+                    'kwargs': {'key_shift': key_shift}
+                }
+                if aug_item_name in aug_map:
+                    aug_map[aug_item_name].append(aug_task)
+                else:
+                    aug_map[aug_item_name] = [aug_task]
+
+        if self.augmentation_args.get('fixed_pitch_shifting') is not None:
+            from augmentation.pitch_shift import PitchShiftAugmentation
+            aug_args = self.augmentation_args['fixed_pitch_shifting']
+            targets = aug_args['targets']
+            scale = aug_args['scale']
+            assert self.augmentation_args.get('random_pitch_shifting') is None, \
+                'Fixed pitch shifting augmentation is not compatible with random pitch shifting.'
+            assert len(targets) == len(set(targets)), \
+                'Fixed pitch shifting augmentation requires having no duplicate targets.'
+            assert hparams['use_spk_id'], 'Fixed pitch shifting augmentation requires use_spk_id == True.'
+            assert hparams['num_spk'] >= (1 + len(targets)) * len(self.spk_map), \
+                'Fixed pitch shifting augmentation requires num_spk >= (1 + len(targets)) * len(speakers).'
+            assert scale < 1, 'Fixed pitch shifting augmentation requires scale < 1.'
+
+            aug_ins = PitchShiftAugmentation(self.raw_data_dirs, aug_args)
+            for i, target in enumerate(targets):
+                aug_item_names = random.sample(all_item_names, int(len(all_item_names) * scale))
+                for aug_item_name in aug_item_names:
+                    replace_spk_id = int(aug_item_name.split(':', maxsplit=1)[0]) + (i + 1) * len(self.spk_map)
+                    aug_task = {
+                        'func': aug_ins.process_item,
+                        'kwargs': {'key_shift': target, 'replace_spk_id': replace_spk_id}
+                    }
+                    if aug_item_name in aug_map:
+                        aug_map[aug_item_name].append(aug_task)
+                    else:
+                        aug_map[aug_item_name] = [aug_task]
+
+        return aug_map
 
     def process_item(self, item_name, meta_data, binarization_args):
         from preprocessing.opencpop import File2Batch
