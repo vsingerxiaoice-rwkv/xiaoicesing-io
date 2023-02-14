@@ -81,7 +81,15 @@ class ParameterEncoder(nn.Module):
             pitch_embed = self.pitch_embed(f0_mel[:, :, None])
 
         if hparams.get('use_key_shift_embed', False):
-            key_shift_embed = self.key_shift_embed(kwarg.get('key_shift')[:, None, None])
+            key_shift = kwarg['key_shift']
+            if len(key_shift.shape) == 1:
+                key_shift_embed = self.key_shift_embed(key_shift[:, None, None])
+            else:
+                delta_l = nframes - key_shift.size(1)
+                if delta_l > 0:
+                    key_shift = torch.cat((key_shift, torch.FloatTensor([[x[-1]] * delta_l for x in key_shift]).to(key_shift.device)), 1)
+                key_shift = key_shift[:, :nframes]
+                key_shift_embed = self.key_shift_embed(key_shift[:, :, None])
         else:
             key_shift_embed = 0
         
