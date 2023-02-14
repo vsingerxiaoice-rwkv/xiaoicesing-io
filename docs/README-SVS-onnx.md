@@ -26,10 +26,10 @@ Note that the scripts are tested on PyTorch 1.8.
 Run with the command
 
 ```bash
-python onnx/export/export_acoustic.py --exp EXP [--target TARGET]
+python onnx/export/export_acoustic.py --exp EXP [--out OUT]
 ```
 
-where `EXP` is the name of experiment, `TARGET` is the path for the target onnx file.
+where `EXP` is the name of experiment, `OUT` is the output directory.
 
 This script will export the acoustic model to the ONNX format and do a lot of optimization (25% ~ 50% faster with ONNXRuntime than PyTorch).
 
