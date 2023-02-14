@@ -951,7 +951,6 @@ def _perform_speaker_mix(spk_embedding: nn.Embedding, spk_map: dict, spk_mix_map
 
 @torch.no_grad()
 def export(fs2_path, diff_path, expose_gender=False, spk_export_list=None, frozen_spk=None):
-    set_hparams(print_hparams=True)
     if hparams.get('use_midi', True) or not hparams['use_pitch_embed']:
         raise NotImplementedError('Only checkpoints of MIDI-less mode are supported.')
 
@@ -1165,6 +1164,9 @@ def merge(fs2_path, diff_path, target_path):
     print('FastSpeech2 and GaussianDiffusion models merged.')
     onnx.save(merged_model, target_path)
 
+def export_phonemes_txt(phonemes_txt_path:str):
+    textEncoder = TokenTextEncoder(vocab_list=build_phoneme_list())
+    textEncoder.store_to_file(phonemes_txt_path)
 
 if __name__ == '__main__':
     parser = argparse.ArgumentParser(description='Export DiffSinger acoustic model to ONNX format.')
@@ -1244,11 +1246,14 @@ if __name__ == '__main__':
         target_model_path = f'{out}/{exp}.onnx'
     else:
         target_model_path = f'{out}/{exp}.{frozen_spk_name}.onnx'
+    phonemes_txt_path =f'{out}/{exp}.phonemes.txt' 
     os.makedirs(out, exist_ok=True)
+    set_hparams(print_hparams=False)
     export(fs2_path=fs2_model_path, diff_path=diff_model_path, expose_gender=args.expose_gender,
            spk_export_list=spk_export_paths, frozen_spk=frozen_spk_mix)
     fix(diff_model_path, diff_model_path)
     merge(fs2_path=fs2_model_path, diff_path=diff_model_path, target_path=target_model_path)
+    export_phonemes_txt(phonemes_txt_path)
     os.remove(fs2_model_path)
     os.remove(diff_model_path)
 
