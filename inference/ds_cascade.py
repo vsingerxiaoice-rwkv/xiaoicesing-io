@@ -190,7 +190,7 @@ class DiffSingerCascadeInfer(BaseSVSInfer):
         else:
             print('Using automatic pitch curve')
 
-        if hparams['use_key_shift_embed']:
+        if hparams.get('use_key_shift_embed', False):
             shift_min, shift_max = hparams['augmentation_args']['random_pitch_shifting']['range']
             if isinstance(item['gender'], float):
                 print(f'Using static gender value: {item["gender"]:.3f}')
