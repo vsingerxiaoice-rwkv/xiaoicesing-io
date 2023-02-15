@@ -2,7 +2,7 @@ import re
 import six
 from six.moves import range  # pylint: disable=redefined-builtin
 
-PAD = "<pad>"
+PAD = "<PAD>"
 EOS = "<EOS>"
 UNK = "<UNK>"
 SEG = "|"
