@@ -70,12 +70,6 @@ class ParameterEncoder(nn.Module):
         mel2ph_ = mel2ph[..., None].repeat([1, 1, encoder_out.shape[-1]])
         decoder_inp = torch.gather(decoder_inp, 1, mel2ph_)
 
-        if hparams.get('use_stretch_embed'):
-            stretch = self.stretch_regulator(dur, mel2ph)
-            stretch_embed = self.stretch_embed(stretch[:, :, None])
-        else:
-            stretch_embed = 0
-        
         nframes = mel2ph.size(1)
         delta_l = nframes - f0.size(1)
         if delta_l > 0:
