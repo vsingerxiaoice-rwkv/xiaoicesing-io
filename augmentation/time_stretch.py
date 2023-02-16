@@ -8,7 +8,6 @@ from data_gen.data_gen_utils import get_pitch_parselmouth
 from modules.fastspeech.tts_modules import LengthRegulator
 from src.vocoders.base_vocoder import VOCODERS
 from utils.hparams import hparams
-from utils.pitch_utils import f0_to_coarse
 
 
 class TimeStretchAugmentation(BaseAugmentation):
@@ -27,23 +26,22 @@ class TimeStretchAugmentation(BaseAugmentation):
         aug_item['speed'] = item['len'] / aug_item['len']
         aug_item['sec'] /= aug_item['speed']
         aug_item['ph_durs'] /= aug_item['speed']
-        aug_item['mel2ph'] = self.get_mel2ph(aug_item['phone'], aug_item['ph_durs'], aug_item['len'])
+        aug_item['mel2ph'] = self.get_mel2ph(aug_item['ph_durs'], aug_item['len'])
         aug_item['mel'] = mel
         aug_item['f0'], aug_item['pitch'] = get_pitch_parselmouth(wav, mel, hparams)
         return aug_item
 
     @torch.no_grad()
-    def get_mel2ph(self, phones, durs, length):
-        ph_seq = torch.LongTensor(phones)[None].to(self.device)
+    def get_mel2ph(self, durs, length):
         ph_acc = np.around(
             np.add.accumulate(durs) * hparams['audio_sample_rate'] / hparams['hop_size'] + 0.5
         ).astype('int')
         ph_dur = np.diff(ph_acc, prepend=0)
         ph_dur = torch.LongTensor(ph_dur)[None].to(self.device)
-        mel2ph = self.lr(ph_dur, ph_seq == 0).cpu().numpy()[0]
+        mel2ph = self.lr(ph_dur).cpu().numpy()[0]
         num_frames = len(mel2ph)
         if num_frames < length:
             mel2ph = np.concatenate((mel2ph, np.full((length - num_frames, mel2ph[-1]))), axis=0)
         elif num_frames > length:
-            mel2ph = mel2ph[:num_frames]
+            mel2ph = mel2ph[:length]
         return mel2ph
