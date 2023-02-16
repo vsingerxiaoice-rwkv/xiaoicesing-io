@@ -22,7 +22,7 @@ os.environ['PYTHONPATH'] = f'"{root_dir}"'
 
 parser = argparse.ArgumentParser(description='Run DiffSinger inference')
 parser.add_argument('proj', type=str, help='Path to the input file')
-parser.add_argument('--exp', type=str, required=False, help='Selection of model')
+parser.add_argument('--exp', type=str, required=True, help='Selection of model')
 parser.add_argument('--spk', type=str, required=False, help='Speaker name or mix of speakers')
 parser.add_argument('--out', type=str, required=False, help='Path of the output folder')
 parser.add_argument('--title', type=str, required=False, help='Title of output file')
@@ -49,7 +49,6 @@ if args.pitch is not None:
 
 name = os.path.basename(args.proj).split('.')[0] if not args.title else args.title
 exp = args.exp
-assert exp is not None, 'Default value of exp is deprecated. You must specify \'--exp\' to run inference.'
 if not os.path.exists(f'{root_dir}/checkpoints/{exp}'):
     for ckpt in os.listdir(os.path.join(root_dir, 'checkpoints')):
         if ckpt.startswith(exp):
