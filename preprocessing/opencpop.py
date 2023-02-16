@@ -80,6 +80,7 @@ class File2Batch:
             mel2ph = np.zeros([mel.shape[0]], int)
             startTime = 0
             ph_durs = meta_data['ph_durs']
+            processed_input['ph_durs'] = np.asarray(ph_durs, dtype=np.float32)
 
             for i_ph in range(len(ph_durs)):
                 start_frame = int(startTime * audio_sample_rate / hop_size + 0.5)
@@ -117,6 +118,8 @@ class File2Batch:
                     get_align(temp_dict, mel, phone_encoded)
             if hparams.get('use_key_shift_embed', False):
                 processed_input['key_shift'] = 0.
+            if hparams.get('use_speed_embed', False):
+                processed_input['speed'] = 1.
         except BinarizationError as e:
             print(f"| Skip item ({e}). item_name: {item_name}, wav_fn: {temp_dict['wav_fn']}")
             return None
@@ -163,6 +166,8 @@ class File2Batch:
             batch['energy'] = utils.collate_1d([s['energy'] for s in samples], 0.0)
         if hparams.get('use_key_shift_embed', False):
             batch['key_shift'] = torch.FloatTensor([s['key_shift'] for s in samples])
+        if hparams.get('use_speed_embed', False):
+            batch['speed'] = torch.FloatTensor([s['speed'] for s in samples])
         if hparams['use_spk_embed']:
             spk_embed = torch.stack([s['spk_embed'] for s in samples])
             batch['spk_embed'] = spk_embed

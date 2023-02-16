@@ -276,6 +276,40 @@ class BaseBinarizer:
                     else:
                         aug_map[aug_item_name] = [aug_task]
 
+        if self.augmentation_args.get('random_time_stretching') is not None:
+            from augmentation.time_stretch import TimeStretchAugmentation
+            aug_args = self.augmentation_args['random_time_stretching']
+            speed_min, speed_max = aug_args['range']
+            domain = aug_args['domain']
+            assert hparams.get('use_speed_embed', False), \
+                'Random time stretching augmentation requires use_speed_embed == True.'
+            assert 0 < speed_min < 1 < speed_max, \
+                'Random time stretching augmentation must have a range where 0 < min < 1 < max.'
+            assert domain in ['log', 'linear'], 'domain must be \'log\' or \'linear\'.'
+
+            aug_ins = TimeStretchAugmentation(self.raw_data_dirs, aug_args)
+            scale = aug_args['scale']
+            aug_item_names = all_item_names * int(scale) \
+                             + random.sample(all_item_names, int(len(all_item_names) * (scale - int(scale))))
+
+            for aug_item_name in aug_item_names:
+                rand = random.random()
+                if domain == 'log':
+                    # Uniform distribution in log domain
+                    speed = speed_min * (speed_max / speed_min) ** rand
+                else:
+                    # Uniform distribution in linear domain
+                    rand = rand * 2 - 1
+                    speed = 1 + (speed_max - 1) * rand if rand >= 0 else 1 + (1 - speed_min) * rand
+                aug_task = {
+                    'func': aug_ins.process_item,
+                    'kwargs': {'speed': speed}
+                }
+                if aug_item_name in aug_map:
+                    aug_map[aug_item_name].append(aug_task)
+                else:
+                    aug_map[aug_item_name] = [aug_task]
+
         return aug_map
 
     def process_item(self, item_name, meta_data, binarization_args):

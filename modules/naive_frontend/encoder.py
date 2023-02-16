@@ -4,7 +4,7 @@ import torch
 import torch.nn as nn
 from torch.nn import functional as F
 from modules.commons.common_layers import Embedding, Linear
-from modules.fastspeech.tts_modules import FastspeechEncoder, StretchRegulator, mel2ph_to_dur
+from modules.fastspeech.tts_modules import FastspeechEncoder, mel2ph_to_dur
 
 class Encoder(FastspeechEncoder):
     def forward_embedding(self, txt_tokens, dur_embed):
@@ -47,12 +47,11 @@ class ParameterEncoder(nn.Module):
         else:
             raise ValueError('f0_embed_type must be \'discrete\' or \'continuous\'.')
 
-        if hparams.get('use_stretch_embed'):
-            self.stretch_regulator = StretchRegulator()
-            self.stretch_embed = Linear(1, hparams['hidden_size'])
-
         if hparams.get('use_key_shift_embed', False):
             self.key_shift_embed = Linear(1, hparams['hidden_size'])
+
+        if hparams.get('use_speed_embed', False):
+            self.speed_embed = Linear(1, hparams['hidden_size'])
 
         if hparams['use_spk_id']:
             self.spk_embed = Embedding(hparams['num_spk'], hparams['hidden_size'])
@@ -62,6 +61,8 @@ class ParameterEncoder(nn.Module):
                 spk_embed_dur_id=None, spk_embed_f0_id=None, infer=False, is_slur=None, **kwarg):
         B, T = txt_tokens.shape
         dur = mel2ph_to_dur(mel2ph, T).float()
+        if hparams.get('use_speed_embed', False):
+            dur *= kwarg['speed']
         dur_embed = self.dur_embed(dur[:, :, None])
         encoder_out = self.encoder(txt_tokens, dur_embed)
         
@@ -102,6 +103,11 @@ class ParameterEncoder(nn.Module):
                 key_shift_embed = self.key_shift_embed(key_shift[:, :, None])
         else:
             key_shift_embed = 0
+
+        if hparams.get('use_speed_embed', False):
+            speed_embed = self.speed_embed(kwarg['speed'][:, None, None])
+        else:
+            speed_embed = 0
         
         if hparams['use_spk_id']:
             if infer:
@@ -116,5 +122,5 @@ class ParameterEncoder(nn.Module):
         else:
             spk_embed = 0
 
-        ret = {'decoder_inp': decoder_inp + stretch_embed + pitch_embed + key_shift_embed + spk_embed, 'f0_denorm': f0_denorm}
+        ret = {'decoder_inp': decoder_inp + pitch_embed + key_shift_embed + speed_embed + spk_embed, 'f0_denorm': f0_denorm}
         return ret

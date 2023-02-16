@@ -84,6 +84,8 @@ class FastSpeechDataset(BaseDataset):
             sample['energy'] = item['energy']
         if self.hparams.get('use_key_shift_embed', False):
             sample['key_shift'] = item['key_shift']
+        if self.hparams.get('use_speed_embed', False):
+            sample['speed'] = item['speed']
         if self.hparams['use_spk_embed']:
             sample["spk_embed"] = torch.Tensor(item['spk_embed'])
         if self.hparams['use_spk_id']:
