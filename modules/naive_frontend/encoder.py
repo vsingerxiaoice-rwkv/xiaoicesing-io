@@ -4,7 +4,7 @@ import torch
 import torch.nn as nn
 from torch.nn import functional as F
 from modules.commons.common_layers import Embedding, Linear
-from modules.fastspeech.tts_modules import FastspeechEncoder, mel2ph_to_dur
+from modules.fastspeech.tts_modules import FastspeechEncoder, StretchRegulator, mel2ph_to_dur
 
 class Encoder(FastspeechEncoder):
     def forward_embedding(self, txt_tokens, dur_embed):
@@ -47,6 +47,10 @@ class ParameterEncoder(nn.Module):
         else:
             raise ValueError('f0_embed_type must be \'discrete\' or \'continuous\'.')
 
+        if hparams.get('use_stretch_embed'):
+            self.stretch_regulator = StretchRegulator()
+            self.stretch_embed = Linear(1, hparams['hidden_size'])
+
         if hparams.get('use_key_shift_embed', False):
             self.key_shift_embed = Linear(1, hparams['hidden_size'])
 
@@ -64,6 +68,12 @@ class ParameterEncoder(nn.Module):
         decoder_inp = F.pad(encoder_out, [0, 0, 1, 0])
         mel2ph_ = mel2ph[..., None].repeat([1, 1, encoder_out.shape[-1]])
         decoder_inp = torch.gather(decoder_inp, 1, mel2ph_)
+
+        if hparams.get('use_stretch_embed'):
+            stretch = self.stretch_regulator(dur, mel2ph)
+            stretch_embed = self.stretch_embed(stretch[:, :, None])
+        else:
+            stretch_embed = 0
         
         nframes = mel2ph.size(1)
         delta_l = nframes - f0.size(1)
@@ -106,5 +116,5 @@ class ParameterEncoder(nn.Module):
         else:
             spk_embed = 0
 
-        ret = {'decoder_inp': decoder_inp + pitch_embed + key_shift_embed + spk_embed, 'f0_denorm': f0_denorm}
+        ret = {'decoder_inp': decoder_inp + stretch_embed + pitch_embed + key_shift_embed + spk_embed, 'f0_denorm': f0_denorm}
         return ret

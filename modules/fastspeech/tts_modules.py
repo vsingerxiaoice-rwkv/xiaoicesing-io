@@ -189,6 +189,33 @@ class LengthRegulator(torch.nn.Module):
         return mel2ph
 
 
+class StretchRegulator(torch.nn.Module):
+    def forward(self, dur, mel2ph):
+        """
+        Example (no batch dim version):
+            1. dur = [2,4,3]
+            2. mel2ph = [1,1,2,2,2,2,3,3,3]
+            3. mel2dur = [2,2,4,4,4,4,3,3,3]
+            4. bound_mask = [0,1,0,0,0,1,0,0,1]
+            5. 1 - bound_mask * mel2dur = [1,-1,1,1,1,-3,1,1,-2] => pad => [0,1,-1,1,1,1,-3,1,1]
+            6. stretch_denorm = [0,1,0,1,2,3,0,1,2]
+
+        :param dur: Batch of durations of each frame (B, T_txt)
+        :param mel2ph: Batch of mel2ph (B, T_speech)
+        :return:
+            stretch (B, T_speech)
+        """
+        dur = F.pad(dur, [1, 0], value=1)  # Avoid dividing by zero
+        mel2dur = torch.gather(dur, 1, mel2ph)
+        bound_mask = torch.gt(mel2ph[:, 1:], mel2ph[:, :-1])
+        bound_mask = F.pad(bound_mask, [0, 1], mode='constant', value=True)
+        stretch_delta = 1 - bound_mask * mel2dur
+        stretch_delta = F.pad(stretch_delta, [1, -1], mode='constant', value=0)
+        stretch_denorm = torch.cumsum(stretch_delta, dim=1)
+        stretch = stretch_denorm / mel2dur
+        return stretch * (mel2ph > 0)
+
+
 class PitchPredictor(torch.nn.Module):
     def __init__(self, idim, n_layers=5, n_chans=384, odim=2, kernel_size=5,
                  dropout_rate=0.1, padding='SAME'):
