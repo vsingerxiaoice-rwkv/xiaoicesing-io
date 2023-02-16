@@ -1195,6 +1195,17 @@ if __name__ == '__main__':
         raise NotImplementedError('Exporting speakers or speaker mixes is not supported yet.')
 
     exp = args.exp
+    if not os.path.exists(f'{root_dir}/checkpoints/{exp}'):
+        for ckpt in os.listdir(os.path.join(root_dir, 'checkpoints')):
+            if ckpt.startswith(exp):
+                print(f'| match ckpt by prefix: {ckpt}')
+                exp = ckpt
+                break
+        assert os.path.exists(f'{root_dir}/checkpoints/{exp}'), 'There are no matching exp in \'checkpoints\' folder. ' \
+                                                                'Please specify \'--exp\' as the folder name or prefix.'
+    else:
+        print(f'| found ckpt by name: {exp}')
+
     cwd = os.getcwd()
     if args.out:
         out = os.path.join(cwd, args.out) if not os.path.isabs(args.out) else args.out
