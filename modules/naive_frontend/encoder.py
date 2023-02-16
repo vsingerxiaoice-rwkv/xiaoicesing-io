@@ -62,7 +62,7 @@ class ParameterEncoder(nn.Module):
         B, T = txt_tokens.shape
         dur = mel2ph_to_dur(mel2ph, T).float()
         if hparams.get('use_speed_embed', False):
-            dur *= kwarg['speed']
+            dur *= kwarg['speed'][:, None]
         dur_embed = self.dur_embed(dur[:, :, None])
         encoder_out = self.encoder(txt_tokens, dur_embed)
         
