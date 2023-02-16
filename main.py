@@ -114,7 +114,7 @@ if len(params) > 0:
 spk_mix = parse_commandline_spk_mix(args.spk) if hparams['use_spk_id'] and args.spk is not None else None
 
 for param in params:
-    if args.gender is not None and hparams['use_key_shift_embed']:
+    if args.gender is not None and hparams.get('use_key_shift_embed'):
         param['gender'] = args.gender
     if spk_mix is not None:
         param['spk_mix'] = spk_mix

@@ -1006,7 +1006,7 @@ def export(fs2_path, diff_path, expose_gender=False, spk_export_list=None, froze
             1: 'n_frames'
         }
     }
-    if hparams['use_key_shift_embed']:
+    if hparams.get('use_key_shift_embed', False):
         if expose_gender:
             # noinspection PyTypedDict
             kwargs['gender'] = torch.rand((1, n_frames), dtype=torch.float32, device=device)
