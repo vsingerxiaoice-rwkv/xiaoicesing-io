@@ -34,8 +34,16 @@ class DiffSingerCascadeInfer(BaseSVSInfer):
         ph_dur = None
         f0_timestep = float(inp['f0_timestep'])
         f0_seq = None
+        gender_timestep = None
+        gender = 0.
         if inp['f0_seq'] is not None:
             f0_seq = np.array(inp['f0_seq'].split(), 'float')
+        if inp.get('gender') is not None:
+            if isinstance(inp['gender'], str):
+                gender_timestep = float(inp['gender_timestep'])
+                gender = np.array(inp['gender'].split(), 'float')
+            else:
+                gender = float(inp['gender'])
         ph_seq_lst = ph_seq.split()
         if inp['ph_dur'] is not None:
             ph_dur = np.array(inp['ph_dur'].split(), 'float')
@@ -50,7 +58,7 @@ class DiffSingerCascadeInfer(BaseSVSInfer):
                                    f'{len(note_lst)} {len(ph_seq.split())} {len(midi_dur_lst)}')
             print(f'Processed {len(ph_seq_lst)} tokens: {" ".join(ph_seq_lst)}')
 
-        return ph_seq, note_lst, midi_dur_lst, is_slur, ph_dur, f0_timestep, f0_seq
+        return ph_seq, note_lst, midi_dur_lst, is_slur, ph_dur, f0_timestep, f0_seq, gender_timestep, gender
 
     def preprocess_input(self, inp, input_type='word'):
         """
@@ -82,9 +90,9 @@ class DiffSingerCascadeInfer(BaseSVSInfer):
         # get ph seq, note lst, midi dur lst, is slur lst.
         if input_type == 'word':
             ph_seq, note_lst, midi_dur_lst, is_slur = self.preprocess_word_level_input(inp)
-            ph_dur = f0_timestep = f0_seq = None
+            ph_dur = f0_timestep = f0_seq = gender_timestep = gender = None
         elif input_type == 'phoneme':  # like transcriptions.txt in Opencpop dataset.
-            ph_seq, note_lst, midi_dur_lst, is_slur, ph_dur, f0_timestep, f0_seq = \
+            ph_seq, note_lst, midi_dur_lst, is_slur, ph_dur, f0_timestep, f0_seq, gender_timestep, gender = \
                 self.preprocess_phoneme_level_input(inp)
         else:
             raise ValueError('Invalid input type. Must be \'word\' or \'phoneme\'.')
@@ -108,6 +116,8 @@ class DiffSingerCascadeInfer(BaseSVSInfer):
             item['ph_dur'] = ph_dur
             item['f0_timestep'] = f0_timestep
             item['f0_seq'] = f0_seq
+            item['gender_timestep'] = gender_timestep
+            item['gender'] = gender
             item['spk_mix_timestep'] = inp.get('spk_mix_timestep')
         return item
 
@@ -178,7 +188,27 @@ class DiffSingerCascadeInfer(BaseSVSInfer):
             f0_interp = np.interp(np.arange(0, t_max, dt), f0_timestep * np.arange(len(f0_seq)), f0_seq)
             log2f0 = torch.FloatTensor(np.log2(f0_interp))[None, :].to(self.device)
         else:
-            print('Using automaic pitch curve')
+            print('Using automatic pitch curve')
+
+        if hparams.get('use_key_shift_embed', False):
+            shift_min, shift_max = hparams['augmentation_args']['random_pitch_shifting']['range']
+            if isinstance(item['gender'], float):
+                print(f'Using static gender value: {item["gender"]:.3f}')
+                gender = item['gender']
+                key_shift_value = gender * shift_max if gender >= 0 else gender * abs(shift_min)
+                key_shift = torch.FloatTensor([key_shift_value]).to(self.device)
+            else:
+                print('Using dynamic gender curve')
+                gender_timestep = item['gender_timestep']
+                gender_seq = item['gender']
+                gender_mask = gender_seq >= 0
+                key_shift_seq = gender_seq * (gender_mask * shift_max + (1 - gender_mask) * abs(shift_min))
+                t_max = (len(key_shift_seq) - 1) * gender_timestep
+                dt = hparams['hop_size'] / hparams['audio_sample_rate']
+                key_shift_interp = np.interp(np.arange(0, t_max, dt), gender_timestep * np.arange(len(key_shift_seq)), key_shift_seq)
+                key_shift = torch.FloatTensor(key_shift_interp)[None, :].to(self.device)
+        else:
+            key_shift = None
 
         batch = {
             'item_name': item_names,
@@ -191,7 +221,8 @@ class DiffSingerCascadeInfer(BaseSVSInfer):
             'midi_dur': midi_dur,
             'is_slur': is_slur,
             'mel2ph': mel2ph,
-            'log2f0': log2f0
+            'log2f0': log2f0,
+            'key_shift': key_shift
         }
         return batch
 
@@ -208,7 +239,8 @@ class DiffSingerCascadeInfer(BaseSVSInfer):
                 spk_mix_embed = None
             output = self.model(txt_tokens, spk_mix_embed=spk_mix_embed, ref_mels=None, infer=True,
                                 pitch_midi=sample['pitch_midi'], midi_dur=sample['midi_dur'],
-                                is_slur=sample['is_slur'], mel2ph=sample['mel2ph'], f0=sample['log2f0'])
+                                is_slur=sample['is_slur'], mel2ph=sample['mel2ph'], f0=sample['log2f0'],
+                                key_shift=sample['key_shift'])
             mel_out = output['mel_out']  # [B, T,80]
             f0_pred = output['f0_denorm']
             if return_mel:

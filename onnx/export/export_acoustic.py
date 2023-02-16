@@ -38,6 +38,7 @@ f0_min = 50.0
 f0_mel_min = 1127 * math.log(1 + f0_min / 700)
 f0_mel_max = 1127 * math.log(1 + f0_max / 700)
 
+frozen_gender = None
 frozen_spk_embed = None
 
 
@@ -71,6 +72,7 @@ class FastSpeech2MIDILess(nn.Module):
         self.dur_embed = Linear(1, hparams['hidden_size'])
         self.encoder = Encoder(self.txt_embed, hparams['hidden_size'], hparams['enc_layers'],
                                hparams['enc_ffn_kernel_size'], num_heads=hparams['num_heads'])
+
         self.f0_embed_type = hparams.get('f0_embed_type', 'discrete')
         if self.f0_embed_type == 'discrete':
             self.pitch_embed = Embedding(300, hparams['hidden_size'], dictionary.pad())
@@ -78,10 +80,15 @@ class FastSpeech2MIDILess(nn.Module):
             self.pitch_embed = Linear(1, hparams['hidden_size'])
         else:
             raise ValueError('f0_embed_type must be \'discrete\' or \'continuous\'.')
+
+        if hparams.get('use_key_shift_embed', False):
+            self.shift_min, self.shift_max = hparams['augmentation_args']['random_pitch_shifting']['range']
+            self.key_shift_embed = Linear(1, hparams['hidden_size'])
+
         if hparams['use_spk_id']:
             self.spk_embed = Embedding(hparams['num_spk'], hparams['hidden_size'])
 
-    def forward(self, tokens, durations, f0, spk_embed=None):
+    def forward(self, tokens, durations, f0, gender=None, spk_embed=None):
         durations *= tokens > 0
         mel2ph = self.lr.forward(durations)
         f0 *= mel2ph > 0
@@ -97,6 +104,18 @@ class FastSpeech2MIDILess(nn.Module):
             f0_mel = (1 + f0 / 700).log()
             pitch_embed = self.pitch_embed(f0_mel[:, :, None])
         condition = encoded + pitch_embed
+        if hparams.get('use_key_shift_embed', False):
+            if frozen_gender is not None:
+                # noinspection PyUnresolvedReferences, PyTypeChecker
+                key_shift = frozen_gender * self.shift_max \
+                    if frozen_gender >= 0. else frozen_gender * abs(self.shift_min)
+                key_shift_embed = self.key_shift_embed(key_shift[:, None, None])
+            else:
+                gender_mask = (gender < 0.).float()
+                key_shift = gender * ((1. - gender_mask) * self.shift_max + gender_mask * abs(self.shift_min))
+                key_shift_embed = self.key_shift_embed(key_shift[:, :, None])
+            condition += key_shift_embed
+
         if hparams['use_spk_id']:
             if frozen_spk_embed is not None:
                 condition += frozen_spk_embed
@@ -465,8 +484,8 @@ class FastSpeech2Wrapper(nn.Module):
         super().__init__()
         self.model = ModuleWrapper(model, name='fs2')
 
-    def forward(self, tokens, durations, f0, spk_embed=None):
-        return self.model(tokens, durations, f0, spk_embed=spk_embed)
+    def forward(self, tokens, durations, f0, gender=None, spk_embed=None):
+        return self.model(tokens, durations, f0, gender=gender, spk_embed=spk_embed)
 
 
 class DiffusionWrapper(nn.Module):
@@ -930,8 +949,8 @@ def _perform_speaker_mix(spk_embedding: nn.Embedding, spk_map: dict, spk_mix_map
     return spk_mix_embed
 
 
-def export(fs2_path, diff_path, spk_export_list=None, frozen_spk=None):
-    set_hparams(print_hparams=False)
+@torch.no_grad()
+def export(fs2_path, diff_path, expose_gender=False, spk_export_list=None, frozen_spk=None):
     if hparams.get('use_midi', True) or not hparams['use_pitch_embed']:
         raise NotImplementedError('Only checkpoints of MIDI-less mode are supported.')
 
@@ -944,159 +963,173 @@ def export(fs2_path, diff_path, spk_export_list=None, frozen_spk=None):
         model=build_diff_model(device)
     )
 
-    with torch.no_grad():
-        # Export speakers and speaker mixes
-        global frozen_spk_embed
-        if hparams['use_spk_id']:
-            if spk_export_list is None and frozen_spk is None:
+    # Export speakers and speaker mixes
+    global frozen_gender, frozen_spk_embed
+    if hparams['use_spk_id']:
+        with open(os.path.join(hparams['work_dir'], 'spk_map.json'), 'r', encoding='utf8') as f:
+            spk_map = json.load(f)
+
+        if spk_export_list is None and frozen_spk is None:
+            if len(spk_map) == 1:
+                # Freeze the only speaker by default
+                frozen_spk = list(spk_map.keys())[0]
+            else:
                 warnings.warn('Combined models cannot run without speaker keys. '
                               'Did you forget to export at least one speaker via the \'--spk\' argument, '
                               'or freeze one speaker via the \'--freeze_spk\' argument?', category=UserWarning)
                 warnings.filterwarnings(action='default')
-            with open(os.path.join(hparams['work_dir'], 'spk_map.json'), 'r', encoding='utf8') as f:
-                spk_map = json.load(f)
-            if frozen_spk is not None:
-                frozen_spk_embed = _perform_speaker_mix(fs2.model.fs2.spk_embed, spk_map,
-                                                        parse_commandline_spk_mix(frozen_spk), device)
-            elif spk_export_list is not None:
-                for spk in spk_export_list:
-                    np.save(spk['path'], _perform_speaker_mix(
-                        fs2.model.fs2.spk_embed, spk_map, parse_commandline_spk_mix(spk['mix']), device
-                    ).cpu().numpy())
+        if frozen_spk is not None:
+            frozen_spk_embed = _perform_speaker_mix(fs2.model.fs2.spk_embed, spk_map,
+                                                    parse_commandline_spk_mix(frozen_spk), device)
+        elif spk_export_list is not None:
+            for spk in spk_export_list:
+                np.save(spk['path'], _perform_speaker_mix(
+                    fs2.model.fs2.spk_embed, spk_map, parse_commandline_spk_mix(spk['mix']), device
+                ).cpu().numpy())
 
-        # Export PyTorch modules
-        n_frames = 10
-        tokens = torch.tensor([[3]], dtype=torch.long, device=device)
-        durations = torch.tensor([[n_frames]], dtype=torch.long, device=device)
-        f0 = torch.tensor([[440.] * n_frames], dtype=torch.float32, device=device)
-        kwargs = {}
-        arguments = (tokens, durations, f0, kwargs)
-        input_names = ['tokens', 'durations', 'f0']
-        dynamix_axes = {
-            'tokens': {
-                1: 'n_tokens'
-            },
-            'durations': {
-                1: 'n_tokens'
-            },
-            'f0': {
-                1: 'n_frames'
-            }
+    # Export PyTorch modules
+    n_frames = 10
+    tokens = torch.tensor([[3]], dtype=torch.long, device=device)
+    durations = torch.tensor([[n_frames]], dtype=torch.long, device=device)
+    f0 = torch.tensor([[440.] * n_frames], dtype=torch.float32, device=device)
+    kwargs = {}
+    arguments = (tokens, durations, f0, kwargs)
+    input_names = ['tokens', 'durations', 'f0']
+    dynamix_axes = {
+        'tokens': {
+            1: 'n_tokens'
+        },
+        'durations': {
+            1: 'n_tokens'
+        },
+        'f0': {
+            1: 'n_frames'
         }
-        if hparams['use_spk_id'] and frozen_spk is None:
+    }
+    if hparams.get('use_key_shift_embed', False):
+        if expose_gender:
             # noinspection PyTypedDict
-            kwargs['spk_embed'] = torch.rand((1, n_frames, hparams['hidden_size']), dtype=torch.float32, device=device)
-            input_names.append('spk_embed')
-            dynamix_axes['spk_embed'] = {
+            kwargs['gender'] = torch.rand((1, n_frames), dtype=torch.float32, device=device)
+            input_names.append('gender')
+            dynamix_axes['gender'] = {
                 1: 'n_frames'
             }
-        print('Exporting FastSpeech2...')
-        torch.onnx.export(
-            fs2,
-            arguments,
-            fs2_path,
-            input_names=input_names,
-            output_names=[
-                'condition'
-            ],
-            dynamic_axes=dynamix_axes,
-            opset_version=11
+        elif frozen_gender is not None:
+            frozen_gender = torch.FloatTensor([frozen_gender]).to(device)
+    if hparams['use_spk_id'] and frozen_spk is None:
+        # noinspection PyTypedDict
+        kwargs['spk_embed'] = torch.rand((1, n_frames, hparams['hidden_size']), dtype=torch.float32, device=device)
+        input_names.append('spk_embed')
+        dynamix_axes['spk_embed'] = {
+            1: 'n_frames'
+        }
+    print('Exporting FastSpeech2...')
+    torch.onnx.export(
+        fs2,
+        arguments,
+        fs2_path,
+        input_names=input_names,
+        output_names=[
+            'condition'
+        ],
+        dynamic_axes=dynamix_axes,
+        opset_version=11
+    )
+    model = onnx.load(fs2_path)
+    model, check = onnxsim.simplify(model, include_subgraph=True)
+    assert check, 'Simplified ONNX model could not be validated'
+    onnx.save(model, fs2_path)
+
+    shape = (1, 1, hparams['audio_num_mel_bins'], n_frames)
+    noise_t = torch.randn(shape, device=device)
+    noise_list = torch.randn((3, *shape), device=device)
+    condition = torch.rand((1, hparams['hidden_size'], n_frames), device=device)
+    step = (torch.rand((), device=device) * hparams['K_step']).long()
+    speedup = (torch.rand((), device=device) * step / 10.).long()
+    step_prev = torch.maximum(step - speedup, torch.tensor(0, dtype=torch.long, device=device))
+
+    print('Tracing GaussianDiffusion submodules...')
+    diffusion.model.denoise_fn = torch.jit.trace(
+        diffusion.model.denoise_fn,
+        (
+            noise_t,
+            step,
+            condition
         )
-        model = onnx.load(fs2_path)
-        model, check = onnxsim.simplify(model, include_subgraph=True)
-        assert check, 'Simplified ONNX model could not be validated'
-        onnx.save(model, fs2_path)
-
-        shape = (1, 1, hparams['audio_num_mel_bins'], n_frames)
-        noise_t = torch.randn(shape, device=device)
-        noise_list = torch.randn((3, *shape), device=device)
-        condition = torch.rand((1, hparams['hidden_size'], n_frames), device=device)
-        step = (torch.rand((), device=device) * hparams['K_step']).long()
-        speedup = (torch.rand((), device=device) * step / 10.).long()
-        step_prev = torch.maximum(step - speedup, torch.tensor(0, dtype=torch.long, device=device))
-
-        print('Tracing GaussianDiffusion submodules...')
-        diffusion.model.denoise_fn = torch.jit.trace(
-            diffusion.model.denoise_fn,
-            (
+    )
+    diffusion.model.naive_noise_predictor = torch.jit.trace(
+        diffusion.model.naive_noise_predictor,
+        (
+            noise_t,
+            noise_t,
+            step
+        ),
+        check_trace=False
+    )
+    diffusion.model.plms_noise_predictor = torch.jit.trace_module(
+        diffusion.model.plms_noise_predictor,
+        {
+            'forward': (
+                noise_t,
                 noise_t,
                 step,
-                condition
-            )
-        )
-        diffusion.model.naive_noise_predictor = torch.jit.trace(
-            diffusion.model.naive_noise_predictor,
-            (
-                noise_t,
-                noise_t,
-                step
+                step_prev
             ),
-            check_trace=False
-        )
-        diffusion.model.plms_noise_predictor = torch.jit.trace_module(
-            diffusion.model.plms_noise_predictor,
-            {
-                'forward': (
-                    noise_t,
-                    noise_t,
-                    step,
-                    step_prev
-                ),
-                'predict_stage0': (
-                    noise_t,
-                    noise_t
-                ),
-                'predict_stage1': (
-                    noise_t,
-                    noise_list
-                ),
-                'predict_stage2': (
-                    noise_t,
-                    noise_list
-                ),
-                'predict_stage3': (
-                    noise_t,
-                    noise_list
-                ),
-            }
-        )
-        diffusion.model.mel_extractor = torch.jit.trace(
-            diffusion.model.mel_extractor,
-            (
+            'predict_stage0': (
+                noise_t,
                 noise_t
-            )
-        )
-
-        diffusion = torch.jit.script(diffusion)
-        condition = torch.rand((1, n_frames, hparams['hidden_size']), device=device)
-        speedup = torch.tensor(10, dtype=torch.long, device=device)
-        dummy = diffusion.forward(condition, speedup)
-
-        torch.onnx.export(
-            diffusion,
-            (
-                condition,
-                speedup
             ),
-            diff_path,
-            input_names=[
-                'condition',
-                'speedup'
-            ],
-            output_names=[
-                'mel'
-            ],
-            dynamic_axes={
-                'condition': {
-                    1: 'n_frames'
-                }
-            },
-            opset_version=11,
-            example_outputs=(
-                dummy
-            )
+            'predict_stage1': (
+                noise_t,
+                noise_list
+            ),
+            'predict_stage2': (
+                noise_t,
+                noise_list
+            ),
+            'predict_stage3': (
+                noise_t,
+                noise_list
+            ),
+        }
+    )
+    diffusion.model.mel_extractor = torch.jit.trace(
+        diffusion.model.mel_extractor,
+        (
+            noise_t
         )
-        print('PyTorch ONNX export finished.')
+    )
+
+    diffusion = torch.jit.script(diffusion)
+    condition = torch.rand((1, n_frames, hparams['hidden_size']), device=device)
+    speedup = torch.tensor(10, dtype=torch.long, device=device)
+    dummy = diffusion.forward(condition, speedup)
+
+    torch.onnx.export(
+        diffusion,
+        (
+            condition,
+            speedup
+        ),
+        diff_path,
+        input_names=[
+            'condition',
+            'speedup'
+        ],
+        output_names=[
+            'mel'
+        ],
+        dynamic_axes={
+            'condition': {
+                1: 'n_frames'
+            }
+        },
+        opset_version=11,
+        example_outputs=(
+            dummy
+        )
+    )
+    print('PyTorch ONNX export finished.')
 
 
 def merge(fs2_path, diff_path, target_path):
@@ -1131,28 +1164,48 @@ def merge(fs2_path, diff_path, target_path):
     print('FastSpeech2 and GaussianDiffusion models merged.')
     onnx.save(merged_model, target_path)
 
+def export_phonemes_txt(phonemes_txt_path:str):
+    textEncoder = TokenTextEncoder(vocab_list=build_phoneme_list())
+    textEncoder.store_to_file(phonemes_txt_path)
 
 if __name__ == '__main__':
     parser = argparse.ArgumentParser(description='Export DiffSinger acoustic model to ONNX format.')
     parser.add_argument('--exp', type=str, required=True, help='experiment to export')
-    parser.add_argument('--target', required=False, type=str, help='path of the target ONNX model')
-    group = parser.add_mutually_exclusive_group()
-    group.add_argument('--spk', required=False, type=str, action='append',
-                        help='(for combined models) speakers or speaker mixes to export')
-    group.add_argument('--freeze_spk', required=False, type=str,
-                        help='(for combined models) speaker or speaker mix to freeze into the model')
     parser.add_argument('--out', required=False, type=str, help='output directory for ONNX models and speaker keys')
+    group_gender = parser.add_mutually_exclusive_group()
+    group_gender.add_argument('--expose_gender', required=False, default=False, action='store_true',
+                              help='(for models with random pitch shifting) expose gender control functionality')
+    group_gender.add_argument('--freeze_gender', type=float, required=False,
+                              help='(for models with random pitch shifting) freeze gender value into the model')
+    group_spk = parser.add_mutually_exclusive_group()
+    group_spk.add_argument('--spk', required=False, type=str, action='append',
+                           help='(for combined models) speakers or speaker mixes to export')
+    group_spk.add_argument('--freeze_spk', required=False, type=str,
+                           help='(for combined models) freeze speaker or speaker mix into the model')
     args = parser.parse_args()
 
-    # Deprecation for --target argument
-    assert args.target is None, 'The \'--target\' argument is deprecated. ' \
-                                'Please use the \'--out\' argument to specified the output directory if needed.'
+    # Check for frozen gender
+    if args.freeze_gender is not None:
+        assert -1. <= args.freeze_gender <= 1., 'Frozen gender must be in [-1, 1].'
+        frozen_gender = args.freeze_gender
+
 
     # Temporarily disable --spk argument
     if args.spk is not None:
         raise NotImplementedError('Exporting speakers or speaker mixes is not supported yet.')
 
     exp = args.exp
+    if not os.path.exists(f'{root_dir}/checkpoints/{exp}'):
+        for ckpt in os.listdir(os.path.join(root_dir, 'checkpoints')):
+            if ckpt.startswith(exp):
+                print(f'| match ckpt by prefix: {ckpt}')
+                exp = ckpt
+                break
+        assert os.path.exists(f'{root_dir}/checkpoints/{exp}'), 'There are no matching exp in \'checkpoints\' folder. ' \
+                                                                'Please specify \'--exp\' as the folder name or prefix.'
+    else:
+        print(f'| found ckpt by name: {exp}')
+
     cwd = os.getcwd()
     if args.out:
         out = os.path.join(cwd, args.out) if not os.path.isabs(args.out) else args.out
@@ -1204,17 +1257,17 @@ if __name__ == '__main__':
         target_model_path = f'{out}/{exp}.onnx'
     else:
         target_model_path = f'{out}/{exp}.{frozen_spk_name}.onnx'
+    phonemes_txt_path =f'{out}/{exp}.phonemes.txt' 
     os.makedirs(out, exist_ok=True)
-    export(fs2_path=fs2_model_path, diff_path=diff_model_path,
+    set_hparams(print_hparams=False)
+    export(fs2_path=fs2_model_path, diff_path=diff_model_path, expose_gender=args.expose_gender,
            spk_export_list=spk_export_paths, frozen_spk=frozen_spk_mix)
     fix(diff_model_path, diff_model_path)
     merge(fs2_path=fs2_model_path, diff_path=diff_model_path, target_path=target_model_path)
+    export_phonemes_txt(phonemes_txt_path)
     os.remove(fs2_model_path)
     os.remove(diff_model_path)
 
     os.chdir(cwd)
-    if args.target:
-        log_path = os.path.abspath(args.out)
-    else:
-        log_path = out
+    log_path = out
     print(f'| export \'model\' to \'{log_path}\'.')

@@ -22,12 +22,13 @@ os.environ['PYTHONPATH'] = f'"{root_dir}"'
 
 parser = argparse.ArgumentParser(description='Run DiffSinger inference')
 parser.add_argument('proj', type=str, help='Path to the input file')
-parser.add_argument('--exp', type=str, required=False, help='Selection of model')
+parser.add_argument('--exp', type=str, required=True, help='Selection of model')
 parser.add_argument('--spk', type=str, required=False, help='Speaker name or mix of speakers')
 parser.add_argument('--out', type=str, required=False, help='Path of the output folder')
 parser.add_argument('--title', type=str, required=False, help='Title of output file')
 parser.add_argument('--num', type=int, required=False, default=1, help='Number of runs')
-parser.add_argument('--key', type=int, required=False, default=0, help='Number of key')
+parser.add_argument('--key', type=int, required=False, default=0, help='Key transition of pitch')
+parser.add_argument('--gender', type=float, required=False, help='Formant shifting (gender control)')
 parser.add_argument('--seed', type=int, required=False, help='Random seed of the inference')
 parser.add_argument('--speedup', type=int, required=False, default=0, help='PNDM speed-up ratio')
 parser.add_argument('--pitch', action='store_true', required=False, default=None, help='Enable manual pitch mode')
@@ -48,7 +49,6 @@ if args.pitch is not None:
 
 name = os.path.basename(args.proj).split('.')[0] if not args.title else args.title
 exp = args.exp
-assert exp is not None, 'Default value of exp is deprecated. You must specify \'--exp\' to run inference.'
 if not os.path.exists(f'{root_dir}/checkpoints/{exp}'):
     for ckpt in os.listdir(os.path.join(root_dir, 'checkpoints')):
         if ckpt.startswith(exp):
@@ -86,6 +86,9 @@ if args.key != 0:
         name += key_suffix
     print(f'音调基于原音频{key_suffix}')
 
+if args.gender is not None:
+    assert -1 <= args.gender <= 1, 'Gender must be in [-1, 1].'
+
 set_hparams(print_hparams=False)
 sample_rate = hparams['audio_sample_rate']
 
@@ -110,6 +113,8 @@ if len(params) > 0:
 spk_mix = parse_commandline_spk_mix(args.spk) if hparams['use_spk_id'] and args.spk is not None else None
 
 for param in params:
+    if args.gender is not None and hparams.get('use_key_shift_embed'):
+        param['gender'] = args.gender
     if spk_mix is not None:
         param['spk_mix'] = spk_mix
     elif 'spk_mix' in param:

@@ -8,6 +8,7 @@ import yaml
 
 global_print_hparams = True
 hparams = {}
+is_main_process = not bool(re.match(r'Process-\d+', multiprocessing.current_process().name))
 
 
 class Args:
@@ -51,7 +52,7 @@ def set_hparams(config='', exp_name='', hparams_str='', print_hparams=True, glob
     args_work_dir = ''
     if args.exp_name != '':
         args.work_dir = args.exp_name
-        args_work_dir = f'checkpoints/{args.work_dir}'
+        args_work_dir = os.path.join('checkpoints', args.work_dir)
 
     config_chains = []
     loaded_config = set()
@@ -79,8 +80,8 @@ def set_hparams(config='', exp_name='', hparams_str='', print_hparams=True, glob
     global hparams
     assert args.config != '' or args_work_dir != '', 'Either config or exp name should be specified.'
     saved_hparams = {}
-    ckpt_config_path = f'{args_work_dir}/config.yaml'
-    if os.path.exists(ckpt_config_path):
+    ckpt_config_path = os.path.join(args_work_dir, 'config.yaml')
+    if args_work_dir != '':
         with open(ckpt_config_path, encoding='utf-8') as f:
             saved_hparams.update(yaml.safe_load(f))
 
@@ -108,7 +109,7 @@ def set_hparams(config='', exp_name='', hparams_str='', print_hparams=True, glob
     ckpt_dictionary = os.path.join(hparams_['work_dir'], os.path.basename(dictionary))
     if args_work_dir != '' and (not os.path.exists(ckpt_config_path) or args.reset) and not args.infer:
         os.makedirs(hparams_['work_dir'], exist_ok=True)
-        if not bool(re.match(r'Process-\d+', multiprocessing.current_process().name)):
+        if is_main_process:
             # Only the main process will save the config file and dictionary
             with open(ckpt_config_path, 'w', encoding='utf-8') as f:
                 hparams_non_recursive = hparams_.copy()
@@ -135,7 +136,7 @@ def set_hparams(config='', exp_name='', hparams_str='', print_hparams=True, glob
         hparams.clear()
         hparams.update(hparams_)
 
-    if print_hparams and global_print_hparams and global_hparams:
+    if is_main_process and print_hparams and global_print_hparams and global_hparams:
         print('| Hparams chains: ', config_chains)
         print('| Hparams: ')
         for i, (k, v) in enumerate(sorted(hparams_.items())):

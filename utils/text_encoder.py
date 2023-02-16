@@ -2,7 +2,7 @@ import re
 import six
 from six.moves import range  # pylint: disable=redefined-builtin
 
-PAD = "<pad>"
+PAD = "<PAD>"
 EOS = "<EOS>"
 UNK = "<UNK>"
 SEG = "|"
@@ -263,7 +263,7 @@ class TokenTextEncoder(TextEncoder):
     def seg(self):
         return self.seg_index
 
-    def store_to_file(self, filename):
+    def store_to_file(self, filename, encoding:str="UTF-8"):
         """Write vocab file to disk.
 
         Vocab files have one token per line. The file ends in a newline. Reserved
@@ -272,7 +272,7 @@ class TokenTextEncoder(TextEncoder):
         Args:
         filename: Full path of the file to store the vocab to.
         """
-        with open(filename, "w") as f:
+        with open(filename, "w", encoding = encoding) as f:
             for i in range(len(self._id_to_token)):
                 f.write(self._id_to_token[i] + "\n")
 

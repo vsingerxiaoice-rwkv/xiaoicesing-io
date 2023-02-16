@@ -32,6 +32,15 @@ binarization_args:
   with_wav: false
   with_spk_embed: false
   with_align: true
+  shuffle: true
+#augmentation_args:
+#  random_pitch_shifting:
+#    range: [-5., 5.]
+#    scale: 1.0
+#  fixed_pitch_shifting:
+#    targets: [-5., 5.]
+#    scale: 0.75
+
 raw_data_dir: 'data/opencpop/raw'
 processed_data_dir: ''
 binary_data_dir: 'data/opencpop/binary'
@@ -58,9 +67,10 @@ use_midi: false
 use_stretch_embed: false
 use_spk_embed: false
 use_spk_id: false
+#use_key_shift_embed: true
 use_gt_f0: false  #  for midi exp
 use_gt_dur: false  # for further midi exp
-f0_embed_type: discrete
+f0_embed_type: continuous
 lambda_f0: 0.0
 lambda_uv: 0.0
 lambda_energy: 0.0

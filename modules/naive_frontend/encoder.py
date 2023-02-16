@@ -51,7 +51,10 @@ class ParameterEncoder(nn.Module):
             self.stretch_regulator = StretchRegulator()
             self.stretch_embed = Linear(1, hparams['hidden_size'])
 
-        if hparams.get('use_spk_id', False):
+        if hparams.get('use_key_shift_embed', False):
+            self.key_shift_embed = Linear(1, hparams['hidden_size'])
+
+        if hparams['use_spk_id']:
             self.spk_embed = Embedding(hparams['num_spk'], hparams['hidden_size'])
     
     def forward(self, txt_tokens, mel2ph=None, spk_embed_id=None,
@@ -86,6 +89,19 @@ class ParameterEncoder(nn.Module):
         else:
             f0_mel = (1 + f0_denorm / 700).log()
             pitch_embed = self.pitch_embed(f0_mel[:, :, None])
+
+        if hparams.get('use_key_shift_embed', False):
+            key_shift = kwarg['key_shift']
+            if len(key_shift.shape) == 1:
+                key_shift_embed = self.key_shift_embed(key_shift[:, None, None])
+            else:
+                delta_l = nframes - key_shift.size(1)
+                if delta_l > 0:
+                    key_shift = torch.cat((key_shift, torch.FloatTensor([[x[-1]] * delta_l for x in key_shift]).to(key_shift.device)), 1)
+                key_shift = key_shift[:, :nframes]
+                key_shift_embed = self.key_shift_embed(key_shift[:, :, None])
+        else:
+            key_shift_embed = 0
         
         if hparams['use_spk_id']:
             if infer:
@@ -100,5 +116,5 @@ class ParameterEncoder(nn.Module):
         else:
             spk_embed = 0
 
-        ret = {'decoder_inp': decoder_inp + stretch_embed + pitch_embed + spk_embed, 'f0_denorm': f0_denorm}
+        ret = {'decoder_inp': decoder_inp + stretch_embed + pitch_embed + key_shift_embed + spk_embed, 'f0_denorm': f0_denorm}
         return ret
