@@ -80,8 +80,8 @@ def set_hparams(config='', exp_name='', hparams_str='', print_hparams=True, glob
     global hparams
     assert args.config != '' or args_work_dir != '', 'Either config or exp name should be specified.'
     saved_hparams = {}
-    ckpt_config_path = f'{args_work_dir}/config.yaml'
-    if os.path.exists(ckpt_config_path):
+    ckpt_config_path = os.path.join(args_work_dir, 'config.yaml')
+    if args_work_dir != '':
         with open(ckpt_config_path, encoding='utf-8') as f:
             saved_hparams.update(yaml.safe_load(f))
 
