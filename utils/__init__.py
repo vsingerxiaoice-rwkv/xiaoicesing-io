@@ -175,10 +175,12 @@ def unpack_dict_to_list(samples):
     return samples_
 
 
-def load_ckpt(cur_model, ckpt_base_dir, prefix_in_ckpt='model', force=True, strict=True):
+def load_ckpt(cur_model, ckpt_base_dir, prefix_in_ckpt='model', ckpt_steps=None, force=True, strict=True):
     if os.path.isfile(ckpt_base_dir):
-        base_dir = os.path.dirname(ckpt_base_dir)
+        ckpt_base_dir = os.path.dirname(ckpt_base_dir)
         checkpoint_path = [ckpt_base_dir]
+    elif ckpt_steps is not None:
+        checkpoint_path = [os.path.join(ckpt_base_dir, f'model_ckpt_steps_{int(ckpt_steps)}.ckpt')]
     else:
         base_dir = ckpt_base_dir
         checkpoint_path = [
@@ -210,7 +212,7 @@ def load_ckpt(cur_model, ckpt_base_dir, prefix_in_ckpt='model', force=True, stri
         cur_model.load_state_dict(state_dict, strict=strict)
         print(f"| load '{prefix_in_ckpt}' from '{checkpoint_path}'.")
     else:
-        e_msg = f"| ckpt not found in {base_dir}."
+        e_msg = f"| ckpt not found in {ckpt_base_dir}."
         if force:
             assert False, e_msg
         else:

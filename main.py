@@ -23,6 +23,7 @@ os.environ['PYTHONPATH'] = f'"{root_dir}"'
 parser = argparse.ArgumentParser(description='Run DiffSinger inference')
 parser.add_argument('proj', type=str, help='Path to the input file')
 parser.add_argument('--exp', type=str, required=True, help='Selection of model')
+parser.add_argument('--ckpt', type=int, required=False, help='Selection of checkpoint training steps')
 parser.add_argument('--spk', type=str, required=False, help='Speaker name or mix of speakers')
 parser.add_argument('--out', type=str, required=False, help='Path of the output folder')
 parser.add_argument('--title', type=str, required=False, help='Title of output file')
@@ -100,7 +101,7 @@ assert os.path.exists(os.path.join(root_dir, hparams['vocoder_ckpt'])), \
 infer_ins = None
 if len(params) > 0:
     if hparams['use_pitch_embed']:
-        infer_ins = DiffSingerCascadeInfer(hparams, load_vocoder=not args.mel)
+        infer_ins = DiffSingerCascadeInfer(hparams, load_vocoder=not args.mel, ckpt_steps=args.ckpt)
     else:
         warnings.warn(
             message='SVS MIDI-B version (implicit pitch prediction) is deprecated. '
@@ -108,7 +109,7 @@ if len(params) > 0:
             category=DeprecationWarning
         )
         warnings.filterwarnings(action='default')
-        infer_ins = DiffSingerE2EInfer(hparams, load_vocoder=not args.mel)
+        infer_ins = DiffSingerE2EInfer(hparams, load_vocoder=not args.mel, ckpt_steps=args.ckpt)
 
 spk_mix = parse_commandline_spk_mix(args.spk) if hparams['use_spk_id'] and args.spk is not None else None
 
