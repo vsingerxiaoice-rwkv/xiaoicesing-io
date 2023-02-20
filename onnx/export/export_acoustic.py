@@ -1188,7 +1188,8 @@ if __name__ == '__main__':
     if args.freeze_gender is not None:
         assert -1. <= args.freeze_gender <= 1., 'Frozen gender must be in [-1, 1].'
         frozen_gender = args.freeze_gender
-
+    elif not args.expose_gender:
+        frozen_gender = 0.
 
     # Temporarily disable --spk argument
     if args.spk is not None:
