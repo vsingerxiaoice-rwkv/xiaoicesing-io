@@ -97,8 +97,15 @@ class ParameterEncoder(nn.Module):
             key_shift_embed = 0
 
         if hparams.get('use_speed_embed', False):
-            speed_embed = self.speed_embed(kwarg['speed'][:, None, None])
-            # speed_embed = self.speed_embed(speed[:, :, None])
+            speed = kwarg['speed']
+            if len(speed.shape) == 1:
+                speed_embed = self.speed_embed(speed[:, None, None])
+            else:
+                delta_l = nframes - speed.size(1)
+                if delta_l > 0:
+                    speed = torch.cat((speed, torch.FloatTensor([[x[-1]] * delta_l for x in speed]).to(speed.device)), 1)
+                speed = speed[:, :nframes]
+                speed_embed = self.speed_embed(speed[:, :, None])
         else:
             speed_embed = 0
         

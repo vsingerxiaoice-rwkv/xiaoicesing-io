@@ -85,10 +85,13 @@ class FastSpeech2MIDILess(nn.Module):
             self.shift_min, self.shift_max = hparams['augmentation_args']['random_pitch_shifting']['range']
             self.key_shift_embed = Linear(1, hparams['hidden_size'])
 
+        if hparams.get('use_speed_embed', False):
+            self.speed_embed = Linear(1, hparams['hidden_size'])
+
         if hparams['use_spk_id']:
             self.spk_embed = Embedding(hparams['num_spk'], hparams['hidden_size'])
 
-    def forward(self, tokens, durations, f0, gender=None, spk_embed=None):
+    def forward(self, tokens, durations, f0, gender=None, velocity=None, spk_embed=None):
         durations *= tokens > 0
         mel2ph = self.lr.forward(durations)
         f0 *= mel2ph > 0
@@ -96,14 +99,14 @@ class FastSpeech2MIDILess(nn.Module):
         dur_embed = self.dur_embed(durations.float()[:, :, None])
         encoded = self.encoder(tokens, dur_embed)
         encoded = F.pad(encoded, (0, 0, 1, 0))
-        encoded = torch.gather(encoded, 1, mel2ph)
+        condition = torch.gather(encoded, 1, mel2ph)
         if self.f0_embed_type == 'discrete':
             pitch = f0_to_coarse(f0)
             pitch_embed = self.pitch_embed(pitch)
         else:
             f0_mel = (1 + f0 / 700).log()
             pitch_embed = self.pitch_embed(f0_mel[:, :, None])
-        condition = encoded + pitch_embed
+        condition += pitch_embed
         if hparams.get('use_key_shift_embed', False):
             if frozen_gender is not None:
                 # noinspection PyUnresolvedReferences, PyTypeChecker
@@ -115,6 +118,12 @@ class FastSpeech2MIDILess(nn.Module):
                 key_shift = gender * ((1. - gender_mask) * self.shift_max + gender_mask * abs(self.shift_min))
                 key_shift_embed = self.key_shift_embed(key_shift[:, :, None])
             condition += key_shift_embed
+        if hparams.get('use_speed_embed', False):
+            if velocity is not None:
+                speed_embed = self.speed_embed(velocity[:, :, None])
+            else:
+                speed_embed = self.speed_embed(torch.FloatTensor([1.]).to(condition.device)[:, None, None])
+            condition += speed_embed
 
         if hparams['use_spk_id']:
             if frozen_spk_embed is not None:
@@ -484,8 +493,8 @@ class FastSpeech2Wrapper(nn.Module):
         super().__init__()
         self.model = ModuleWrapper(model, name='fs2')
 
-    def forward(self, tokens, durations, f0, gender=None, spk_embed=None):
-        return self.model(tokens, durations, f0, gender=gender, spk_embed=spk_embed)
+    def forward(self, tokens, durations, f0, gender=None, velocity=None, spk_embed=None):
+        return self.model(tokens, durations, f0, gender=gender, velocity=velocity, spk_embed=spk_embed)
 
 
 class DiffusionWrapper(nn.Module):
@@ -950,7 +959,7 @@ def _perform_speaker_mix(spk_embedding: nn.Embedding, spk_map: dict, spk_mix_map
 
 
 @torch.no_grad()
-def export(fs2_path, diff_path, expose_gender=False, spk_export_list=None, frozen_spk=None):
+def export(fs2_path, diff_path, expose_gender=False, expose_velocity=False, spk_export_list=None, frozen_spk=None):
     if hparams.get('use_midi', True) or not hparams['use_pitch_embed']:
         raise NotImplementedError('Only checkpoints of MIDI-less mode are supported.')
 
@@ -1016,6 +1025,14 @@ def export(fs2_path, diff_path, expose_gender=False, spk_export_list=None, froze
             }
         elif frozen_gender is not None:
             frozen_gender = torch.FloatTensor([frozen_gender]).to(device)
+    if hparams.get('use_speed_embed', False):
+        if expose_velocity:
+            # noinspection PyTypedDict
+            kwargs['velocity'] = torch.rand((1, n_frames), dtype=torch.float32, device=device)
+            input_names.append('velocity')
+            dynamix_axes['velocity'] = {
+                1: 'n_frames'
+            }
     if hparams['use_spk_id'] and frozen_spk is None:
         # noinspection PyTypedDict
         kwargs['spk_embed'] = torch.rand((1, n_frames, hparams['hidden_size']), dtype=torch.float32, device=device)
@@ -1177,6 +1194,8 @@ if __name__ == '__main__':
                               help='(for models with random pitch shifting) expose gender control functionality')
     group_gender.add_argument('--freeze_gender', type=float, required=False,
                               help='(for models with random pitch shifting) freeze gender value into the model')
+    parser.add_argument('--expose_velocity', required=False, default=False, action='store_true',
+                        help='(for models with random time stretching) expose velocity control functionality')
     group_spk = parser.add_mutually_exclusive_group()
     group_spk.add_argument('--spk', required=False, type=str, action='append',
                            help='(for combined models) speakers or speaker mixes to export')
@@ -1260,7 +1279,8 @@ if __name__ == '__main__':
     phonemes_txt_path =f'{out}/{exp}.phonemes.txt' 
     os.makedirs(out, exist_ok=True)
     set_hparams(print_hparams=False)
-    export(fs2_path=fs2_model_path, diff_path=diff_model_path, expose_gender=args.expose_gender,
+    export(fs2_path=fs2_model_path, diff_path=diff_model_path,
+           expose_gender=args.expose_gender, expose_velocity=args.expose_velocity,
            spk_export_list=spk_export_paths, frozen_spk=frozen_spk_mix)
     fix(diff_model_path, diff_model_path)
     merge(fs2_path=fs2_model_path, diff_path=diff_model_path, target_path=target_model_path)
