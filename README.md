@@ -59,7 +59,7 @@ CUDA_VISIBLE_DEVICES=0 python run.py --config configs/acoustic/nomidi.yaml --exp
 ```sh
 python main.py path/to/your.ds --exp $MY_DS_EXP_NAME
 ```
-See more supported arguments with `python main.py -h`. See examples of *.ds file in the `samples/` folder.
+See more supported arguments with `python main.py -h`. See examples of *.ds files in the [samples/](samples/) folder.
 
 ### Deployment
 
@@ -79,7 +79,7 @@ OpenUTAU, an open-sourced SVS editor with modern GUI, has unofficial temporary s
 
 ### Algorithms, principles and advanced features
 
-See the original [paper](https://arxiv.org/abs/2105.02446), the `docs/` folder and [releases](https://github.com/openvpi/DiffSinger/releases) for more details.
+See the original [paper](https://arxiv.org/abs/2105.02446), the [docs/](docs/) folder and [releases](https://github.com/openvpi/DiffSinger/releases) for more details.
 
 
 
