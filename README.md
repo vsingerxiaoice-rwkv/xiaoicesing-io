@@ -6,9 +6,17 @@ This is a cleaner version of Diffsinger, which provides:
 - better file structre: tts-related files are filtered out into the "tts/" folder, as they are not used in DiffSinger.
 - **(new) Much condensed version of the preprocessing, training, and inference pipeline**. The preprocessing pipeline is at 'preprocessing/opencpop.py', the training pipeline is at 'training/diffsinger.py', the inference pipeline is at 'inference/ds_cascade.py' or 'inference/ds_e2e.py'.
 
+## Progress since we forked into this repository
+
+TBD
+
 ## Getting Started
 
-### 0. Installation
+[**[ 中文教程 | Chinese Tutorial ]**](https://www.yuque.com/sunsa-i3ayc/sivu7h)
+
+### Installation
+
+#### Environments and dependencies
 
 ```bash
 # Install PyTorch manually (1.8.2 LTS recommended)
@@ -20,27 +28,66 @@ pip3 install torch==1.8.2 torchvision==0.9.2 torchaudio==0.8.2 --extra-index-url
 pip install -r requirements.txt
 ```
 
-### 1. Preprocessing
+#### Pretrained models
+
+- **(Required)** Get the pretrained vocoder from the [DiffSinger Comminity Vocoder Project](https://openvpi.github.io/vocoders) and unzip it into `checkpoints/` folder.
+- Get the acoustic model from [releases](https://github.com/openvpi/DiffSinger/releases) or elsewhere and unzip into the `checkpoints/` folder.
+
+### Building your own dataset
+
+This [pipeline](pipelines/no_midi_preparation.ipynb) will guide you from installing dependencies to formatting your recordings and generating the final configuration file.
+
+### Preprocessing
+
+The following is **only an example** for [opencpop](http://wenet.org.cn/opencpop/) dataset.
 
 ```sh
 export PYTHONPATH=.
 CUDA_VISIBLE_DEVICES=0 python data_gen/binarize.py --config configs/acoustic/nomidi.yaml
 ```
-### 2. Training
+### Training
+
+The following is **only an example** for [opencpop](http://wenet.org.cn/opencpop/) dataset.
 
 ```sh
 CUDA_VISIBLE_DEVICES=0 python run.py --config configs/acoustic/nomidi.yaml --exp_name $MY_DS_EXP_NAME --reset  
 ```
-### 3. Inference
+### Inference
+
+#### Infer from *.ds file
 
 ```sh
-CUDA_VISIBLE_DEVICES=0 python run.py --exp_name $MY_DS_EXP_NAME --infer
+python main.py path/to/your.ds --exp $MY_DS_EXP_NAME
 ```
-Easy inference with Google Colab:
+See more supported arguments with `python main.py -h`. See examples of *.ds files in the [samples/](samples/) folder.
 
-Version 1: [![Open In Colab](https://colab.research.google.com/assets/colab-badge.svg)](https://colab.research.google.com/drive/1kfmZ6Y018c5trSwQAbhdQtZ7Il8W_4BU)
+### Deployment
 
-Version 2: [![Open In Colab](https://colab.research.google.com/assets/colab-badge.svg)](https://colab.research.google.com/drive/1V7yjNlh8_8o3IPK9buFb5MHVFrYmhELi)
+#### Export model to ONNX format
+
+Please see this [documentation](docs/README-SVS-onnx.md) before you run the following command:
+
+```sh
+python onnx/export/export_acoustic.py --exp $MY_DS_EXP_NAME
+```
+
+See more supported arguments with `python onnx/export/export_acoustic.py -h`.
+
+#### Use DiffSinger via OpenUTAU editor
+
+OpenUTAU, an open-sourced SVS editor with modern GUI, has unofficial temporary support for DiffSinger. See [OpenUTAU for DiffSinger](https://github.com/xunmengshe/OpenUtau/) for more details.
+
+### Algorithms, principles and advanced features
+
+See the original [paper](https://arxiv.org/abs/2105.02446), the [docs/](docs/) folder and [releases](https://github.com/openvpi/DiffSinger/releases) for more details.
+
+
+
+---
+
+Below is the README inherited from the original repository.
+
+
 
 # DiffSinger: Singing Voice Synthesis via Shallow Diffusion Mechanism
 [![arXiv](https://img.shields.io/badge/arXiv-Paper-<COLOR>.svg)](https://arxiv.org/abs/2105.02446)

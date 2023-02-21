@@ -453,17 +453,17 @@ class GaussianDiffusion(nn.Module):
         return mel
 
 
-def build_fs2_model(device):
+def build_fs2_model(device, ckpt_steps=None):
     model = FastSpeech2MIDILess(
         dictionary=TokenTextEncoder(vocab_list=build_phoneme_list())
     )
     model.eval()
-    load_ckpt(model, hparams['work_dir'], 'model.fs2', strict=True)
+    load_ckpt(model, hparams['work_dir'], 'model.fs2', ckpt_steps=ckpt_steps, strict=True)
     model.to(device)
     return model
 
 
-def build_diff_model(device):
+def build_diff_model(device, ckpt_steps=None):
     model = GaussianDiffusion(
         out_dims=hparams['audio_num_mel_bins'],
         timesteps=hparams['timesteps'],
@@ -472,7 +472,7 @@ def build_diff_model(device):
         spec_max=hparams['spec_max'],
     )
     model.eval()
-    load_ckpt(model, hparams['work_dir'], 'model', strict=False)
+    load_ckpt(model, hparams['work_dir'], 'model', ckpt_steps=ckpt_steps, strict=False)
     model.build_submodules()
     model.to(device)
     return model
@@ -959,17 +959,19 @@ def _perform_speaker_mix(spk_embedding: nn.Embedding, spk_map: dict, spk_mix_map
 
 
 @torch.no_grad()
-def export(fs2_path, diff_path, expose_gender=False, expose_velocity=False, spk_export_list=None, frozen_spk=None):
+def export(fs2_path, diff_path, ckpt_steps=None,
+           expose_gender=False, expose_velocity=False,
+           spk_export_list=None, frozen_spk=None):
     if hparams.get('use_midi', True) or not hparams['use_pitch_embed']:
         raise NotImplementedError('Only checkpoints of MIDI-less mode are supported.')
 
     # Build models to export
     device = 'cuda' if torch.cuda.is_available() else 'cpu'
     fs2 = FastSpeech2Wrapper(
-        model=build_fs2_model(device)
+        model=build_fs2_model(device, ckpt_steps=ckpt_steps)
     )
     diffusion = DiffusionWrapper(
-        model=build_diff_model(device)
+        model=build_diff_model(device, ckpt_steps=ckpt_steps)
     )
 
     # Export speakers and speaker mixes
@@ -1188,6 +1190,7 @@ def export_phonemes_txt(phonemes_txt_path:str):
 if __name__ == '__main__':
     parser = argparse.ArgumentParser(description='Export DiffSinger acoustic model to ONNX format.')
     parser.add_argument('--exp', type=str, required=True, help='experiment to export')
+    parser.add_argument('--ckpt', type=int, required=False, help='checkpoint training steps')
     parser.add_argument('--out', required=False, type=str, help='output directory for ONNX models and speaker keys')
     group_gender = parser.add_mutually_exclusive_group()
     group_gender.add_argument('--expose_gender', required=False, default=False, action='store_true',
@@ -1207,7 +1210,8 @@ if __name__ == '__main__':
     if args.freeze_gender is not None:
         assert -1. <= args.freeze_gender <= 1., 'Frozen gender must be in [-1, 1].'
         frozen_gender = args.freeze_gender
-
+    elif not args.expose_gender:
+        frozen_gender = 0.
 
     # Temporarily disable --spk argument
     if args.spk is not None:
@@ -1279,7 +1283,7 @@ if __name__ == '__main__':
     phonemes_txt_path =f'{out}/{exp}.phonemes.txt' 
     os.makedirs(out, exist_ok=True)
     set_hparams(print_hparams=False)
-    export(fs2_path=fs2_model_path, diff_path=diff_model_path,
+    export(fs2_path=fs2_model_path, diff_path=diff_model_path, ckpt_steps=args.ckpt,
            expose_gender=args.expose_gender, expose_velocity=args.expose_velocity,
            spk_export_list=spk_export_paths, frozen_spk=frozen_spk_mix)
     fix(diff_model_path, diff_model_path)

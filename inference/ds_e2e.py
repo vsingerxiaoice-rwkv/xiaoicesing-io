@@ -14,7 +14,7 @@ import numpy as np
 
 
 class DiffSingerE2EInfer(BaseSVSInfer):
-    def build_model(self):
+    def build_model(self, ckpt_steps=None):
         model = GaussianDiffusion(
             phone_encoder=self.ph_encoder,
             out_dims=hparams['audio_num_mel_bins'], denoise_fn=DIFF_DECODERS[hparams['diff_decoder_type']](hparams),
@@ -25,7 +25,7 @@ class DiffSingerE2EInfer(BaseSVSInfer):
         )
 
         model.eval()
-        load_ckpt(model, hparams['work_dir'], 'model')
+        load_ckpt(model, hparams['work_dir'], 'model', ckpt_steps=ckpt_steps)
 
         if hparams.get('pe_enable') is not None and hparams['pe_enable']:
             self.pe = PitchExtractor().to(self.device)

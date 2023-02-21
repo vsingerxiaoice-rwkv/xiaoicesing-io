@@ -10,7 +10,7 @@ import numpy as np
 
 
 class DiffSingerCascadeInfer(BaseSVSInfer):
-    def build_model(self):
+    def build_model(self, ckpt_steps=None):
         model = GaussianDiffusion(
             phone_encoder=self.ph_encoder,
             out_dims=hparams['audio_num_mel_bins'], denoise_fn=DIFF_DECODERS[hparams['diff_decoder_type']](hparams),
@@ -20,7 +20,7 @@ class DiffSingerCascadeInfer(BaseSVSInfer):
             spec_min=hparams['spec_min'], spec_max=hparams['spec_max'],
         )
         model.eval()
-        load_ckpt(model, hparams['work_dir'], 'model')
+        load_ckpt(model, hparams['work_dir'], 'model', ckpt_steps=ckpt_steps)
         return model
 
     def preprocess_word_level_input(self, inp):
