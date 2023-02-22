@@ -40,11 +40,11 @@ class File2Batch:
                 'txt': song_info[1],
                 'ph': song_info[2],
                 'word_boundary': np.array([1 if x in vowels + ['AP', 'SP'] else 0 for x in song_info[2].split()]),
-                'ph_durs': [float(x) for x in song_info[5].split(" ")],
+                'ph_durs': [float(x) for x in song_info[5].split()],
                 'pitch_midi': np.array([note_to_midi(x.split("/")[0]) if x != 'rest' else 0
-                                        for x in song_info[3].split(" ")]),
-                'midi_dur': np.array([float(x) for x in song_info[4].split(" ")]),
-                'is_slur': np.array([int(x) for x in song_info[6].split(" ")]),
+                                        for x in song_info[3].split()]),
+                'midi_dur': np.array([float(x) for x in song_info[4].split()]),
+                'is_slur': np.array([int(x) for x in song_info[6].split()]),
                 'spk_id': ds_id
             }
 
