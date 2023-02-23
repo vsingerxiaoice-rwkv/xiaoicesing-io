@@ -230,11 +230,13 @@ class BaseBinarizer:
 
             aug_ins = PitchShiftAugmentation(self.raw_data_dirs, aug_args)
             scale = aug_args['scale']
-            aug_item_names = all_item_names * int(scale) \
-                             + random.sample(all_item_names, int(len(all_item_names) * (scale - int(scale))))
+            aug_item_names = [
+                all_item_names[random.randrange(len(all_item_names))]
+                for _ in range(int(scale * len(all_item_names)))
+            ]
 
             for aug_item_name in aug_item_names:
-                rand = random.random() * 2 - 1
+                rand = random.uniform(-1, 1)
                 if rand < 0:
                     key_shift = key_shift_min * abs(rand)
                 else:
@@ -264,7 +266,10 @@ class BaseBinarizer:
 
             aug_ins = PitchShiftAugmentation(self.raw_data_dirs, aug_args)
             for i, target in enumerate(targets):
-                aug_item_names = random.sample(all_item_names, int(len(all_item_names) * scale))
+                aug_item_names = [
+                    all_item_names[random.randrange(len(all_item_names))]
+                    for _ in range(int(scale * len(all_item_names)))
+                ]
                 for aug_item_name in aug_item_names:
                     replace_spk_id = int(aug_item_name.split(':', maxsplit=1)[0]) + (i + 1) * len(self.spk_map)
                     aug_task = {
@@ -289,17 +294,18 @@ class BaseBinarizer:
 
             aug_ins = TimeStretchAugmentation(self.raw_data_dirs, aug_args)
             scale = aug_args['scale']
-            aug_item_names = all_item_names * int(scale) \
-                             + random.sample(all_item_names, int(len(all_item_names) * (scale - int(scale))))
+            aug_item_names = [
+                all_item_names[random.randrange(len(all_item_names))]
+                for _ in range(int(scale * len(all_item_names)))
+            ]
 
             for aug_item_name in aug_item_names:
-                rand = random.random()
                 if domain == 'log':
                     # Uniform distribution in log domain
-                    speed = speed_min * (speed_max / speed_min) ** rand
+                    speed = speed_min * (speed_max / speed_min) ** random.random()
                 else:
                     # Uniform distribution in linear domain
-                    rand = rand * 2 - 1
+                    rand = random.uniform(-1, 1)
                     speed = 1 + (speed_max - 1) * rand if rand >= 0 else 1 + (1 - speed_min) * rand
                 aug_task = {
                     'func': aug_ins.process_item,
