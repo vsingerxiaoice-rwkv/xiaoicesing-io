@@ -35,11 +35,11 @@ class SpectrogramStretchAugmentation(BaseAugmentation):
 
         if speed != 1. or hparams.get('use_speed_embed', False):
             aug_item['len'] = len(mel)
-            aug_item['speed'] = item['len'] / aug_item['len']
+            aug_item['speed'] = int(np.round(hparams['hop_size'] * speed)) / hparams['hop_size'] # real speed
             aug_item['sec'] /= aug_item['speed']
             aug_item['ph_durs'] /= aug_item['speed']
             aug_item['mel2ph'] = self.get_mel2ph(aug_item['ph_durs'], aug_item['len'])
-            aug_item['f0'], aug_item['pitch'] = get_pitch_parselmouth(wav, mel, hparams)
+            aug_item['f0'], aug_item['pitch'] = get_pitch_parselmouth(wav, mel, hparams, speed=speed)
 
         if key_shift != 0. or hparams.get('use_key_shift_embed', False):
             aug_item['f0'] *= 2 ** (key_shift / 12)
