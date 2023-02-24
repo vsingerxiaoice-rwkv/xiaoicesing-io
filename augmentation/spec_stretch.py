@@ -42,6 +42,7 @@ class SpectrogramStretchAugmentation(BaseAugmentation):
             aug_item['f0'], aug_item['pitch'] = get_pitch_parselmouth(wav, mel, hparams, speed=speed)
 
         if key_shift != 0. or hparams.get('use_key_shift_embed', False):
+            aug_item['key_shift'] = key_shift
             aug_item['f0'] *= 2 ** (key_shift / 12)
             aug_item['pitch'] = f0_to_coarse(aug_item['f0'])
 
