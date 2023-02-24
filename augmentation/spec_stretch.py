@@ -39,11 +39,7 @@ class SpectrogramStretchAugmentation(BaseAugmentation):
             aug_item['sec'] /= aug_item['speed']
             aug_item['ph_durs'] /= aug_item['speed']
             aug_item['mel2ph'] = self.get_mel2ph(aug_item['ph_durs'], aug_item['len'])
-            try:
-                aug_item['f0'], aug_item['pitch'] = get_pitch_parselmouth(wav, mel, hparams, speed=speed)
-            except ValueError:
-                print(f'Error padding f0 in {aug_item["wav_fn"]}!')
-                print(key_shift, speed)
+            aug_item['f0'], aug_item['pitch'] = get_pitch_parselmouth(wav, mel, hparams, speed=speed)
 
         if key_shift != 0. or hparams.get('use_key_shift_embed', False):
             aug_item['key_shift'] = key_shift
