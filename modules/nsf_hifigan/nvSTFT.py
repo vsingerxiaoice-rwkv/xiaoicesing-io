@@ -99,7 +99,7 @@ class STFT():
         if keyshift_key not in self.hann_window:
             self.hann_window[keyshift_key] = torch.hann_window(win_size_new).to(y.device)
         
-        y = torch.nn.functional.pad(y.unsqueeze(1), (int((win_size_new-hop_length_new)/2), int((win_size_new-hop_length_new)/2)), mode='reflect')
+        y = torch.nn.functional.pad(y.unsqueeze(1), ((win_size_new-hop_length_new)//2, (win_size_new-hop_length_new+1)//2), mode='reflect')
         y = y.squeeze(1)
         
         spec = torch.stft(y, n_fft_new, hop_length=hop_length_new, win_length=win_size_new, window=self.hann_window[keyshift_key],
