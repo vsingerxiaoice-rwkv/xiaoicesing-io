@@ -1,3 +1,4 @@
+import copy
 import shutil
 import os
 os.environ["OMP_NUM_THREADS"] = "1"
@@ -218,9 +219,11 @@ class BaseBinarizer:
         Code for all types of data augmentation should be added here.
         """
         aug_map = {}
+        aug_list = []
         all_item_names = [item_name for item_name, _ in self.meta_data_iterator(prefix)]
+        total_scale = 0
         if self.augmentation_args.get('random_pitch_shifting') is not None:
-            from augmentation.pitch_shift import PitchShiftAugmentation
+            from augmentation.spec_stretch import SpectrogramStretchAugmentation
             aug_args = self.augmentation_args['random_pitch_shifting']
             key_shift_min, key_shift_max = aug_args['range']
             assert hparams.get('use_key_shift_embed', False), \
@@ -228,18 +231,18 @@ class BaseBinarizer:
             assert key_shift_min < 0 < key_shift_max, \
                 'Random pitch shifting augmentation must have a range where min < 0 < max.'
 
-            aug_ins = PitchShiftAugmentation(self.raw_data_dirs, aug_args)
+            aug_ins = SpectrogramStretchAugmentation(self.raw_data_dirs, aug_args)
             scale = aug_args['scale']
-            aug_item_names = all_item_names * int(scale) \
-                             + random.sample(all_item_names, int(len(all_item_names) * (scale - int(scale))))
+            aug_item_names = random.choices(all_item_names, k=int(scale * len(all_item_names)))
 
             for aug_item_name in aug_item_names:
-                rand = random.random() * 2 - 1
+                rand = random.uniform(-1, 1)
                 if rand < 0:
                     key_shift = key_shift_min * abs(rand)
                 else:
                     key_shift = key_shift_max * rand
                 aug_task = {
+                    'name': aug_item_name,
                     'func': aug_ins.process_item,
                     'kwargs': {'key_shift': key_shift}
                 }
@@ -247,9 +250,12 @@ class BaseBinarizer:
                     aug_map[aug_item_name].append(aug_task)
                 else:
                     aug_map[aug_item_name] = [aug_task]
+                aug_list.append(aug_task)
+
+            total_scale += scale
 
         if self.augmentation_args.get('fixed_pitch_shifting') is not None:
-            from augmentation.pitch_shift import PitchShiftAugmentation
+            from augmentation.spec_stretch import SpectrogramStretchAugmentation
             aug_args = self.augmentation_args['fixed_pitch_shifting']
             targets = aug_args['targets']
             scale = aug_args['scale']
@@ -262,12 +268,13 @@ class BaseBinarizer:
                 'Fixed pitch shifting augmentation requires num_spk >= (1 + len(targets)) * len(speakers).'
             assert scale < 1, 'Fixed pitch shifting augmentation requires scale < 1.'
 
-            aug_ins = PitchShiftAugmentation(self.raw_data_dirs, aug_args)
+            aug_ins = SpectrogramStretchAugmentation(self.raw_data_dirs, aug_args)
             for i, target in enumerate(targets):
-                aug_item_names = random.sample(all_item_names, int(len(all_item_names) * scale))
+                aug_item_names = random.choices(all_item_names, k=int(scale * len(all_item_names)))
                 for aug_item_name in aug_item_names:
                     replace_spk_id = int(aug_item_name.split(':', maxsplit=1)[0]) + (i + 1) * len(self.spk_map)
                     aug_task = {
+                        'name': aug_item_name,
                         'func': aug_ins.process_item,
                         'kwargs': {'key_shift': target, 'replace_spk_id': replace_spk_id}
                     }
@@ -275,6 +282,60 @@ class BaseBinarizer:
                         aug_map[aug_item_name].append(aug_task)
                     else:
                         aug_map[aug_item_name] = [aug_task]
+                    aug_list.append(aug_task)
+
+            total_scale += scale * len(targets)
+
+        if self.augmentation_args.get('random_time_stretching') is not None:
+            from augmentation.spec_stretch import SpectrogramStretchAugmentation
+            aug_args = self.augmentation_args['random_time_stretching']
+            speed_min, speed_max = aug_args['range']
+            domain = aug_args['domain']
+            assert hparams.get('use_speed_embed', False), \
+                'Random time stretching augmentation requires use_speed_embed == True.'
+            assert 0 < speed_min < 1 < speed_max, \
+                'Random time stretching augmentation must have a range where 0 < min < 1 < max.'
+            assert domain in ['log', 'linear'], 'domain must be \'log\' or \'linear\'.'
+
+            aug_ins = SpectrogramStretchAugmentation(self.raw_data_dirs, aug_args)
+            scale = aug_args['scale']
+            k_from_raw = int(scale / (1 + total_scale) * len(all_item_names))
+            k_from_aug = int(total_scale * scale / (1 + total_scale) * len(all_item_names))
+            k_mutate = int(total_scale * scale / (1 + scale) * len(all_item_names))
+            aug_types = [0] * k_from_raw + [1] * k_from_aug + [2] * k_mutate
+            aug_items = random.choices(all_item_names, k=k_from_raw) + random.choices(aug_list, k=k_from_aug + k_mutate)
+
+            for aug_type, aug_item in zip(aug_types, aug_items):
+                if domain == 'log':
+                    # Uniform distribution in log domain
+                    speed = speed_min * (speed_max / speed_min) ** random.random()
+                else:
+                    # Uniform distribution in linear domain
+                    rand = random.uniform(-1, 1)
+                    speed = 1 + (speed_max - 1) * rand if rand >= 0 else 1 + (1 - speed_min) * rand
+                if aug_type == 0:
+                    aug_task = {
+                        'name': aug_item,
+                        'func': aug_ins.process_item,
+                        'kwargs': {'speed': speed}
+                    }
+                    if aug_item in aug_map:
+                        aug_map[aug_item].append(aug_task)
+                    else:
+                        aug_map[aug_item] = [aug_task]
+                    aug_list.append(aug_task)
+                elif aug_type == 1:
+                    aug_task = copy.deepcopy(aug_item)
+                    aug_item['kwargs']['speed'] = speed
+                    if aug_item['name'] in aug_map:
+                        aug_map[aug_item['name']].append(aug_task)
+                    else:
+                        aug_map[aug_item['name']] = [aug_task]
+                    aug_list.append(aug_task)
+                elif aug_type == 2:
+                    aug_item['kwargs']['speed'] = speed
+
+            total_scale += scale
 
         return aug_map
 

@@ -50,6 +50,9 @@ class ParameterEncoder(nn.Module):
         if hparams.get('use_key_shift_embed', False):
             self.key_shift_embed = Linear(1, hparams['hidden_size'])
 
+        if hparams.get('use_speed_embed', False):
+            self.speed_embed = Linear(1, hparams['hidden_size'])
+
         if hparams['use_spk_id']:
             self.spk_embed = Embedding(hparams['num_spk'], hparams['hidden_size'])
     
@@ -64,7 +67,7 @@ class ParameterEncoder(nn.Module):
         decoder_inp = F.pad(encoder_out, [0, 0, 1, 0])
         mel2ph_ = mel2ph[..., None].repeat([1, 1, encoder_out.shape[-1]])
         decoder_inp = torch.gather(decoder_inp, 1, mel2ph_)
-        
+
         nframes = mel2ph.size(1)
         delta_l = nframes - f0.size(1)
         if delta_l > 0:
@@ -92,6 +95,19 @@ class ParameterEncoder(nn.Module):
                 key_shift_embed = self.key_shift_embed(key_shift[:, :, None])
         else:
             key_shift_embed = 0
+
+        if hparams.get('use_speed_embed', False):
+            speed = kwarg['speed']
+            if len(speed.shape) == 1:
+                speed_embed = self.speed_embed(speed[:, None, None])
+            else:
+                delta_l = nframes - speed.size(1)
+                if delta_l > 0:
+                    speed = torch.cat((speed, torch.FloatTensor([[x[-1]] * delta_l for x in speed]).to(speed.device)), 1)
+                speed = speed[:, :nframes]
+                speed_embed = self.speed_embed(speed[:, :, None])
+        else:
+            speed_embed = 0
         
         if hparams['use_spk_id']:
             if infer:
@@ -106,5 +122,5 @@ class ParameterEncoder(nn.Module):
         else:
             spk_embed = 0
 
-        ret = {'decoder_inp': decoder_inp + pitch_embed + key_shift_embed + spk_embed, 'f0_denorm': f0_denorm}
+        ret = {'decoder_inp': decoder_inp + pitch_embed + key_shift_embed + speed_embed + spk_embed, 'f0_denorm': f0_denorm}
         return ret

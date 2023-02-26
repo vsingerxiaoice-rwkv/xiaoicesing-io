@@ -21,6 +21,7 @@ class NaiveTask(DiffSingerMIDITask):
         uv = sample['uv']
         energy = sample.get('energy')
         key_shift = sample.get('key_shift')
+        speed = sample.get('speed')
 
         if infer:
             if hparams['use_spk_id']:
@@ -29,12 +30,12 @@ class NaiveTask(DiffSingerMIDITask):
                 spk_embed = sample['spk_embed']
             else:
                 spk_embed = None
-            output = model(txt_tokens, mel2ph=mel2ph, spk_mix_embed=spk_embed,
-                           ref_mels=target, f0=f0, uv=uv, energy=energy, key_shift=key_shift, infer=infer)
+            output = model(txt_tokens, mel2ph=mel2ph, spk_mix_embed=spk_embed,ref_mels=target,
+                           f0=f0, uv=uv, energy=energy, key_shift=key_shift, speed=speed, infer=infer)
         else:
             spk_embed = sample.get('spk_ids') if hparams['use_spk_id'] else sample.get('spk_embed')
-            output = model(txt_tokens, mel2ph=mel2ph, spk_embed=spk_embed,
-                           ref_mels=target, f0=f0, uv=uv, energy=energy, key_shift=key_shift, infer=infer)
+            output = model(txt_tokens, mel2ph=mel2ph, spk_embed=spk_embed, ref_mels=target,
+                           f0=f0, uv=uv, energy=energy, key_shift=key_shift, speed=speed, infer=infer)
 
         losses = {}
         if 'diff_loss' in output:
@@ -51,6 +52,7 @@ class NaiveTask(DiffSingerMIDITask):
         target = sample['mels']  # [B, T_s, 80]
         energy = sample.get('energy')
         key_shift = sample.get('key_shift')
+        speed = sample.get('speed')
         # fs2_mel = sample['fs2_mels']
         spk_embed = sample.get('spk_embed') if not hparams['use_spk_id'] else sample.get('spk_ids')
         mel2ph = sample['mel2ph']
@@ -70,7 +72,7 @@ class NaiveTask(DiffSingerMIDITask):
                 spk_embed = None
             model_out = self.model(
                 txt_tokens, spk_mix_embed=spk_embed, mel2ph=mel2ph, f0=f0, uv=None, energy=energy,
-                key_shift=key_shift, ref_mels=None, pitch_midi=sample['pitch_midi'],
+                key_shift=key_shift, speed=speed, ref_mels=None, pitch_midi=sample['pitch_midi'],
                 midi_dur=sample.get('midi_dur'), is_slur=sample.get('is_slur'), infer=True
             )
 

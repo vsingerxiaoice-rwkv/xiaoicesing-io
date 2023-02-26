@@ -44,6 +44,11 @@ class DiffSingerCascadeInfer(BaseSVSInfer):
                 gender = np.array(inp['gender'].split(), 'float')
             else:
                 gender = float(inp['gender'])
+        velocity_timestep = None
+        velocity = None
+        if inp.get('velocity') is not None:
+            velocity_timestep = float(inp['velocity_timestep'])
+            velocity = np.array(inp['velocity'].split(), 'float')
         ph_seq_lst = ph_seq.split()
         if inp['ph_dur'] is not None:
             ph_dur = np.array(inp['ph_dur'].split(), 'float')
@@ -58,7 +63,8 @@ class DiffSingerCascadeInfer(BaseSVSInfer):
                                    f'{len(note_lst)} {len(ph_seq.split())} {len(midi_dur_lst)}')
             print(f'Processed {len(ph_seq_lst)} tokens: {" ".join(ph_seq_lst)}')
 
-        return ph_seq, note_lst, midi_dur_lst, is_slur, ph_dur, f0_timestep, f0_seq, gender_timestep, gender
+        return ph_seq, note_lst, midi_dur_lst, is_slur, ph_dur, \
+            f0_timestep, f0_seq, gender_timestep, gender, velocity_timestep, velocity
 
     def preprocess_input(self, inp, input_type='word'):
         """
@@ -90,9 +96,10 @@ class DiffSingerCascadeInfer(BaseSVSInfer):
         # get ph seq, note lst, midi dur lst, is slur lst.
         if input_type == 'word':
             ph_seq, note_lst, midi_dur_lst, is_slur = self.preprocess_word_level_input(inp)
-            ph_dur = f0_timestep = f0_seq = gender_timestep = gender = None
+            ph_dur = f0_timestep = f0_seq = gender_timestep = gender = velocity_timestep = velocity = None
         elif input_type == 'phoneme':  # like transcriptions.txt in Opencpop dataset.
-            ph_seq, note_lst, midi_dur_lst, is_slur, ph_dur, f0_timestep, f0_seq, gender_timestep, gender = \
+            ph_seq, note_lst, midi_dur_lst, is_slur, ph_dur, \
+                f0_timestep, f0_seq, gender_timestep, gender, velocity_timestep, velocity = \
                 self.preprocess_phoneme_level_input(inp)
         else:
             raise ValueError('Invalid input type. Must be \'word\' or \'phoneme\'.')
@@ -118,6 +125,8 @@ class DiffSingerCascadeInfer(BaseSVSInfer):
             item['f0_seq'] = f0_seq
             item['gender_timestep'] = gender_timestep
             item['gender'] = gender
+            item['velocity_timestep'] = velocity_timestep
+            item['velocity'] = velocity
             item['spk_mix_timestep'] = inp.get('spk_mix_timestep')
         return item
 
@@ -210,6 +219,23 @@ class DiffSingerCascadeInfer(BaseSVSInfer):
         else:
             key_shift = None
 
+        if hparams.get('use_speed_embed', False):
+            if item['velocity'] is None:
+                print('Using default velocity curve')
+                speed = torch.FloatTensor([1.]).to(self.device)
+            else:
+                print('Using manual velocity curve')
+                velocity_timestep = item['velocity_timestep']
+                velocity_seq = item['velocity']
+                speed_min, speed_max = hparams['augmentation_args']['random_time_stretching']['range']
+                speed_seq = np.clip(velocity_seq, a_min=speed_min, a_max=speed_max)
+                t_max = (len(speed_seq) - 1) * velocity_timestep
+                dt = hparams['hop_size'] / hparams['audio_sample_rate']
+                speed_interp = np.interp(np.arange(0, t_max, dt), velocity_timestep * np.arange(len(speed_seq)), speed_seq)
+                speed = torch.FloatTensor(speed_interp)[None, :].to(self.device)
+        else:
+            speed = None
+
         batch = {
             'item_name': item_names,
             'text': text,
@@ -222,7 +248,8 @@ class DiffSingerCascadeInfer(BaseSVSInfer):
             'is_slur': is_slur,
             'mel2ph': mel2ph,
             'log2f0': log2f0,
-            'key_shift': key_shift
+            'key_shift': key_shift,
+            'speed': speed
         }
         return batch
 
@@ -240,8 +267,8 @@ class DiffSingerCascadeInfer(BaseSVSInfer):
             output = self.model(txt_tokens, spk_mix_embed=spk_mix_embed, ref_mels=None, infer=True,
                                 pitch_midi=sample['pitch_midi'], midi_dur=sample['midi_dur'],
                                 is_slur=sample['is_slur'], mel2ph=sample['mel2ph'], f0=sample['log2f0'],
-                                key_shift=sample['key_shift'])
-            mel_out = output['mel_out']  # [B, T,80]
+                                key_shift=sample['key_shift'], speed=sample['speed'])
+            mel_out = output['mel_out']  # [B, T, M]
             f0_pred = output['f0_denorm']
             if return_mel:
                 return mel_out.cpu(), f0_pred.cpu()

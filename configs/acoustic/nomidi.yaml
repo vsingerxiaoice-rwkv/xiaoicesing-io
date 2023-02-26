@@ -40,6 +40,10 @@ binarization_args:
 #  fixed_pitch_shifting:
 #    targets: [-5., 5.]
 #    scale: 0.75
+#  random_time_stretching:
+#    range: [0.5, 2.]
+#    domain: log  # or linear
+#    scale: 2.0
 
 raw_data_dir: 'data/opencpop/raw'
 processed_data_dir: ''
@@ -66,7 +70,8 @@ use_uv: false
 use_midi: false
 use_spk_embed: false
 use_spk_id: false
-#use_key_shift_embed: true
+use_key_shift_embed: false
+use_speed_embed: false
 use_gt_f0: false  #  for midi exp
 use_gt_dur: false  # for further midi exp
 f0_embed_type: continuous

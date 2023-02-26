@@ -70,7 +70,7 @@ class STFT():
         self.mel_basis = {}
         self.hann_window = {}
     
-    def get_mel(self, y, keyshift=0, center=False):
+    def get_mel(self, y, keyshift=0, speed=1, center=False):
         sampling_rate = self.target_sr
         n_mels     = self.n_mels
         n_fft      = self.n_fft
@@ -83,6 +83,7 @@ class STFT():
         factor = 2 ** (keyshift / 12)       
         n_fft_new = int(np.round(n_fft * factor))
         win_size_new = int(np.round(win_size * factor))
+        hop_length_new = int(np.round(hop_length * speed))
         
         if torch.min(y) < -1.:
             print('min value is ', torch.min(y))
@@ -98,10 +99,10 @@ class STFT():
         if keyshift_key not in self.hann_window:
             self.hann_window[keyshift_key] = torch.hann_window(win_size_new).to(y.device)
         
-        y = torch.nn.functional.pad(y.unsqueeze(1), (int((win_size_new-hop_length)/2), int((win_size_new-hop_length)/2)), mode='reflect')
+        y = torch.nn.functional.pad(y.unsqueeze(1), ((win_size_new-hop_length_new)//2, (win_size_new-hop_length_new+1)//2), mode='reflect')
         y = y.squeeze(1)
         
-        spec = torch.stft(y, n_fft_new, hop_length=hop_length, win_length=win_size_new, window=self.hann_window[keyshift_key],
+        spec = torch.stft(y, n_fft_new, hop_length=hop_length_new, win_length=win_size_new, window=self.hann_window[keyshift_key],
                           center=center, pad_mode='reflect', normalized=False, onesided=True, return_complex=False)
         # print(111,spec)
         spec = torch.sqrt(spec.pow(2).sum(-1)+(1e-9))
