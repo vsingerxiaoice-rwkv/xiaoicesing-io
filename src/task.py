@@ -83,7 +83,7 @@ class DiffFsTask(FastSpeech2Task):
         return outputs
 
     def build_scheduler(self, optimizer):
-        return torch.optim.lr_scheduler.StepLR(optimizer, hparams['decay_steps'], gamma=0.5)
+        return torch.optim.lr_scheduler.StepLR(optimizer, hparams['decay_steps'], gamma=hparams.get('gamma', 0.5))
 
     def optimizer_step(self, epoch, batch_idx, optimizer, optimizer_idx):
         if optimizer is None:

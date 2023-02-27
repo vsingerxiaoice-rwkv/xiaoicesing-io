@@ -103,6 +103,7 @@ gen_tgt_spk_id: -1
 num_sanity_val_steps: 1
 lr: 0.0004
 decay_steps: 50000
+gamma: 0.5
 max_tokens: 80000
 max_sentences: 48
 val_check_interval: 2000
