@@ -30,7 +30,7 @@ pip install -r requirements.txt
 
 #### Pretrained models
 
-- **(Required)** Get the pretrained vocoder from the [DiffSinger Comminity Vocoder Project](https://openvpi.github.io/vocoders) and unzip it into `checkpoints/` folder.
+- **(Required)** Get the pretrained vocoder from the [DiffSinger Comminity Vocoder Project](https://openvpi.github.io/vocoders) and unzip it into `checkpoints/` folder, or train a ultra-lightweight [DDSP](https://github.com/yxlllc/pc-ddsp) vocoder first by yourself, then configure it according to the relevant [instructions](https://github.com/yxlllc/pc-ddsp/blob/master/DiffSinger.md).
 - Get the acoustic model from [releases](https://github.com/openvpi/DiffSinger/releases) or elsewhere and unzip into the `checkpoints/` folder.
 
 ### Building your own dataset
