@@ -11,6 +11,8 @@ Currently, we only support exporting MIDI-less acoustic model to ONNX format.
 
 ### 0. Environment Preparation
 
+**<font color='red'> Important:</font>** Due to the complexity of the model and inference procedure, these scripts are only compatible with **PyTorch 1.8**. We apologize for any inconvenience caused; we will try to address this issue in the future.
+
 Run with the command to install extra requirements for exporting the model to ONNX format.
 
 ```bash
@@ -18,8 +20,6 @@ pip install onnx==1.12.0 onnxsim==0.4.10 protobuf==3.13.0  # Used for graph repa
 ```
 
 The `onnxruntime` package is required to run inference with ONNX model and ONNXRuntime. See the [official guidance](https://onnxruntime.ai/) for instructions to install packages matching your hardware. CUDA, DirectML and default CPU are recommended since the model has been tested on these execution providers.
-
-Note that the scripts are tested on PyTorch 1.8.
 
 ### 1. Export to ONNX format
 
