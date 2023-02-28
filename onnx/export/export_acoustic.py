@@ -1,5 +1,6 @@
 import json
 import os
+import shutil
 import sys
 import warnings
 
@@ -958,6 +959,12 @@ def _perform_speaker_mix(spk_embedding: nn.Embedding, spk_map: dict, spk_mix_map
     return spk_mix_embed
 
 
+def _save_speaker_embed(path: str, spk_embed: np.ndarray):
+    with open(path, 'wb') as f:
+        f.write(spk_embed.tobytes())
+    print(f'| export spk embed of \'{path.rsplit(".", maxsplit=2)[1]}\'')
+
+
 @torch.no_grad()
 def export(fs2_path, diff_path, ckpt_steps=None,
            expose_gender=False, expose_velocity=False,
@@ -994,7 +1001,7 @@ def export(fs2_path, diff_path, ckpt_steps=None,
                                                     parse_commandline_spk_mix(frozen_spk), device)
         elif spk_export_list is not None:
             for spk in spk_export_list:
-                np.save(spk['path'], _perform_speaker_mix(
+                _save_speaker_embed(spk['path'], _perform_speaker_mix(
                     fs2.model.fs2.spk_embed, spk_map, parse_commandline_spk_mix(spk['mix']), device
                 ).cpu().numpy())
 
@@ -1200,7 +1207,7 @@ if __name__ == '__main__':
     parser.add_argument('--expose_velocity', required=False, default=False, action='store_true',
                         help='(for models with random time stretching) expose velocity control functionality')
     group_spk = parser.add_mutually_exclusive_group()
-    group_spk.add_argument('--spk', required=False, type=str, action='append',
+    group_spk.add_argument('--export_spk', required=False, type=str, action='append',
                            help='(for combined models) speakers or speaker mixes to export')
     group_spk.add_argument('--freeze_spk', required=False, type=str,
                            help='(for combined models) freeze speaker or speaker mix into the model')
@@ -1212,10 +1219,6 @@ if __name__ == '__main__':
         frozen_gender = args.freeze_gender
     elif not args.expose_gender:
         frozen_gender = 0.
-
-    # Temporarily disable --spk argument
-    if args.spk is not None:
-        raise NotImplementedError('Exporting speakers or speaker mixes is not supported yet.')
 
     exp = args.exp
     if not os.path.exists(f'{root_dir}/checkpoints/{exp}'):
@@ -1249,19 +1252,19 @@ if __name__ == '__main__':
     spk_export_paths = None
     frozen_spk_name = None
     frozen_spk_mix = None
-    if args.spk is not None:
+    if args.export_spk is not None:
         spk_export_paths = []
-        for spk_export in args.spk:
+        for spk_export in args.export_spk:
             assert '=' in spk_export or '|' not in spk_export, \
                 'You must specify an alias with \'NAME=\' for each speaker mix.'
             if '=' in spk_export:
                 alias, mix = spk_export.split('=', maxsplit=1)
                 assert re.fullmatch(spk_name_pattern, alias) is not None, f'Invalid alias \'{alias}\' for speaker mix.'
-                spk_export_paths.append({'mix': mix, 'path': f'onnx/assets/temp/{alias}.npy'})
+                spk_export_paths.append({'mix': mix, 'path': f'onnx/temp/{exp}.{alias}.emb'})
             else:
                 assert re.fullmatch(spk_name_pattern, spk_export) is not None, \
                     f'Invalid alias \'{spk_export}\' for speaker mix.'
-                spk_export_paths.append({'mix': spk_export, 'path': f'onnx/assets/temp/{spk_export}.npy'})
+                spk_export_paths.append({'mix': spk_export, 'path': f'onnx/temp/{exp}.{spk_export}.emb'})
     elif args.freeze_spk is not None:
         assert '=' in args.freeze_spk or '|' not in args.freeze_spk, \
             'You must specify an alias with \'NAME=\' for each speaker mix.'
@@ -1280,7 +1283,7 @@ if __name__ == '__main__':
         target_model_path = f'{out}/{exp}.onnx'
     else:
         target_model_path = f'{out}/{exp}.{frozen_spk_name}.onnx'
-    phonemes_txt_path =f'{out}/{exp}.phonemes.txt' 
+    phonemes_txt_path =f'{out}/{exp}.phonemes.txt'
     os.makedirs(out, exist_ok=True)
     set_hparams(print_hparams=False)
     export(fs2_path=fs2_model_path, diff_path=diff_model_path, ckpt_steps=args.ckpt,
@@ -1289,6 +1292,9 @@ if __name__ == '__main__':
     fix(diff_model_path, diff_model_path)
     merge(fs2_path=fs2_model_path, diff_path=diff_model_path, target_path=target_model_path)
     export_phonemes_txt(phonemes_txt_path)
+    if spk_export_paths is not None:
+        [shutil.copy(p['path'], out) for p in spk_export_paths]
+        [os.remove(p['path']) for p in spk_export_paths if os.path.exists(p['path'])]
     os.remove(fs2_model_path)
     os.remove(diff_model_path)
 
