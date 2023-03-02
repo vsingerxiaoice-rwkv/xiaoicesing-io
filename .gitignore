@@ -8,7 +8,8 @@ local_tools/
 (!/pipelines/assets)/*.wav
 infer_out/
 *.onnx
-data/
+data/*
+!data/.gitkeep
 checkpoints/
 venv/
 
