@@ -288,7 +288,7 @@ class FastSpeech2Task(TtsTask):
         name = f'mel_{batch_idx}' if name is None else name
         vmin = hparams['mel_vmin']
         vmax = hparams['mel_vmax']
-        spec_cat = torch.cat([spec_out - spec, spec, spec_out], -1)
+        spec_cat = torch.cat([(spec_out - spec).abs() + vmin, spec, spec_out], -1)
         self.logger.experiment.add_figure(name, spec_to_figure(spec_cat[0], vmin, vmax), self.global_step)
 
     def plot_dur(self, batch_idx, sample, model_out):
