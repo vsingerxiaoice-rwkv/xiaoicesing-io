@@ -20,7 +20,7 @@ def get_vocoder_cls(hparams):
 
 
 class BaseVocoder:
-    def spec2wav(self, mel):
+    def spec2wav(self, mel, **kwargs):
         """
 
         :param mel: [T, 80]

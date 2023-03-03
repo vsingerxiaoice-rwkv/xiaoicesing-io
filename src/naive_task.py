@@ -82,7 +82,7 @@ class NaiveTask(DiffSingerMIDITask):
             else:
                 gt_f0 = denorm_f0(sample['f0'], sample['uv'], hparams)
                 pred_f0 = gt_f0
-            self.plot_wav(batch_idx, sample['mels'], model_out['mel_out'], is_mel=True, gt_f0=gt_f0, f0=pred_f0)
+            self.plot_wav(batch_idx, sample['mels'], model_out['mel_out'], gt_f0=gt_f0, pred_f0=pred_f0)
             self.plot_mel(batch_idx, sample['mels'], model_out['mel_out'], name=f'diffmel_{batch_idx}')
 
         return outputs
