@@ -10,6 +10,7 @@ def spec_to_figure(spec, vmin=None, vmax=None):
         spec = spec.cpu().numpy()
     fig = plt.figure(figsize=(12, 9))
     plt.pcolor(spec.T, vmin=vmin, vmax=vmax)
+    plt.tight_layout()
     return fig
 
 
