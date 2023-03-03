@@ -93,7 +93,7 @@ class DiffSingerTask(DiffSpeechTask):
             else:
                 gt_f0 = denorm_f0(sample['f0'], sample['uv'], hparams)
                 pred_f0 = model_out.get('f0_denorm')
-            self.plot_wav(batch_idx, sample['mels'], model_out['mel_out'], is_mel=True, gt_f0=gt_f0, f0=pred_f0)
+            self.plot_wav(batch_idx, sample['mels'], model_out['mel_out'], gt_f0=gt_f0, pred_f0=pred_f0)
             self.plot_mel(batch_idx, sample['mels'], model_out['mel_out'], name=f'diffmel_{batch_idx}')
             self.plot_mel(batch_idx, sample['mels'], model_out['fs2_mel'], name=f'fs2mel_{batch_idx}')
         return outputs
@@ -200,7 +200,7 @@ class DiffSingerOfflineTask(DiffSingerTask):
             else:
                 gt_f0 = denorm_f0(sample['f0'], sample['uv'], hparams)
                 pred_f0 = model_out.get('f0_denorm')
-            self.plot_wav(batch_idx, sample['mels'], model_out['mel_out'], is_mel=True, gt_f0=gt_f0, f0=pred_f0)
+            self.plot_wav(batch_idx, sample['mels'], model_out['mel_out'], gt_f0=gt_f0, pred_f0=pred_f0)
             self.plot_mel(batch_idx, sample['mels'], model_out['mel_out'], name=f'diffmel_{batch_idx}')
             self.plot_mel(batch_idx, sample['mels'], fs2_mel, name=f'fs2mel_{batch_idx}')
         return outputs
@@ -341,7 +341,7 @@ class DiffSingerMIDITask(DiffSingerTask):
             else:
                 gt_f0 = denorm_f0(sample['f0'], sample['uv'], hparams)
                 pred_f0 = model_out.get('f0_denorm')
-            self.plot_wav(batch_idx, sample['mels'], model_out['mel_out'], is_mel=True, gt_f0=gt_f0, f0=pred_f0)
+            self.plot_wav(batch_idx, sample['mels'], model_out['mel_out'], gt_f0=gt_f0, pred_f0=pred_f0)
             self.plot_mel(batch_idx, sample['mels'], model_out['mel_out'], name=f'diffmel_{batch_idx}')
             #self.plot_mel(batch_idx, sample['mels'], model_out['fs2_mel'], name=f'fs2mel_{batch_idx}')
             if hparams['use_pitch_embed']:

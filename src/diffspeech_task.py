@@ -19,6 +19,7 @@ class DiffSpeechTask(DiffFsTask):
         super(DiffSpeechTask, self).__init__()
         self.dataset_cls = FastSpeechDataset
         self.vocoder: BaseVocoder = get_vocoder_cls(hparams)()
+        self.logged_gt_wav = set()
 
     def build_tts_model(self):
         mel_bins = hparams['audio_num_mel_bins']
@@ -102,21 +103,22 @@ class DiffSpeechTask(DiffFsTask):
             model_out = self.model(
                 txt_tokens, spk_embed=spk_embed, mel2ph=mel2ph, f0=f0, uv=uv, energy=energy, ref_mels=None, infer=True)
             gt_f0 = denorm_f0(sample['f0'], sample['uv'], hparams)
-            self.plot_wav(batch_idx, sample['mels'], model_out['mel_out'], is_mel=True, gt_f0=gt_f0, f0=model_out.get('f0_denorm'))
+            self.plot_wav(batch_idx, sample['mels'], model_out['mel_out'], gt_f0=gt_f0,
+                          pred_f0=model_out.get('f0_denorm'))
             self.plot_mel(batch_idx, sample['mels'], model_out['mel_out'])
         return outputs
 
     ############
     # validation plots
     ############
-    def plot_wav(self, batch_idx, gt_wav, wav_out, is_mel=False, gt_f0=None, f0=None, name=None):
-        gt_wav = gt_wav[0].cpu().numpy()
-        wav_out = wav_out[0].cpu().numpy()
+    def plot_wav(self, batch_idx, gt_mel, pred_mel, gt_f0=None, pred_f0=None):
+        gt_mel = gt_mel[0].cpu().numpy()
+        pred_mel = pred_mel[0].cpu().numpy()
         gt_f0 = gt_f0[0].cpu().numpy()
-        f0 = f0[0].cpu().numpy()
-        if is_mel:
-            gt_wav = self.vocoder.spec2wav(gt_wav, f0=gt_f0)
-            wav_out = self.vocoder.spec2wav(wav_out, f0=f0)
-        self.logger.experiment.add_audio(f'gt_{batch_idx}', gt_wav, sample_rate=hparams['audio_sample_rate'], global_step=self.global_step)
-        self.logger.experiment.add_audio(f'wav_{batch_idx}', wav_out, sample_rate=hparams['audio_sample_rate'], global_step=self.global_step)
-
+        pred_f0 = pred_f0[0].cpu().numpy()
+        if batch_idx not in self.logged_gt_wav:
+            gt_wav = self.vocoder.spec2wav(gt_mel, f0=gt_f0)
+            self.logger.experiment.add_audio(f'gt_{batch_idx}', gt_wav, sample_rate=hparams['audio_sample_rate'], global_step=self.global_step)
+            self.logged_gt_wav.add(batch_idx)
+        pred_wav = self.vocoder.spec2wav(pred_mel, f0=pred_f0)
+        self.logger.experiment.add_audio(f'pred_{batch_idx}', pred_wav, sample_rate=hparams['audio_sample_rate'], global_step=self.global_step)

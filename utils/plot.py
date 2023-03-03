@@ -8,8 +8,9 @@ LINE_COLORS = ['w', 'r', 'y', 'cyan', 'm', 'b', 'lime']
 def spec_to_figure(spec, vmin=None, vmax=None):
     if isinstance(spec, torch.Tensor):
         spec = spec.cpu().numpy()
-    fig = plt.figure(figsize=(12, 6))
+    fig = plt.figure(figsize=(12, 9))
     plt.pcolor(spec.T, vmin=vmin, vmax=vmax)
+    plt.tight_layout()
     return fig
 
 
