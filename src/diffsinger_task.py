@@ -282,7 +282,7 @@ class DiffSingerMIDITask(DiffSingerTask):
         mel2ph = sample['mel2ph'] # [B, T_s]
         f0 = sample['f0']
         uv = sample['uv']
-        energy = sample['energy']
+        energy = sample.get('energy')
 
         spk_embed = sample.get('spk_embed') if not hparams['use_spk_id'] else sample.get('spk_ids')
         if hparams['pitch_type'] == 'cwt':
