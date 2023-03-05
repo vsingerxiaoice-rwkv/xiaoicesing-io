@@ -61,7 +61,7 @@ class SpectrogramStretchAugmentation(BaseAugmentation):
         mel2ph = self.lr(ph_dur).cpu().numpy()[0]
         num_frames = len(mel2ph)
         if num_frames < length:
-            mel2ph = np.concatenate((mel2ph, np.full((length - num_frames, mel2ph[-1]))), axis=0)
+            mel2ph = np.concatenate((mel2ph, np.full(length - num_frames, mel2ph[-1])), axis=0)
         elif num_frames > length:
             mel2ph = mel2ph[:length]
         return mel2ph
