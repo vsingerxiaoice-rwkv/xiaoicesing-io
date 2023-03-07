@@ -55,13 +55,11 @@ class DiffSingerCascadeInfer(BaseSVSInfer):
             if not len(note_lst) == len(ph_seq_lst) == len(midi_dur_lst) == len(ph_dur):
                 raise RuntimeError(f'The number of notes, phones and durations mismatch:'
                                    f'{len(note_lst)} {len(ph_seq.split())} {len(midi_dur_lst)} {len(ph_dur)}')
-            print(f'Processed {len(ph_seq_lst)} tokens: {" ".join(ph_seq_lst)}')
         else:
-            print(len(note_lst), len(ph_seq.split()), len(midi_dur_lst))
             if not len(note_lst) == len(ph_seq.split()) == len(midi_dur_lst):
                 raise RuntimeError(f'The number of notes, phones and durations mismatch:'
                                    f'{len(note_lst)} {len(ph_seq.split())} {len(midi_dur_lst)}')
-            print(f'Processed {len(ph_seq_lst)} tokens: {" ".join(ph_seq_lst)}')
+        print(f'Processed {len(ph_seq_lst)} tokens: {" ".join(ph_seq_lst)}')
 
         return ph_seq, note_lst, midi_dur_lst, is_slur, ph_dur, \
             f0_timestep, f0_seq, gender_timestep, gender, velocity_timestep, velocity
