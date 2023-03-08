@@ -1,6 +1,3 @@
-VOCODERS = {}
-
-
 class BaseVocoder:
     def spec2wav(self, mel, **kwargs):
         """

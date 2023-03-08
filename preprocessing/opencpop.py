@@ -11,7 +11,7 @@ from librosa import note_to_midi
 import utils
 from basics.base_binarizer import BinarizationError
 from data_gen.data_gen_utils import get_pitch_parselmouth
-from basics.base_vocoder import VOCODERS
+from src.vocoders.vocoder_utils import VOCODERS
 from utils.hparams import hparams
 from utils.phoneme_utils import get_all_vowels
 

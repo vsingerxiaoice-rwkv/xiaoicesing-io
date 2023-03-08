@@ -1,6 +1,7 @@
 import importlib
 
-from basics.base_vocoder import VOCODERS
+
+VOCODERS = {}
 
 
 def register_vocoder(cls):
