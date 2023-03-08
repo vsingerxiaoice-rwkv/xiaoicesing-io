@@ -1,7 +1,7 @@
 base_config:
   - configs/basics/fs2.yaml
 
-task_cls: src.naive_task.NaiveTask
+task_cls: src.acoustic_task.NaiveTask
 datasets: [
   'opencpop',
 ]
