@@ -28,7 +28,7 @@ def _build_dict_and_list():
 
 def _initialize_consonants_and_vowels():
     # Currently we only support two-part consonant-vowel phoneme systems.
-    for _ph_list in build_g2p_dictionary().values():
+    for _ph_list in _g2p_dictionary.values():
         _ph_count = len(_ph_list)
         if _ph_count == 0 or _ph_list[0] in ['AP', 'SP']:
             continue
