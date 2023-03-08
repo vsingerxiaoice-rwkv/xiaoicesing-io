@@ -1,10 +1,10 @@
 from modules.commons.common_layers import *
 from modules.commons.common_layers import Embedding
 from modules.fastspeech.tts_modules import FastspeechDecoder, DurationPredictor, LengthRegulator, PitchPredictor, \
-    EnergyPredictor, FastspeechEncoder
+    FastspeechEncoder
 from utils.cwt import cwt2f0
 from utils.hparams import hparams
-from utils.pitch_utils import f0_to_coarse, denorm_f0, norm_f0
+from utils.pitch_utils import norm_f0
 
 FS_ENCODERS = {
     'fft': lambda hp, embed_tokens, d: FastspeechEncoder(
@@ -76,14 +76,6 @@ class FastSpeech2(nn.Module):
                     dropout_rate=hparams['predictor_dropout'],
                     odim=2 if hparams['pitch_type'] == 'frame' else 1,
                     padding=hparams['ffn_padding'], kernel_size=hparams['predictor_kernel'])
-        if hparams['use_energy_embed']:
-            self.energy_embed = Embedding(256, self.hidden_size, self.padding_idx)
-            self.energy_predictor = EnergyPredictor(
-                self.hidden_size,
-                n_chans=predictor_hidden,
-                n_layers=hparams['predictor_layers'],
-                dropout_rate=hparams['predictor_dropout'], odim=1,
-                padding=hparams['ffn_padding'], kernel_size=hparams['predictor_kernel'])
 
     def build_embedding(self, dictionary, embed_dim):
         num_embeddings = len(dictionary)
@@ -147,30 +139,6 @@ class FastSpeech2(nn.Module):
         ret['mel_out'] = self.run_decoder(decoder_inp, tgt_nonpadding, ret, infer=infer, **kwargs)
 
         return ret
-
-    def add_dur(self, dur_input, mel2ph, txt_tokens, ret):
-        """
-            NOTE: this part of script is *isolated* from other scripts, which means
-                  it may not be compatible with the current version.
-
-        :param dur_input: [B, T_txt, H]
-        :param mel2ph: [B, T_mel]
-        :param txt_tokens: [B, T_txt]
-        :param ret:
-        :return:
-        """
-        return
-        src_padding = txt_tokens == 0
-        dur_input = dur_input.detach() + hparams['predictor_grad'] * (dur_input - dur_input.detach())
-        if mel2ph is None:
-            dur, xs = self.dur_predictor.inference(dur_input, src_padding)
-            ret['dur'] = xs
-            ret['dur_choice'] = dur
-            mel2ph = self.length_regulator(dur, src_padding).detach()
-        else:
-            ret['dur'] = self.dur_predictor(dur_input, src_padding)
-        ret['mel2ph'] = mel2ph
-        return mel2ph
 
     def run_decoder(self, decoder_inp, tgt_nonpadding, ret, infer, **kwargs):
         x = decoder_inp  # [B, T, H]
