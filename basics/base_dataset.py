@@ -1,9 +1,12 @@
-import torch
-from utils.hparams import hparams
-import numpy as np
 import os
 
-class BaseDataset(torch.utils.data.Dataset):
+import numpy as np
+from torch.utils.data import Dataset
+
+from utils.hparams import hparams
+
+
+class BaseDataset(Dataset):
     '''
         Base class for datasets.
         1. *ordered_indices*:
