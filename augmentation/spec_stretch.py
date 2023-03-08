@@ -6,7 +6,7 @@ import torch
 from basics.base_augmentation import BaseAugmentation
 from data_gen.data_gen_utils import get_pitch_parselmouth
 from modules.fastspeech.tts_modules import LengthRegulator
-from src.vocoders.base_vocoder import VOCODERS
+from basics.base_vocoder import VOCODERS
 from utils.hparams import hparams
 from utils.pitch_utils import f0_to_coarse
 

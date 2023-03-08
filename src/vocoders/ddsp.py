@@ -4,7 +4,7 @@ import torch
 import yaml
 import numpy as np
 from librosa.filters import mel as librosa_mel_fn
-from src.vocoders.base_vocoder import BaseVocoder, register_vocoder
+from basics.base_vocoder import BaseVocoder, register_vocoder
 from utils.hparams import hparams
 
 class DotDict(dict):

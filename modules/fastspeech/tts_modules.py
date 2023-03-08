@@ -262,10 +262,6 @@ class PitchPredictor(torch.nn.Module):
         return xs
 
 
-class EnergyPredictor(PitchPredictor):
-    pass
-
-
 def mel2ph_to_dur(mel2ph, T_txt, max_dur=None):
     B, _ = mel2ph.shape
     dur = mel2ph.new_zeros(B, T_txt + 1).scatter_add(1, mel2ph, torch.ones_like(mel2ph))

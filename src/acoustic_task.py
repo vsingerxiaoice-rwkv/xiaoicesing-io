@@ -23,7 +23,7 @@ from basics.base_dataset import BaseDataset
 from basics.base_task import BaseTask
 from data_gen.data_gen_utils import get_pitch_parselmouth
 from modules.fastspeech.tts_modules import mel2ph_to_dur
-from src.vocoders.base_vocoder import get_vocoder_cls, BaseVocoder
+from basics.base_vocoder import get_vocoder_cls, BaseVocoder
 from utils import audio
 from utils.cwt import get_lf0_cwt
 from utils.hparams import hparams
@@ -34,14 +34,11 @@ from utils.pitch_utils import norm_interp_f0
 from utils.pl_utils import data_loader
 from utils.plot import spec_to_figure
 from utils.text_encoder import TokenTextEncoder
-from .diff.candidate_decoder import FFT
 from .diff.diffusion import GaussianDiffusion
 from .diff.net import DiffNet
 
 DIFF_DECODERS = {
     'wavenet': lambda hp: DiffNet(hp['audio_num_mel_bins']),
-    'fft': lambda hp: FFT(
-        hp['hidden_size'], hp['dec_layers'], hp['dec_ffn_kernel_size'], hp['num_heads']),
 }
 matplotlib.use('Agg')
 

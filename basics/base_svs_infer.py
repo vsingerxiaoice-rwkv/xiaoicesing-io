@@ -5,7 +5,7 @@ import os
 import torch
 from pypinyin import lazy_pinyin
 
-from src.vocoders.base_vocoder import VOCODERS
+from basics.base_vocoder import VOCODERS
 from utils.hparams import set_hparams, hparams
 from utils.phoneme_utils import build_g2p_dictionary, build_phoneme_list
 from utils.text_encoder import TokenTextEncoder
