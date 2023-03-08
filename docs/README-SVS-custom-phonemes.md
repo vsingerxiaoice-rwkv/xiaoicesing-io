@@ -117,10 +117,3 @@ Phoneme distribution* of Opencpop dataset on this dictionary is shown below.
 ![img](resources/phoneme_distribution.jpg)
 
 *`AP` and `SP` are not included.
-
-To migrate `ds` file from original dictionary to this strict dictionary, run the following command:
-
-```bash
-python utils/phoneme_utils path/to/your/original.ds path/to/your/target.ds
-```
-
