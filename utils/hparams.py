@@ -1,14 +1,13 @@
 import argparse
-import multiprocessing
 import os
-import re
 import shutil
 
 import yaml
 
+from utils.multiprocess_utils import is_main_process
+
 global_print_hparams = True
 hparams = {}
-is_main_process = not bool(re.match(r'Process-\d+', multiprocessing.current_process().name))
 
 
 class Args:

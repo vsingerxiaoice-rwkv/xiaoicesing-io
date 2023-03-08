@@ -1,6 +1,14 @@
 import os
+import re
 import traceback
-from multiprocessing import Queue, Process
+from multiprocessing import Queue, Process, current_process
+
+is_main_process = not bool(re.match(r'Process-\d+', current_process().name))
+
+
+def main_process_print(self, *args, sep=' ', end='\n', file=None):
+    if is_main_process:
+        print(self, *args, sep=sep, end=end, file=file)
 
 
 def chunked_worker(worker_id, map_func, args, results_queue=None, init_ctx_func=None):

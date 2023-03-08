@@ -1,3 +1,5 @@
+from utils.multiprocess_utils import main_process_print
+
 _initialized = False
 _ALL_CONSONANTS_SET = set()
 _ALL_VOWELS_SET = set()
@@ -21,7 +23,7 @@ def _build_dict_and_list():
     for _list in _g2p_dictionary.values():
         [_set.add(ph) for ph in _list]
     _phoneme_list = sorted(list(_set))
-    print('| load phoneme set:', _phoneme_list)
+    main_process_print('| load phoneme set:', _phoneme_list)
 
 
 def _initialize_consonants_and_vowels():
