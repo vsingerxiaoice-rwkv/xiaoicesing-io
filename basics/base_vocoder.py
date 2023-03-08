@@ -14,6 +14,8 @@ def get_vocoder_cls(hparams):
     else:
         vocoder_cls = hparams['vocoder']
         pkg = ".".join(vocoder_cls.split(".")[:-1])
+        if pkg == '':
+            pkg = 'src.vocoders'
         cls_name = vocoder_cls.split(".")[-1]
         vocoder_cls = getattr(importlib.import_module(pkg), cls_name)
         return vocoder_cls
