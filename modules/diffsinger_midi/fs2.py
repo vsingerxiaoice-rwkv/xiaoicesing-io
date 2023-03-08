@@ -1,16 +1,10 @@
 from modules.commons.common_layers import *
 from modules.commons.common_layers import Embedding
-from modules.fastspeech.tts_modules import FastspeechDecoder, DurationPredictor, LengthRegulator, PitchPredictor, \
-    EnergyPredictor, FastspeechEncoder
-from utils.cwt import cwt2f0
-from utils.hparams import hparams
-from utils.pitch_utils import f0_to_coarse, denorm_f0, norm_f0
 from modules.fastspeech.fs2 import FastSpeech2
-from utils.text_encoder import TokenTextEncoder
-from tts.data_gen.txt_processors.zh_g2pM import get_all_vowels
-from torch.nn import functional as F
-import torch
+from modules.fastspeech.tts_modules import FastspeechEncoder
 from training.diffsinger import Batch2Loss
+from utils.hparams import hparams
+from utils.phoneme_utils import get_all_vowels
 
 
 class FastspeechMIDIEncoder(FastspeechEncoder):

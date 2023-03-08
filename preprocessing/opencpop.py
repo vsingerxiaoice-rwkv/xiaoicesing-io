@@ -12,8 +12,8 @@ import utils
 from basics.base_binarizer import BinarizationError
 from data_gen.data_gen_utils import get_pitch_parselmouth
 from basics.base_vocoder import VOCODERS
-from tts.data_gen.txt_processors.zh_g2pM import get_all_vowels
 from utils.hparams import hparams
+from utils.phoneme_utils import get_all_vowels
 
 vowels = get_all_vowels()
 
