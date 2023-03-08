@@ -23,7 +23,8 @@ from basics.base_dataset import BaseDataset
 from basics.base_task import BaseTask
 from data_gen.data_gen_utils import get_pitch_parselmouth
 from modules.fastspeech.tts_modules import mel2ph_to_dur
-from basics.base_vocoder import get_vocoder_cls, BaseVocoder
+from basics.base_vocoder import BaseVocoder
+from .vocoders.vocoder_utils import get_vocoder_cls
 from utils import audio
 from utils.cwt import get_lf0_cwt
 from utils.hparams import hparams

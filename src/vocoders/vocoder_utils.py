@@ -1,15 +1,20 @@
-import librosa
+import importlib
 
-from utils.hparams import hparams
-import numpy as np
+from basics.base_vocoder import VOCODERS
 
 
-def denoise(wav, v=0.1):
-    spec = librosa.stft(y=wav, n_fft=hparams['fft_size'], hop_length=hparams['hop_size'],
-                        win_length=hparams['win_size'], pad_mode='constant')
-    spec_m = np.abs(spec)
-    spec_m = np.clip(spec_m - v, a_min=0, a_max=None)
-    spec_a = np.angle(spec)
+def register_vocoder(cls):
+    VOCODERS[cls.__name__.lower()] = cls
+    VOCODERS[cls.__name__] = cls
+    return cls
 
-    return librosa.istft(spec_m * np.exp(1j * spec_a), hop_length=hparams['hop_size'],
-                         win_length=hparams['win_size'])
+
+def get_vocoder_cls(hparams):
+    if hparams['vocoder'] in VOCODERS:
+        return VOCODERS[hparams['vocoder']]
+    else:
+        vocoder_cls = hparams['vocoder']
+        pkg = ".".join(vocoder_cls.split(".")[:-1])
+        cls_name = vocoder_cls.split(".")[-1]
+        vocoder_cls = getattr(importlib.import_module(pkg), cls_name)
+        return vocoder_cls

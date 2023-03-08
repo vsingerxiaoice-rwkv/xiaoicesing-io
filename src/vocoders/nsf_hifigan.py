@@ -4,7 +4,8 @@ import torch
 
 from modules.nsf_hifigan.models import load_model
 from modules.nsf_hifigan.nvSTFT import load_wav_to_torch, STFT
-from basics.base_vocoder import BaseVocoder, register_vocoder
+from basics.base_vocoder import BaseVocoder
+from src.vocoders.vocoder_utils import register_vocoder
 from utils.hparams import hparams
 
 
