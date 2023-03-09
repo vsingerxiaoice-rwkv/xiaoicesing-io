@@ -8,7 +8,7 @@ import torch.nn.functional as F
 from torch import nn
 from tqdm import tqdm
 
-from modules.fastspeech.encoder import FastSpeech2Acoustic
+from modules.fastspeech.acoustic_encoder import FastSpeech2Acoustic
 from src.diff.net import DiffNet
 from training.diffsinger import Batch2Loss
 from utils.hparams import hparams

@@ -23,7 +23,7 @@ import torch.nn.functional as F
 from torch.nn import Linear, Embedding
 
 from modules.commons.common_layers import Mish
-from modules.fastspeech.encoder import FastSpeech2AcousticEncoder
+from modules.fastspeech.acoustic_encoder import FastSpeech2AcousticEncoder
 from src.diff.diffusion import beta_schedule
 from src.diff.net import AttrDict
 from utils import load_ckpt
