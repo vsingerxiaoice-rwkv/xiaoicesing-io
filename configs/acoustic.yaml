@@ -1,5 +1,5 @@
 base_config:
-  - configs/basics/fs2.yaml
+  - configs/base.yaml
 
 task_cls: src.acoustic_task.AcousticTask
 datasets: [
@@ -13,8 +13,6 @@ test_prefixes: [
     '2093',
     '2100',
 ]
-test_num: 0
-valid_num: 0
 
 vocoder: NsfHifiGAN
 vocoder_ckpt: checkpoints/nsf_hifigan/model
@@ -46,21 +44,16 @@ binarization_args:
 #    scale: 2.0
 
 raw_data_dir: 'data/opencpop/raw'
-processed_data_dir: ''
 binary_data_dir: 'data/opencpop/binary'
 binarizer_cls: data_gen.acoustic.AcousticBinarizer
 g2p_dictionary: dictionaries/opencpop-extension.txt
-pitch_extractor: 'parselmouth'
 pitch_type: frame
-content_cond_steps: [ ] # [ 0, 10000 ]
-spk_cond_steps: [ ] # [ 0, 10000 ]
 spec_min: [-5]
 spec_max: [0]
 keep_bins: 128
 mel_loss: "ssim:0.5|l1:0.5"
 mel_vmin: -6. #-6.
 mel_vmax: 1.5
-wav2spec_eps: 1e-6
 save_f0: true
 
 #pe_enable: true
@@ -75,18 +68,10 @@ use_speed_embed: false
 use_gt_f0: false  #  for midi exp
 use_gt_dur: false  # for further midi exp
 f0_embed_type: continuous
-lambda_f0: 0.0
-lambda_uv: 0.0
-lambda_energy: 0.0
-lambda_ph_dur: 0.0
-lambda_sent_dur: 0.0
-lambda_word_dur: 0.0
-predictor_grad: 0.0
 
 K_step: 1000
 timesteps: 1000
 max_beta: 0.02
-predictor_layers: 5
 rel_pos: true
 gaussian_start: true
 pndm_speedup: 10
@@ -99,7 +84,6 @@ diff_loss_type: l2
 schedule_type: 'linear'
 
 # train and eval
-gen_tgt_spk_id: -1
 num_sanity_val_steps: 1
 lr: 0.0004
 decay_steps: 50000

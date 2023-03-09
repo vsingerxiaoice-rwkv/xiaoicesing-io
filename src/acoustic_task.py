@@ -475,11 +475,6 @@ class AcousticTask(BaseTask):
                         fig = plt.figure()
                         plt.plot(f0_pred_, label=r'$f0_P$')
                         plt.plot(f0_gt_, label=r'$f0_G$')
-                        if hparams.get('pe_enable') is not None and hparams['pe_enable']:
-                            # f0_midi = prediction.get("f0_midi")
-                            # f0_midi = f0_midi[mel_gt_mask]
-                            # plt.plot(f0_midi, label=r'$f0_M$')
-                            pass
                         plt.legend()
                         plt.tight_layout()
                         plt.savefig(f'{gen_dir}/plot/[F0][{item_name}]{text}.png', format='png')

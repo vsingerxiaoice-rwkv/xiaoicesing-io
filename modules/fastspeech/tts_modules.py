@@ -230,7 +230,7 @@ class FastSpeech2Encoder(nn.Module):
         super().__init__()
         hidden_size = hparams['hidden_size'] if hidden_size is None else hidden_size
         kernel_size = hparams['enc_ffn_kernel_size'] if ffn_kernel_size is None else ffn_kernel_size
-        num_layers = hparams['dec_layers'] if num_layers is None else num_layers
+        num_layers = hparams['enc_layers'] if num_layers is None else num_layers
         self.num_layers = num_layers
         embed_dim = self.hidden_size = hidden_size
         self.dropout = dropout if dropout is not None else hparams['dropout']

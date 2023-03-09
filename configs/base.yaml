@@ -15,18 +15,8 @@ save_codes:
 #############
 sort_by_len: true
 raw_data_dir: ''
-processed_data_dir: ''
 binary_data_dir: ''
-dict_dir: ''
-pre_align_cls: ''
 binarizer_cls: basics.base_binarizer.BaseBinarizer
-pre_align_args:
-  use_tone: true # for ZH
-  forced_align: mfa
-  use_sox: false
-  txt_processor: en
-  allow_no_txt: false
-  denoise: false
 binarization_args:
   shuffle: false
   with_txt: true
@@ -36,12 +26,9 @@ binarization_args:
   with_f0: true
   with_f0cwt: true
 
-loud_norm: false
 endless_ds: true
 reset_phone_dict: true
 
-test_num: 100
-valid_num: 100
 max_frames: 1550
 max_input_tokens: 1550
 audio_num_mel_bins: 80
@@ -60,30 +47,33 @@ ds_workers: 4
 #########
 # model
 #########
+hidden_size: 256
 dropout: 0.1
+use_pos_embed: true
 enc_layers: 4
-dec_layers: 4
-hidden_size: 384
 num_heads: 2
-prenet_dropout: 0.5
-prenet_hidden_size: 256
-stop_token_weight: 5.0
 enc_ffn_kernel_size: 9
-dec_ffn_kernel_size: 9
 ffn_act: gelu
 ffn_padding: 'SAME'
-
+use_pitch_embed: true
+pitch_type: ph # frame|ph|cwt
+use_uv: true
+pitch_norm: log
+use_energy_embed: false
+use_spk_id: false
+use_spk_embed: false
 
 ###########
 # optimization
 ###########
 lr: 2.0
-warmup_updates: 8000
+warmup_updates: 2000
 optimizer_adam_beta1: 0.9
 optimizer_adam_beta2: 0.98
 weight_decay: 0
 clip_grad_norm: 1
-
+mel_loss: l1:0.5|ssim:0.5 # l1|l2|gdl|ssim or l1:0.5|ssim:0.5
+dur_loss: mse # huber|mol
 
 ###########
 # train and eval
@@ -95,23 +85,25 @@ num_ckpt_keep: 3
 accumulate_grad_batches: 1
 log_interval: 100
 num_sanity_val_steps: 5  # steps of validation at the beginning
-check_val_every_n_epoch: 10
 val_check_interval: 2000
-max_epochs: 1000
-max_updates: 160000
+max_updates: 120000
 test_input_dir: ''
-max_tokens: 30000
+max_tokens: 32000
 max_sentences: 100000
 max_eval_sentences: 1
 max_eval_tokens: 60000
 train_set_name: 'train'
 valid_set_name: 'valid'
 test_set_name: 'test'
-vocoder: pwg
+vocoder: ''
 vocoder_ckpt: ''
 profile_infer: false
 out_wav_norm: false
 save_gt: false
 save_f0: false
 gen_dir_name: ''
-use_denoise: false
+num_valid_plots: 5
+num_test_samples: 0
+test_ids: []
+use_gt_dur: false
+use_gt_f0: false

@@ -43,14 +43,14 @@ The following is **only an example** for [opencpop](http://wenet.org.cn/opencpop
 
 ```sh
 export PYTHONPATH=.
-CUDA_VISIBLE_DEVICES=0 python data_gen/binarize.py --config configs/acoustic/nomidi.yaml
+CUDA_VISIBLE_DEVICES=0 python data_gen/binarize.py --config configs/acoustic.yaml
 ```
 ### Training
 
 The following is **only an example** for [opencpop](http://wenet.org.cn/opencpop/) dataset.
 
 ```sh
-CUDA_VISIBLE_DEVICES=0 python run.py --config configs/acoustic/nomidi.yaml --exp_name $MY_DS_EXP_NAME --reset  
+CUDA_VISIBLE_DEVICES=0 python run.py --config configs/acoustic.yaml --exp_name $MY_DS_EXP_NAME --reset  
 ```
 ### Inference
 

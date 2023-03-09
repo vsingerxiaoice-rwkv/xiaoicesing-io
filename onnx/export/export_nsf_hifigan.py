@@ -311,7 +311,7 @@ if __name__ == '__main__':
     sys.argv = [
         'inference/ds_cascade.py',
         '--config',
-        'configs/acoustic/nomidi.yaml',
+        'configs/acoustic.yaml',
     ]
     path = 'onnx/assets/nsf_hifigan2.onnx'
     export(path)
