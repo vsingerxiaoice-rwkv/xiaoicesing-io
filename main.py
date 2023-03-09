@@ -72,6 +72,7 @@ if args.key != 0:
     if not args.title:
         name += key_suffix
     print(f'音调基于原音频{key_suffix}')
+params = params[:1]
 
 if args.gender is not None:
     assert -1 <= args.gender <= 1, 'Gender must be in [-1, 1].'
