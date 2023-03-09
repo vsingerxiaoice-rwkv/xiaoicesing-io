@@ -1,12 +1,11 @@
-import logging
 import math
 
 import torch
 import torch.nn as nn
 from torch.nn import functional as F
 
+from modules.commons.common_layers import SinusoidalPositionalEmbedding, EncSALayer, BatchNorm1dTBC
 from modules.commons.espnet_positional_embedding import RelPositionalEncoding
-from modules.commons.common_layers import SinusoidalPositionalEmbedding, Linear, EncSALayer, DecSALayer, BatchNorm1dTBC
 from utils.hparams import hparams
 
 DEFAULT_MAX_SOURCE_POSITIONS = 2000

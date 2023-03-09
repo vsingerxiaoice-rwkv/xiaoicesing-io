@@ -30,7 +30,6 @@ parser.add_argument('--key', type=int, required=False, default=0, help='Key tran
 parser.add_argument('--gender', type=float, required=False, help='Formant shifting (gender control)')
 parser.add_argument('--seed', type=int, required=False, help='Random seed of the inference')
 parser.add_argument('--speedup', type=int, required=False, default=0, help='PNDM speed-up ratio')
-parser.add_argument('--pitch', action='store_true', required=False, default=None, help='Enable manual pitch mode')
 parser.add_argument('--mel', action='store_true', required=False, default=False,
                     help='Save intermediate mel format instead of waveform')
 args = parser.parse_args()

@@ -23,7 +23,7 @@ import torch.nn.functional as F
 from torch.nn import Linear, Embedding
 
 from modules.commons.common_layers import Mish
-from modules.naive_frontend.encoder import FastSpeech2Acoustic2Encoder
+from modules.naive_frontend.encoder import FastSpeech2AcousticEncoder
 from src.diff.diffusion import beta_schedule
 from src.diff.net import AttrDict
 from utils import load_ckpt
@@ -65,14 +65,14 @@ class LengthRegulator(nn.Module):
         return mel2ph
 
 
-class FastSpeech2MIDILess(nn.Module):
+class FastSpeech2Acoustic(nn.Module):
     def __init__(self, dictionary):
         super().__init__()
         self.lr = LengthRegulator()
         self.txt_embed = Embedding(len(dictionary), hparams['hidden_size'], dictionary.pad())
         self.dur_embed = Linear(1, hparams['hidden_size'])
-        self.encoder = FastSpeech2Acoustic2Encoder(self.txt_embed, hparams['hidden_size'], hparams['enc_layers'],
-                                                   hparams['enc_ffn_kernel_size'], num_heads=hparams['num_heads'])
+        self.encoder = FastSpeech2AcousticEncoder(self.txt_embed, hparams['hidden_size'], hparams['enc_layers'],
+                                                  hparams['enc_ffn_kernel_size'], num_heads=hparams['num_heads'])
 
         self.f0_embed_type = hparams.get('f0_embed_type', 'discrete')
         if self.f0_embed_type == 'discrete':
@@ -455,7 +455,7 @@ class GaussianDiffusion(nn.Module):
 
 
 def build_fs2_model(device, ckpt_steps=None):
-    model = FastSpeech2MIDILess(
+    model = FastSpeech2Acoustic(
         dictionary=TokenTextEncoder(vocab_list=build_phoneme_list())
     )
     model.eval()

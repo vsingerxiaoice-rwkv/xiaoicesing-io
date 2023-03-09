@@ -8,13 +8,13 @@ from utils.hparams import hparams
 from utils.pitch_utils import f0_to_coarse, denorm_f0
 
 
-class FastSpeech2Acoustic2Encoder(FastSpeech2Encoder):
+class FastSpeech2AcousticEncoder(FastSpeech2Encoder):
     def forward_embedding(self, txt_tokens, dur_embed):
         # embed tokens and positions
         x = self.embed_scale * self.embed_tokens(txt_tokens)
         x = x + dur_embed
         if hparams['use_pos_embed']:
-            if hparams.get('rel_pos') is not None and hparams['rel_pos']:
+            if hparams.get('rel_pos', False):
                 x = self.embed_positions(x)
             else:
                 positions = self.embed_positions(txt_tokens)
@@ -40,7 +40,7 @@ class FastSpeech2Acoustic(nn.Module):
         super().__init__()
         self.txt_embed = Embedding(len(dictionary), hparams['hidden_size'], dictionary.pad())
         self.dur_embed = Linear(1, hparams['hidden_size'])
-        self.encoder = FastSpeech2Acoustic2Encoder(
+        self.encoder = FastSpeech2AcousticEncoder(
             self.txt_embed, hidden_size=hparams['hidden_size'], num_layers=hparams['enc_layers'],
             ffn_kernel_size=hparams['enc_ffn_kernel_size'], num_heads=hparams['num_heads']
         )
