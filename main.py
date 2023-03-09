@@ -3,15 +3,14 @@ import argparse
 import json
 import os
 import sys
-import warnings
 
 import numpy as np
 import torch
 
-from utils.infer_utils import cross_fade, trans_key
 from inference.ds_cascade import DiffSingerCascadeInfer
 from utils.audio import save_wav
 from utils.hparams import set_hparams, hparams
+from utils.infer_utils import cross_fade, trans_key
 from utils.slur_utils import merge_slurs
 from utils.spk_utils import parse_commandline_spk_mix
 
@@ -32,20 +31,9 @@ parser.add_argument('--gender', type=float, required=False, help='Formant shifti
 parser.add_argument('--seed', type=int, required=False, help='Random seed of the inference')
 parser.add_argument('--speedup', type=int, required=False, default=0, help='PNDM speed-up ratio')
 parser.add_argument('--pitch', action='store_true', required=False, default=None, help='Enable manual pitch mode')
-parser.add_argument('--forced_automatic_pitch_mode', action='store_true', required=False, default=False)
 parser.add_argument('--mel', action='store_true', required=False, default=False,
                     help='Save intermediate mel format instead of waveform')
 args = parser.parse_args()
-
-# Deprecation for --pitch
-warnings.filterwarnings(action='default')
-if args.pitch is not None:
-    warnings.warn(
-        message='The argument \'--pitch\' is deprecated and will be removed in the future. '
-                'The program now automatically detects which mode to use.',
-        category=DeprecationWarning,
-    )
-    warnings.filterwarnings(action='default')
 
 name = os.path.basename(args.proj).split('.')[0] if not args.title else args.title
 exp = args.exp
@@ -65,7 +53,7 @@ if not out:
     out = os.path.dirname(os.path.abspath(args.proj))
 
 sys.argv = [
-    f'{root_dir}/inference/ds_e2e.py' if not args.pitch else f'{root_dir}/inference/ds_cascade.py',
+    f'{root_dir}/inference/ds_cascade.py',
     '--exp_name',
     exp,
     '--infer'
@@ -130,24 +118,6 @@ def infer_once(path: str, save_mel=False):
     current_length = 0
 
     for i, param in enumerate(params):
-        # Ban automatic pitch mode by default
-        param_have_f0 = 'f0_seq' in param and param['f0_seq']
-        if hparams['use_pitch_embed'] and not param_have_f0:
-            if not args.forced_automatic_pitch_mode:
-                assert param_have_f0, 'You are using automatic pitch mode which may not produce satisfactory ' \
-                                      'results. When you see this message, it is very likely that you forgot to ' \
-                                      'freeze the f0 sequence into the input file, and this error is to inform ' \
-                                      'you that a double-check should be applied. If you do want to test out the ' \
-                                      'automatic pitch mode, please force it on manually.'
-            warnings.warn(
-                message='You are using forced automatic pitch mode. As this mode is only for testing purpose, '
-                        'please note that you must know clearly what you are doing, and be aware that the result '
-                        'may not be satisfactory.',
-                category=UserWarning
-            )
-            warnings.filterwarnings(action='default')
-            param['f0_seq'] = None
-
         if 'seed' in param:
             print(f'| set seed: {param["seed"] & 0xffff_ffff}')
             torch.manual_seed(param["seed"] & 0xffff_ffff)
