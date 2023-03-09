@@ -19,15 +19,15 @@ vowels = get_all_vowels()
 
 
 class File2Batch:
-    '''
+    """
         pipeline: file -> temporary_dict -> processed_input -> batch
-    '''
+    """
 
     @staticmethod
     def file2temporary_dict(raw_data_dir, ds_id):
-        '''
+        """
             read from file, store data in temporary dicts
-        '''
+        """
         # meta_midi = json.load(open(os.path.join(raw_data_dir, 'meta.json')))   # [list of dict]
         utterance_labels = open(os.path.join(raw_data_dir, 'transcriptions.txt'), encoding='utf-8').readlines()
 
@@ -57,9 +57,9 @@ class File2Batch:
 
     @staticmethod
     def temporary_dict2processed_input(item_name, temp_dict, encoder, binarization_args):
-        '''
+        """
             process data in temporary_dicts
-        '''
+        """
 
         def get_pitch(wav, mel):
             # get ground truth f0 by self.get_pitch_algorithm
@@ -127,12 +127,12 @@ class File2Batch:
 
     @staticmethod
     def processed_input2batch(samples):
-        '''
+        """
             Args:
                 samples: one batch of processed_input
             NOTE:
                 the batch size is controlled by hparams['max_sentences']
-        '''
+        """
         if len(samples) == 0:
             return {}
         id = torch.LongTensor([s['id'] for s in samples])

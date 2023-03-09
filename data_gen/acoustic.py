@@ -47,9 +47,6 @@ class AcousticBinarizer(BaseBinarizer):
     def test_item_names(self):
         return self._test_item_names
 
-    def get_align(self, meta_data, mel, phone_encoded, res):
-        raise NotImplementedError()
-
     def split_train_test_set(self, item_names):
         item_names = set(deepcopy(item_names))
         prefixes = set([str(pr) for pr in hparams['test_prefixes']])

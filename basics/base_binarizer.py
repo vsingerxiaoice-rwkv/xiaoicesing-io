@@ -1,6 +1,7 @@
 import copy
-import shutil
 import os
+import shutil
+
 os.environ["OMP_NUM_THREADS"] = "1"
 
 from utils.multiprocess_utils import chunked_multiprocess_run
@@ -8,7 +9,7 @@ import random
 import json
 from resemblyzer import VoiceEncoder
 from tqdm import tqdm
-from data_gen.data_gen_utils import get_mel2ph, get_pitch_parselmouth, build_phone_encoder
+from data_gen.data_gen_utils import get_pitch_parselmouth, build_phone_encoder
 from utils.hparams import set_hparams, hparams
 from utils.phoneme_utils import build_phoneme_list
 import numpy as np
@@ -47,11 +48,7 @@ class BaseBinarizer:
         if data_dir is None:
             data_dir = hparams['raw_data_dir']
 
-        if 'speakers' not in hparams:
-            speakers = hparams['datasets']
-            hparams['speakers'] = hparams['datasets']
-        else:
-            speakers = hparams['speakers']
+        speakers = hparams['speakers']
         assert isinstance(speakers, list), 'Speakers must be a list'
         assert len(speakers) == len(set(speakers)), 'Speakers cannot contain duplicate names'
 
@@ -342,44 +339,6 @@ class BaseBinarizer:
     def process_item(self, item_name, meta_data, binarization_args):
         from preprocessing.opencpop import File2Batch
         return File2Batch.temporary_dict2processed_input(item_name, meta_data, self.phone_encoder, binarization_args)
-
-    def get_align(self, meta_data, mel, phone_encoded, res):
-        raise NotImplementedError
-
-    def get_align_from_textgrid(self, meta_data, mel, phone_encoded, res):
-        '''
-            NOTE: this part of script is *isolated* from other scripts, which means
-                  it may not be compatible with the current version.
-        '''
-        return
-        tg_fn, ph = meta_data['tg_fn'], meta_data['ph']
-        if tg_fn is not None and os.path.exists(tg_fn):
-            mel2ph, dur = get_mel2ph(tg_fn, ph, mel, hparams)
-        else:
-            raise BinarizationError(f"Align not found")
-        if mel2ph.max() - 1 >= len(phone_encoded):
-            raise BinarizationError(
-                f"Align does not match: mel2ph.max() - 1: {mel2ph.max() - 1}, len(phone_encoded): {len(phone_encoded)}")
-        res['mel2ph'] = mel2ph
-        res['dur'] = dur
-
-    def get_f0cwt(self, f0, res):
-        '''
-            NOTE: this part of script is *isolated* from other scripts, which means
-                  it may not be compatible with the current version.
-        '''
-        return
-        from utils.cwt import get_cont_lf0, get_lf0_cwt
-        uv, cont_lf0_lpf = get_cont_lf0(f0)
-        logf0s_mean_org, logf0s_std_org = np.mean(cont_lf0_lpf), np.std(cont_lf0_lpf)
-        cont_lf0_lpf_norm = (cont_lf0_lpf - logf0s_mean_org) / logf0s_std_org
-        Wavelet_lf0, scales = get_lf0_cwt(cont_lf0_lpf_norm)
-        if np.any(np.isnan(Wavelet_lf0)):
-            raise BinarizationError("NaN CWT")
-        res['cwt_spec'] = Wavelet_lf0
-        res['cwt_scales'] = scales
-        res['f0_mean'] = logf0s_mean_org
-        res['f0_std'] = logf0s_std_org
 
 
 if __name__ == "__main__":
