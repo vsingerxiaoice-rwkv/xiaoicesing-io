@@ -1,12 +1,14 @@
-from utils.hparams import hparams
-from utils.pitch_utils import f0_to_coarse, denorm_f0, norm_f0
 import torch
 import torch.nn as nn
 from torch.nn import functional as F
-from modules.commons.common_layers import Embedding, Linear
-from modules.fastspeech.tts_modules import FastspeechEncoder, mel2ph_to_dur
 
-class Encoder(FastspeechEncoder):
+from modules.commons.common_layers import Embedding, Linear
+from modules.fastspeech.tts_modules import FastSpeech2Encoder, mel2ph_to_dur
+from utils.hparams import hparams
+from utils.pitch_utils import f0_to_coarse, denorm_f0
+
+
+class FastSpeech2Acoustic2Encoder(FastSpeech2Encoder):
     def forward_embedding(self, txt_tokens, dur_embed):
         # embed tokens and positions
         x = self.embed_scale * self.embed_tokens(txt_tokens)
@@ -23,21 +25,25 @@ class Encoder(FastspeechEncoder):
     def forward(self, txt_tokens, dur_embed):
         """
         :param txt_tokens: [B, T]
+        :param dur_embed: [B, T, H]
         :return: {
-            'encoder_out': [T x B x C]
+            'encoder_out': [T x B x H]
         }
         """
         encoder_padding_mask = txt_tokens.eq(self.padding_idx).detach()
         x = self.forward_embedding(txt_tokens, dur_embed)  # [B, T, H]
-        x = super(FastspeechEncoder, self).forward(x, encoder_padding_mask)
+        x = super()._forward(x, encoder_padding_mask)
         return x
 
-class ParameterEncoder(nn.Module):
+class FastSpeech2Acoustic(nn.Module):
     def __init__(self, dictionary):
         super().__init__()
         self.txt_embed = Embedding(len(dictionary), hparams['hidden_size'], dictionary.pad())
         self.dur_embed = Linear(1, hparams['hidden_size'])
-        self.encoder = Encoder(self.txt_embed, hparams['hidden_size'], hparams['enc_layers'], hparams['enc_ffn_kernel_size'], num_heads=hparams['num_heads'])
+        self.encoder = FastSpeech2Acoustic2Encoder(
+            self.txt_embed, hidden_size=hparams['hidden_size'], num_layers=hparams['enc_layers'],
+            ffn_kernel_size=hparams['enc_ffn_kernel_size'], num_heads=hparams['num_heads']
+        )
 
         self.f0_embed_type = hparams.get('f0_embed_type', 'discrete')
         if self.f0_embed_type == 'discrete':
@@ -56,9 +62,7 @@ class ParameterEncoder(nn.Module):
         if hparams['use_spk_id']:
             self.spk_embed = Embedding(hparams['num_spk'], hparams['hidden_size'])
     
-    def forward(self, txt_tokens, mel2ph=None, spk_embed_id=None,
-                ref_mels=None, f0=None, uv=None, energy=None, skip_decoder=False,
-                spk_embed_dur_id=None, spk_embed_f0_id=None, infer=False, is_slur=None, **kwarg):
+    def forward(self, txt_tokens, mel2ph=None, f0=None, uv=None, spk_embed_id=None, infer=False, **kwarg):
         B, T = txt_tokens.shape
         dur = mel2ph_to_dur(mel2ph, T).float()
         dur_embed = self.dur_embed(dur[:, :, None])

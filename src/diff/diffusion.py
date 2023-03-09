@@ -1,21 +1,22 @@
-import math
-import random
 from collections import deque
 from functools import partial
 from inspect import isfunction
-from pathlib import Path
+
 import numpy as np
 import torch
 import torch.nn.functional as F
 from torch import nn
 from tqdm import tqdm
-from einops import rearrange
 
-from modules.fastspeech.fs2 import FastSpeech2
-from modules.diffsinger_midi.fs2 import FastSpeech2MIDI
-from modules.naive_frontend.encoder import ParameterEncoder
-from utils.hparams import hparams
+from modules.naive_frontend.encoder import FastSpeech2Acoustic
+from src.diff.net import DiffNet
 from training.diffsinger import Batch2Loss
+from utils.hparams import hparams
+
+
+DIFF_DECODERS = {
+    'wavenet': lambda hp: DiffNet(hp['audio_num_mel_bins']),
+}
 
 
 def exists(x):
@@ -27,8 +28,6 @@ def default(val, d):
         return val
     return d() if isfunction(d) else d
 
-
-# gaussian diffusion trainer class
 
 def extract(a, t, x_shape):
     b, *_ = t.shape
@@ -70,16 +69,12 @@ beta_schedule = {
 
 
 class GaussianDiffusion(nn.Module):
-    def __init__(self, phone_encoder, out_dims, denoise_fn,
-                 timesteps=1000, K_step=1000, loss_type=hparams.get('diff_loss_type', 'l1'), betas=None, spec_min=None,
+    def __init__(self, phone_encoder, out_dims, timesteps=1000, K_step=1000,
+                 loss_type=hparams.get('diff_loss_type', 'l1'), betas=None, spec_min=None,
                  spec_max=None):
         super().__init__()
-        self.denoise_fn = denoise_fn
-        if hparams.get('use_midi') is not None and hparams['use_midi']:
-            self.fs2 = FastSpeech2MIDI(phone_encoder, out_dims)
-        else:
-            #self.fs2 = FastSpeech2(phone_encoder, out_dims)
-            self.fs2 = ParameterEncoder(phone_encoder)
+        self.denoise_fn = DIFF_DECODERS[hparams['diff_decoder_type']](hparams)
+        self.fs2 = FastSpeech2Acoustic(phone_encoder)
         self.mel_bins = out_dims
 
         if exists(betas):
@@ -235,8 +230,7 @@ class GaussianDiffusion(nn.Module):
         '''
             conditioning diffusion, use fastspeech2 encoder output as the condition
         '''
-        ret = self.fs2(txt_tokens, mel2ph, spk_embed, ref_mels, f0, uv, energy,
-                       skip_decoder=True, infer=infer, **kwargs)
+        ret = self.fs2(txt_tokens, mel2ph=mel2ph, f0=f0, uv=uv, spk_embed_id=spk_embed, infer=infer, **kwargs)
         cond = ret['decoder_inp'].transpose(1, 2)
         b, *_, device = *txt_tokens.shape, txt_tokens.device
 

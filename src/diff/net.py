@@ -86,6 +86,7 @@ class ResidualBlock(nn.Module):
         
         return (x + residual) / sqrt(2.0), skip
 
+
 class DiffNet(nn.Module):
     def __init__(self, in_dims=80):
         super().__init__()

@@ -10,7 +10,6 @@ import torch
 
 from utils.infer_utils import cross_fade, trans_key
 from inference.ds_cascade import DiffSingerCascadeInfer
-from inference.ds_e2e import DiffSingerE2EInfer
 from utils.audio import save_wav
 from utils.hparams import set_hparams, hparams
 from utils.slur_utils import merge_slurs
@@ -86,6 +85,7 @@ if args.key != 0:
     if not args.title:
         name += key_suffix
     print(f'音调基于原音频{key_suffix}')
+params = params[:1]
 
 if args.gender is not None:
     assert -1 <= args.gender <= 1, 'Gender must be in [-1, 1].'
@@ -100,16 +100,7 @@ assert os.path.exists(os.path.join(root_dir, hparams['vocoder_ckpt'])), \
 
 infer_ins = None
 if len(params) > 0:
-    if hparams['use_pitch_embed']:
-        infer_ins = DiffSingerCascadeInfer(hparams, load_vocoder=not args.mel, ckpt_steps=args.ckpt)
-    else:
-        warnings.warn(
-            message='SVS MIDI-B version (implicit pitch prediction) is deprecated. '
-            'Please select or train a model of MIDI-A version (controllable pitch prediction).',
-            category=DeprecationWarning
-        )
-        warnings.filterwarnings(action='default')
-        infer_ins = DiffSingerE2EInfer(hparams, load_vocoder=not args.mel, ckpt_steps=args.ckpt)
+    infer_ins = DiffSingerCascadeInfer(hparams, load_vocoder=not args.mel, ckpt_steps=args.ckpt)
 
 spk_mix = parse_commandline_spk_mix(args.spk) if hparams['use_spk_id'] and args.spk is not None else None
 

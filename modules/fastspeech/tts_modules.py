@@ -216,52 +216,6 @@ class StretchRegulator(torch.nn.Module):
         return stretch * (mel2ph > 0)
 
 
-class PitchPredictor(torch.nn.Module):
-    def __init__(self, idim, n_layers=5, n_chans=384, odim=2, kernel_size=5,
-                 dropout_rate=0.1, padding='SAME'):
-        """Initilize pitch predictor module.
-        Args:
-            idim (int): Input dimension.
-            n_layers (int, optional): Number of convolutional layers.
-            n_chans (int, optional): Number of channels of convolutional layers.
-            kernel_size (int, optional): Kernel size of convolutional layers.
-            dropout_rate (float, optional): Dropout rate.
-        """
-        super(PitchPredictor, self).__init__()
-        self.conv = torch.nn.ModuleList()
-        self.kernel_size = kernel_size
-        self.padding = padding
-        for idx in range(n_layers):
-            in_chans = idim if idx == 0 else n_chans
-            self.conv += [torch.nn.Sequential(
-                torch.nn.ConstantPad1d(((kernel_size - 1) // 2, (kernel_size - 1) // 2)
-                                       if padding == 'SAME'
-                                       else (kernel_size - 1, 0), 0),
-                torch.nn.Conv1d(in_chans, n_chans, kernel_size, stride=1, padding=0),
-                torch.nn.ReLU(),
-                LayerNorm(n_chans, dim=1),
-                torch.nn.Dropout(dropout_rate)
-            )]
-        self.linear = torch.nn.Linear(n_chans, odim)
-        self.embed_positions = SinusoidalPositionalEmbedding(idim, 0, init_size=4096)
-        self.pos_embed_alpha = nn.Parameter(torch.Tensor([1]))
-
-    def forward(self, xs):
-        """
-
-        :param xs: [B, T, H]
-        :return: [B, T, H]
-        """
-        positions = self.pos_embed_alpha * self.embed_positions(xs[..., 0])
-        xs = xs + positions
-        xs = xs.transpose(1, -1)  # (B, idim, Tmax)
-        for f in self.conv:
-            xs = f(xs)  # (B, C, Tmax)
-        # NOTE: calculate in log domain
-        xs = self.linear(xs.transpose(1, -1))  # (B, Tmax, H)
-        return xs
-
-
 def mel2ph_to_dur(mel2ph, T_txt, max_dur=None):
     B, _ = mel2ph.shape
     dur = mel2ph.new_zeros(B, T_txt + 1).scatter_add(1, mel2ph, torch.ones_like(mel2ph))
@@ -271,10 +225,13 @@ def mel2ph_to_dur(mel2ph, T_txt, max_dur=None):
     return dur
 
 
-class FFTBlocks(nn.Module):
-    def __init__(self, hidden_size, num_layers, ffn_kernel_size=9, dropout=None, num_heads=2,
-                 use_pos_embed=True, use_last_norm=True, norm='ln', use_pos_embed_alpha=True):
+class FastSpeech2Encoder(nn.Module):
+    def __init__(self, embed_tokens, hidden_size, num_layers, ffn_kernel_size=9, dropout=None, num_heads=2,
+                 use_pos_embed=False, use_last_norm=True, norm='ln', use_pos_embed_alpha=True):
         super().__init__()
+        hidden_size = hparams['hidden_size'] if hidden_size is None else hidden_size
+        kernel_size = hparams['enc_ffn_kernel_size'] if ffn_kernel_size is None else ffn_kernel_size
+        num_layers = hparams['dec_layers'] if num_layers is None else num_layers
         self.num_layers = num_layers
         embed_dim = self.hidden_size = hidden_size
         self.dropout = dropout if dropout is not None else hparams['dropout']
@@ -291,7 +248,7 @@ class FFTBlocks(nn.Module):
         self.layers = nn.ModuleList([])
         self.layers.extend([
             TransformerEncoderLayer(self.hidden_size, self.dropout,
-                                    kernel_size=ffn_kernel_size, num_heads=num_heads)
+                                    kernel_size=kernel_size, num_heads=num_heads)
             for _ in range(self.num_layers)
         ])
         if self.use_last_norm:
@@ -302,13 +259,22 @@ class FFTBlocks(nn.Module):
         else:
             self.layer_norm = None
 
-    def forward(self, x, padding_mask=None, attn_mask=None, return_hiddens=False):
+        self.embed_tokens = embed_tokens
+        self.embed_scale = math.sqrt(hidden_size)
+        self.padding_idx = 0
+        if hparams.get('rel_pos') is not None and hparams['rel_pos']:
+            self.embed_positions = RelPositionalEncoding(hidden_size, dropout_rate=0.0)
+        else:
+            self.embed_positions = SinusoidalPositionalEmbedding(
+                hidden_size, self.padding_idx, init_size=DEFAULT_MAX_TARGET_POSITIONS,
+            )
+
+    def _forward(self, x, padding_mask=None, attn_mask=None, return_hiddens=False):
         """
         :param x: [B, T, C]
         :param padding_mask: [B, T]
         :return: [B, T, C] or [L, B, T, C]
         """
-        # padding_mask = x.abs().sum(-1).eq(0).data if padding_mask is None else padding_mask
         padding_mask = x.abs().sum(-1).eq(0).detach() if padding_mask is None else padding_mask
         nonpadding_mask_TB = 1 - padding_mask.transpose(0, 1).float()[:, :, None]  # [T, B, 1]
         if self.use_pos_embed:
@@ -329,59 +295,3 @@ class FFTBlocks(nn.Module):
         else:
             x = x.transpose(0, 1)  # [B, T, C]
         return x
-
-
-class FastspeechEncoder(FFTBlocks):
-    '''
-        compared to FFTBlocks:
-        - input is [B, T], not [B, T, C]
-        - supports "relative" positional encoding
-    '''
-    def __init__(self, embed_tokens, hidden_size=None, num_layers=None, kernel_size=None, num_heads=2):
-        hidden_size = hparams['hidden_size'] if hidden_size is None else hidden_size
-        kernel_size = hparams['enc_ffn_kernel_size'] if kernel_size is None else kernel_size
-        num_layers = hparams['dec_layers'] if num_layers is None else num_layers
-        super().__init__(hidden_size, num_layers, kernel_size, num_heads=num_heads,
-                         use_pos_embed=False)  # use_pos_embed_alpha for compatibility
-        self.embed_tokens = embed_tokens
-        self.embed_scale = math.sqrt(hidden_size)
-        self.padding_idx = 0
-        if hparams.get('rel_pos') is not None and hparams['rel_pos']:
-            self.embed_positions = RelPositionalEncoding(hidden_size, dropout_rate=0.0)
-        else:
-            self.embed_positions = SinusoidalPositionalEmbedding(
-                hidden_size, self.padding_idx, init_size=DEFAULT_MAX_TARGET_POSITIONS,
-            )
-
-    def forward(self, txt_tokens):
-        """
-
-        :param txt_tokens: [B, T]
-        :return: {
-            'encoder_out': [T x B x C]
-        }
-        """
-        # encoder_padding_mask = txt_tokens.eq(self.padding_idx).data
-        encoder_padding_mask = txt_tokens.eq(self.padding_idx)
-        x = self.forward_embedding(txt_tokens)  # [B, T, H]
-        x = super(FastspeechEncoder, self).forward(x, encoder_padding_mask)
-        return x
-
-    def forward_embedding(self, txt_tokens):
-        # embed tokens and positions
-        x = self.embed_scale * self.embed_tokens(txt_tokens)
-        if hparams['use_pos_embed']:
-            positions = self.embed_positions(txt_tokens)
-            x = x + positions
-        x = F.dropout(x, p=self.dropout, training=self.training)
-        return x
-
-
-class FastspeechDecoder(FFTBlocks):
-    def __init__(self, hidden_size=None, num_layers=None, kernel_size=None, num_heads=None):
-        num_heads = hparams['num_heads'] if num_heads is None else num_heads
-        hidden_size = hparams['hidden_size'] if hidden_size is None else hidden_size
-        kernel_size = hparams['dec_ffn_kernel_size'] if kernel_size is None else kernel_size
-        num_layers = hparams['dec_layers'] if num_layers is None else num_layers
-        super().__init__(hidden_size, num_layers, kernel_size, num_heads=num_heads)
-

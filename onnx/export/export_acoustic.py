@@ -23,7 +23,7 @@ import torch.nn.functional as F
 from torch.nn import Linear, Embedding
 
 from modules.commons.common_layers import Mish
-from modules.naive_frontend.encoder import Encoder
+from modules.naive_frontend.encoder import FastSpeech2Acoustic2Encoder
 from src.diff.diffusion import beta_schedule
 from src.diff.net import AttrDict
 from utils import load_ckpt
@@ -71,8 +71,8 @@ class FastSpeech2MIDILess(nn.Module):
         self.lr = LengthRegulator()
         self.txt_embed = Embedding(len(dictionary), hparams['hidden_size'], dictionary.pad())
         self.dur_embed = Linear(1, hparams['hidden_size'])
-        self.encoder = Encoder(self.txt_embed, hparams['hidden_size'], hparams['enc_layers'],
-                               hparams['enc_ffn_kernel_size'], num_heads=hparams['num_heads'])
+        self.encoder = FastSpeech2Acoustic2Encoder(self.txt_embed, hparams['hidden_size'], hparams['enc_layers'],
+                                                   hparams['enc_ffn_kernel_size'], num_heads=hparams['num_heads'])
 
         self.f0_embed_type = hparams.get('f0_embed_type', 'discrete')
         if self.f0_embed_type == 'discrete':
@@ -1129,7 +1129,7 @@ def export(fs2_path, diff_path, ckpt_steps=None,
     diffusion = torch.jit.script(diffusion)
     condition = torch.rand((1, n_frames, hparams['hidden_size']), device=device)
     speedup = torch.tensor(10, dtype=torch.long, device=device)
-    dummy = diffusion.forward(condition, speedup)
+    dummy = diffusion.forward(condition, speedup, )
 
     torch.onnx.export(
         diffusion,

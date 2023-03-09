@@ -21,10 +21,9 @@ from tqdm import tqdm
 import utils
 from basics.base_dataset import BaseDataset
 from basics.base_task import BaseTask
+from basics.base_vocoder import BaseVocoder
 from data_gen.data_gen_utils import get_pitch_parselmouth
 from modules.fastspeech.tts_modules import mel2ph_to_dur
-from basics.base_vocoder import BaseVocoder
-from .vocoders.vocoder_utils import get_vocoder_cls
 from utils import audio
 from utils.cwt import get_lf0_cwt
 from utils.hparams import hparams
@@ -36,11 +35,8 @@ from utils.pl_utils import data_loader
 from utils.plot import spec_to_figure
 from utils.text_encoder import TokenTextEncoder
 from .diff.diffusion import GaussianDiffusion
-from .diff.net import DiffNet
+from .vocoders.vocoder_utils import get_vocoder_cls
 
-DIFF_DECODERS = {
-    'wavenet': lambda hp: DiffNet(hp['audio_num_mel_bins']),
-}
 matplotlib.use('Agg')
 
 
@@ -192,7 +188,7 @@ class AcousticTask(BaseTask):
         mel_bins = hparams['audio_num_mel_bins']
         self.model = GaussianDiffusion(
             phone_encoder=self.phone_encoder,
-            out_dims=mel_bins, denoise_fn=DIFF_DECODERS[hparams['diff_decoder_type']](hparams),
+            out_dims=mel_bins,
             timesteps=hparams['timesteps'],
             K_step=hparams['K_step'],
             loss_type=hparams['diff_loss_type'],
