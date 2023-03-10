@@ -2,7 +2,8 @@ import numpy as np
 
 from utils.hparams import hparams
 
-PAD = "<PAD>"
+PAD = '<PAD>'
+PAD_INDEX = 0
 
 
 def strip_ids(ids, ids_to_strip):
@@ -32,7 +33,7 @@ class TokenTextEncoder:
     def encode(self, sentence):
         """Converts a space-separated string of phones to a list of ids."""
         phones = sentence.strip().split()
-        return [self.vocab_list.index(ph) + self.num_reserved_ids if ph != PAD else 0 for ph in phones]
+        return [self.vocab_list.index(ph) + self.num_reserved_ids if ph != PAD else PAD_INDEX for ph in phones]
 
     def decode(self, ids, strip_padding=False):
         if strip_padding:
