@@ -1,6 +1,6 @@
 import numpy as np
 
-from hparams import hparams
+from utils.hparams import hparams
 
 PAD = "<PAD>"
 
