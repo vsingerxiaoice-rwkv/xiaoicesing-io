@@ -176,13 +176,12 @@ class AcousticTask(BaseTask):
                 lbd = 1.0
             self.loss_and_lambda[l] = lbd
         print("| Mel losses:", self.loss_and_lambda)
-        self.sil_ph = self.phone_encoder.sil_phonemes()
         self.logged_gt_wav = set()
 
     @staticmethod
     def build_phone_encoder():
         phone_list = build_phoneme_list()
-        return TokenTextEncoder(vocab_list=phone_list, replace_oov=',')
+        return TokenTextEncoder(vocab_list=phone_list)
 
     def build_model(self):
         mel_bins = hparams['audio_num_mel_bins']

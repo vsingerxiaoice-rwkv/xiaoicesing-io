@@ -324,7 +324,7 @@ def get_mel2ph(tg_fn, ph, mel, hparams):
 
 
 def build_phone_encoder(phone_list):
-    return TokenTextEncoder(vocab_list=phone_list, replace_oov=',')
+    return TokenTextEncoder(vocab_list=phone_list)
 
 
 def is_sil_phoneme(p):

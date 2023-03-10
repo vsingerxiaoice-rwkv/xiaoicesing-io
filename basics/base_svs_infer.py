@@ -39,7 +39,7 @@ class BaseSVSInfer:
 
         if load_model:
             phone_list = build_phoneme_list()
-            self.ph_encoder = TokenTextEncoder(vocab_list=phone_list, replace_oov=',')
+            self.ph_encoder = TokenTextEncoder(vocab_list=phone_list)
             self.pinyin2phs = build_g2p_dictionary()
             if hparams['use_spk_id']:
                 with open(os.path.join(hparams['work_dir'], 'spk_map.json'), 'r', encoding='utf8') as f:
