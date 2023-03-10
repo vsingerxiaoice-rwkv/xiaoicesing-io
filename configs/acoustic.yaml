@@ -2,9 +2,6 @@ base_config:
   - configs/base.yaml
 
 task_cls: src.acoustic_task.AcousticTask
-datasets: [
-  'opencpop',
-]
 num_spk: 1
 test_prefixes: [
     '2044',
