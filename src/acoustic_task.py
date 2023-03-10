@@ -157,9 +157,6 @@ class AcousticTask(BaseTask):
         self.dataset_cls = AcousticDataset
         self.vocoder: BaseVocoder = get_vocoder_cls(hparams)()
         self.phone_encoder = self.build_phone_encoder()
-        self.padding_idx = self.phone_encoder.pad()
-        self.eos_idx = self.phone_encoder.eos()
-        self.seg_idx = self.phone_encoder.seg()
         self.saving_result_pool = None
         self.saving_results_futures = None
         self.stats = {}
