@@ -58,8 +58,7 @@ class BaseBinarizer:
 
         self.binarization_args = hparams['binarization_args']
         self.augmentation_args = hparams.get('augmentation_args', {})
-        self.pre_align_args = hparams['pre_align_args']
-        
+
         self.items = {}
         # every item in self.items has some attributes
         self.item_attributes = item_attributes
