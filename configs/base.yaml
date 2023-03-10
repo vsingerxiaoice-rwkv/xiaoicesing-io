@@ -24,7 +24,6 @@ binarization_args:
   with_align: true
   with_spk_embed: true
   with_f0: true
-  with_f0cwt: true
 
 endless_ds: true
 reset_phone_dict: true

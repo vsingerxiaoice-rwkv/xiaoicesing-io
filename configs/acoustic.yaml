@@ -56,8 +56,6 @@ mel_vmin: -6. #-6.
 mel_vmax: 1.5
 save_f0: true
 
-#pe_enable: true
-#pe_ckpt: 'checkpoints/0102_xiaoma_pe'
 max_frames: 8000
 use_uv: false
 use_midi: false
