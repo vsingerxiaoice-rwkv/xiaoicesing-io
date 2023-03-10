@@ -30,7 +30,7 @@ from utils import load_ckpt
 from utils.hparams import hparams, set_hparams
 from utils.phoneme_utils import build_phoneme_list
 from utils.spk_utils import parse_commandline_spk_mix
-from utils.text_encoder import TokenTextEncoder
+from utils.text_encoder import TokenTextEncoder, PAD as TOKEN_PAD
 
 
 f0_bin = 256
@@ -69,14 +69,14 @@ class FastSpeech2Acoustic(nn.Module):
     def __init__(self, dictionary):
         super().__init__()
         self.lr = LengthRegulator()
-        self.txt_embed = Embedding(len(dictionary), hparams['hidden_size'], dictionary.pad())
+        self.txt_embed = Embedding(len(dictionary), hparams['hidden_size'], TOKEN_PAD)
         self.dur_embed = Linear(1, hparams['hidden_size'])
         self.encoder = FastSpeech2AcousticEncoder(self.txt_embed, hparams['hidden_size'], hparams['enc_layers'],
                                                   hparams['enc_ffn_kernel_size'], num_heads=hparams['num_heads'])
 
         self.f0_embed_type = hparams.get('f0_embed_type', 'discrete')
         if self.f0_embed_type == 'discrete':
-            self.pitch_embed = Embedding(300, hparams['hidden_size'], dictionary.pad())
+            self.pitch_embed = Embedding(300, hparams['hidden_size'], TOKEN_PAD)
         elif self.f0_embed_type == 'continuous':
             self.pitch_embed = Linear(1, hparams['hidden_size'])
         else:

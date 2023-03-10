@@ -43,6 +43,9 @@ class TokenTextEncoder:
             for _id in ids
         ])
 
+    def pad(self):
+        pass
+
     @property
     def vocab_size(self):
         return len(self.vocab_list) + self.num_reserved_ids

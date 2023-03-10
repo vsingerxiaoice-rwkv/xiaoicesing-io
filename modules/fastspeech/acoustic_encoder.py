@@ -6,6 +6,7 @@ from modules.commons.common_layers import Embedding, Linear
 from modules.fastspeech.tts_modules import FastSpeech2Encoder, mel2ph_to_dur
 from utils.hparams import hparams
 from utils.pitch_utils import f0_to_coarse, denorm_f0
+from utils.text_encoder import PAD as TOKEN_PAD
 
 
 class FastSpeech2AcousticEncoder(FastSpeech2Encoder):
@@ -38,7 +39,7 @@ class FastSpeech2AcousticEncoder(FastSpeech2Encoder):
 class FastSpeech2Acoustic(nn.Module):
     def __init__(self, dictionary):
         super().__init__()
-        self.txt_embed = Embedding(len(dictionary), hparams['hidden_size'], dictionary.pad())
+        self.txt_embed = Embedding(len(dictionary), hparams['hidden_size'], TOKEN_PAD)
         self.dur_embed = Linear(1, hparams['hidden_size'])
         self.encoder = FastSpeech2AcousticEncoder(
             self.txt_embed, hidden_size=hparams['hidden_size'], num_layers=hparams['enc_layers'],
@@ -47,7 +48,7 @@ class FastSpeech2Acoustic(nn.Module):
 
         self.f0_embed_type = hparams.get('f0_embed_type', 'discrete')
         if self.f0_embed_type == 'discrete':
-            self.pitch_embed = Embedding(300, hparams['hidden_size'], dictionary.pad())
+            self.pitch_embed = Embedding(300, hparams['hidden_size'], TOKEN_PAD)
         elif self.f0_embed_type == 'continuous':
             self.pitch_embed = Linear(1, hparams['hidden_size'])
         else:
