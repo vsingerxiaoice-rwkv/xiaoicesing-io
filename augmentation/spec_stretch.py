@@ -4,7 +4,7 @@ import numpy as np
 import torch
 
 from basics.base_augmentation import BaseAugmentation
-from data_gen.data_gen_utils import get_pitch_parselmouth
+from data_gen.data_gen_utils import get_pitch_parselmouth, get_mel2ph_torch
 from modules.fastspeech.tts_modules import LengthRegulator
 from src.vocoders.vocoder_utils import VOCODERS
 from utils.hparams import hparams
@@ -31,37 +31,28 @@ class SpectrogramStretchAugmentation(BaseAugmentation):
                 aug_item['wav_fn'], keyshift=key_shift, speed=speed
             )
 
-        aug_item['mel'] = mel
+        aug_item['mel'] = torch.from_numpy(mel)
 
         if speed != 1. or hparams.get('use_speed_embed', False):
-            aug_item['len'] = len(mel)
+            aug_item['length'] = mel.shape[0]
             aug_item['speed'] = int(np.round(hparams['hop_size'] * speed)) / hparams['hop_size'] # real speed
-            aug_item['sec'] /= aug_item['speed']
-            aug_item['ph_durs'] /= aug_item['speed']
-            aug_item['mel2ph'] = self.get_mel2ph(aug_item['ph_durs'], aug_item['len'])
-            aug_item['f0'], aug_item['pitch'] = get_pitch_parselmouth(wav, mel, hparams, speed=speed)
+            aug_item['seconds'] /= aug_item['speed']
+            aug_item['ph_dur'] /= aug_item['speed']
+            aug_item['mel2ph'] = get_mel2ph_torch(
+                self.lr, aug_item['ph_dur'], aug_item['length'], hparams, device=self.device
+            )
+            f0, f0_coarse, _ = get_pitch_parselmouth(
+                wav, aug_item['length'], hparams, speed=speed, interp_uv=item['interp_uv']
+            )
+            aug_item['f0'], aug_item['f0_coarse'] = \
+                torch.from_numpy(f0), torch.from_numpy(f0_coarse)
 
         if key_shift != 0. or hparams.get('use_key_shift_embed', False):
             aug_item['key_shift'] = key_shift
             aug_item['f0'] *= 2 ** (key_shift / 12)
-            aug_item['pitch'] = f0_to_coarse(aug_item['f0'])
+            aug_item['f0_coarse'] = torch.from_numpy(f0_to_coarse(aug_item['f0'].numpy()))
 
         if replace_spk_id is not None:
             aug_item['spk_id'] = replace_spk_id
 
         return aug_item
-
-    @torch.no_grad()
-    def get_mel2ph(self, durs, length):
-        ph_acc = np.around(
-            np.add.accumulate(durs) * hparams['audio_sample_rate'] / hparams['hop_size'] + 0.5
-        ).astype('int')
-        ph_dur = np.diff(ph_acc, prepend=0)
-        ph_dur = torch.LongTensor(ph_dur)[None].to(self.device)
-        mel2ph = self.lr(ph_dur).cpu().numpy()[0]
-        num_frames = len(mel2ph)
-        if num_frames < length:
-            mel2ph = np.concatenate((mel2ph, np.full(length - num_frames, mel2ph[-1])), axis=0)
-        elif num_frames > length:
-            mel2ph = mel2ph[:length]
-        return mel2ph

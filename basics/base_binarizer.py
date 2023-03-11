@@ -4,7 +4,6 @@ import os
 import random
 from copy import deepcopy
 
-from data_gen.data_gen_utils import get_pitch_parselmouth
 from utils.hparams import set_hparams, hparams
 from utils.phoneme_utils import build_phoneme_list
 from utils.text_encoder import TokenTextEncoder
@@ -62,9 +61,6 @@ class BaseBinarizer:
         if self.binarization_args['shuffle']:
             random.seed(hparams['seed'])
             random.shuffle(self.item_names)
-        
-        # set default get_pitch algorithm
-        self.get_pitch_algorithm = get_pitch_parselmouth
 
     def load_meta_data(self, raw_data_dir, ds_id):
         raise NotImplementedError()

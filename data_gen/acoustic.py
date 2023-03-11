@@ -1,32 +1,25 @@
 """
     item: one piece of data
     item_name: data id
-    wavfn: wave file path
-    txt: lyrics
-    ph: phoneme
-    tgfn: text grid file path (unused)
+    wav_fn: wave file path
     spk: dataset name
-    wdb: word boundary
-    ph_durs: phoneme durations
-    midi: pitch as midi notes
-    midi_dur: midi duration
-    is_slur: keep singing upon note changes
+    ph_seq: phoneme sequence
+    ph_dur: phoneme durations
 """
-
+import json
 import os
 import os.path
 import random
-import traceback
 from copy import deepcopy
 
 import matplotlib.pyplot as plt
 import numpy as np
-from librosa import note_to_midi
+import torch
 from tqdm import tqdm
 
 from basics.base_binarizer import BaseBinarizer, BinarizationError
-from data_gen.data_gen_utils import get_pitch_parselmouth
-from preprocessing.opencpop import vowels
+from data_gen.data_gen_utils import get_pitch_parselmouth, get_mel2ph_torch
+from modules.fastspeech.tts_modules import LengthRegulator
 from src.vocoders.vocoder_utils import VOCODERS
 from utils.hparams import hparams
 from utils.indexed_datasets import IndexedDatasetBuilder
@@ -34,38 +27,45 @@ from utils.multiprocess_utils import chunked_multiprocess_run
 from utils.phoneme_utils import build_phoneme_list
 
 os.environ["OMP_NUM_THREADS"] = "1"
+ACOUSTIC_ITEM_ATTRIBUTES = ['mel', 'tokens', 'mel2ph', 'f0', 'f0_coarse', 'uv', 'key_shift', 'speed']
 
 
 class AcousticBinarizer(BaseBinarizer):
+    def __init__(self):
+        super().__init__()
+        self.lr = LengthRegulator()
+
     def load_meta_data(self, raw_data_dir, ds_id):
         utterance_labels = open(os.path.join(raw_data_dir, 'transcriptions.txt'), encoding='utf-8').readlines()
-        all_temp_dict = {}
+        meta_data_dict = {}
         for utterance_label in utterance_labels:
-            song_info = utterance_label.split('|')
-            item_name = song_info[0]
-            temp_dict = {
-                'wav_fn': f'{raw_data_dir}/wavs/{item_name}.wav',
-                'txt': song_info[1],
-                'ph': song_info[2],
-                'word_boundary': np.array([1 if x in vowels + ['AP', 'SP'] else 0 for x in song_info[2].split()]),
-                'ph_durs': [float(x) for x in song_info[5].split()],
-                'pitch_midi': np.array([note_to_midi(x.split("/")[0]) if x != 'rest' else 0
-                                        for x in song_info[3].split()]),
-                'midi_dur': np.array([float(x) for x in song_info[4].split()]),
-                'is_slur': np.array([int(x) for x in song_info[6].split()]),
-                'spk_id': ds_id
-            }
-
-            assert temp_dict['pitch_midi'].shape == temp_dict['midi_dur'].shape == temp_dict['is_slur'].shape, \
-                (temp_dict['pitch_midi'].shape, temp_dict['midi_dur'].shape, temp_dict['is_slur'].shape)
-
-            all_temp_dict[f'{ds_id}:{item_name}'] = temp_dict
-        self.items.update(all_temp_dict)
+            if self.binarization_args.get('label_format', 'grid') == 'json':
+                label_dict = json.loads(utterance_label)
+                item_name = label_dict['item_name']
+                temp_dict = {
+                    'wav_fn': f'{raw_data_dir}/wavs/{item_name}.wav',
+                    'ph_seq': label_dict['ph_seq'].split(),
+                    'ph_dur': [float(x) for x in label_dict['ph_dur'].split()],
+                    'spk_id': ds_id
+                }
+            else:
+                song_info = utterance_label.split('|')
+                item_name = song_info[0]
+                temp_dict = {
+                    'wav_fn': f'{raw_data_dir}/wavs/{item_name}.wav',
+                    'ph_seq': song_info[2].split(),
+                    'ph_dur': [float(x) for x in song_info[5].split()],
+                    'spk_id': ds_id
+                }
+            assert len(temp_dict['ph_seq']) == len(temp_dict['ph_dur']), \
+                f'Lengths of ph_seq and ph_dur mismatch in \'{item_name}\'.'
+            meta_data_dict[f'{ds_id}:{item_name}'] = temp_dict
+        self.items.update(meta_data_dict)
 
     def process(self):
         super().process()
         self.process_data_split('valid')
-        self.process_data_split('test')
+        # self.process_data_split('test')
         self.process_data_split('train', apply_augmentation=len(self.augmentation_args) > 0)
 
     def check_coverage(self):
@@ -76,8 +76,10 @@ class AcousticBinarizer(BaseBinarizer):
             phoneme_map[ph] = 0
         ph_occurred = []
         # Load and count those phones that appear in the actual data
-        for item in self.items.values():
-            ph_occurred += item['ph'].split(' ')
+        for item_name in self.items:
+            ph_occurred += self.items[item_name]['ph_seq']
+            if len(ph_occurred) == 0:
+                raise BinarizationError(f'Empty tokens in {item_name}.')
         for ph in ph_occurred:
             if ph not in ph_required:
                 continue
@@ -116,50 +118,43 @@ class AcousticBinarizer(BaseBinarizer):
         if ph_occurred != ph_required:
             unrecognizable_phones = ph_occurred.difference(ph_required)
             missing_phones = ph_required.difference(ph_occurred)
-            raise AssertionError('transcriptions and dictionary mismatch.\n'
+            raise BinarizationError('transcriptions and dictionary mismatch.\n'
                                  f' (+) {sorted(unrecognizable_phones)}\n'
                                  f' (-) {sorted(missing_phones)}')
 
     def process_data_split(self, prefix, multiprocess=False, apply_augmentation=False):
         data_dir = hparams['binary_data_dir']
         args = []
-        builder = IndexedDatasetBuilder(f'{data_dir}/{prefix}')
+        builder = IndexedDatasetBuilder(data_dir, name=prefix, allowed_attr=ACOUSTIC_ITEM_ATTRIBUTES)
         lengths = []
-        f0s = []
         total_sec = 0
         total_raw_sec = 0
 
-        if self.binarization_args['with_spk_embed']:
-            from resemblyzer import VoiceEncoder
-            voice_encoder = VoiceEncoder().cuda()
+        # if self.binarization_args['with_spk_embed']:
+        #     from resemblyzer import VoiceEncoder
+        #     voice_encoder = VoiceEncoder().cuda()
 
         for item_name, meta_data in self.meta_data_iterator(prefix):
             args.append([item_name, meta_data, self.binarization_args])
 
         aug_map = self.arrange_data_augmentation(prefix) if apply_augmentation else {}
 
-        def postprocess(item_):
+        def postprocess(_item):
             nonlocal total_sec, total_raw_sec
-            if item_ is None:
+            if _item is None:
                 return
-            item_['spk_embed'] = voice_encoder.embed_utterance(item_['wav']) \
-                if self.binarization_args['with_spk_embed'] else None
-            if not self.binarization_args['with_wav'] and 'wav' in item_:
-                del item_['wav']
-            builder.add_item(item_)
-            lengths.append(item_['len'])
-            total_sec += item_['sec']
-            total_raw_sec += item_['sec']
-            if item_.get('f0') is not None:
-                f0s.append(item_['f0'])
+            # item_['spk_embed'] = voice_encoder.embed_utterance(item_['wav']) \
+            #     if self.binarization_args['with_spk_embed'] else None
+            builder.add_item(_item)
+            lengths.append(_item['length'])
+            total_sec += _item['seconds']
+            total_raw_sec += _item['seconds']
 
-            for task in aug_map.get(item_['item_name'], []):
-                aug_item = task['func'](item_, **task['kwargs'])
+            for task in aug_map.get(_item['name'], []):
+                aug_item = task['func'](_item, **task['kwargs'])
                 builder.add_item(aug_item)
-                lengths.append(aug_item['len'])
-                total_sec += aug_item['sec']
-                if aug_item.get('f0') is not None:
-                    f0s.append(aug_item['f0'])
+                lengths.append(aug_item['length'])
+                total_sec += aug_item['seconds']
 
         if multiprocess:
             # code for parallel processing
@@ -176,11 +171,9 @@ class AcousticBinarizer(BaseBinarizer):
                 postprocess(item)
 
         builder.finalize()
-        np.save(f'{data_dir}/{prefix}_lengths.npy', lengths)
-        if len(f0s) > 0:
-            f0s = np.concatenate(f0s, 0)
-            f0s = f0s[f0s != 0]
-            np.save(f'{data_dir}/{prefix}_f0s_mean_std.npy', [np.mean(f0s).item(), np.std(f0s).item()])
+        with open(os.path.join(data_dir, f'{prefix}.lengths'), 'wb') as f:
+            # noinspection PyTypeChecker
+            np.save(f, lengths)
 
         if apply_augmentation:
             print(f'| {prefix} total duration (before augmentation): {total_raw_sec:.2f}s')
@@ -188,6 +181,47 @@ class AcousticBinarizer(BaseBinarizer):
                 f'| {prefix} total duration (after augmentation): {total_sec:.2f}s ({total_sec / total_raw_sec:.2f}x)')
         else:
             print(f'| {prefix} total duration: {total_raw_sec:.2f}s')
+
+    def process_item(self, item_name, meta_data, binarization_args):
+        if hparams['vocoder'] in VOCODERS:
+            wav, mel = VOCODERS[hparams['vocoder']].wav2spec(meta_data['wav_fn'])
+        else:
+            wav, mel = VOCODERS[hparams['vocoder'].split('.')[-1]].wav2spec(meta_data['wav_fn'])
+        length = mel.shape[0]
+        seconds = length * hparams['hop_size'] / hparams['audio_sample_rate']
+        processed_input = {
+            'name': item_name,
+            'wav_fn': meta_data['wav_fn'],
+            'spk_id': meta_data['spk_id'],
+            'seconds': seconds,
+            'length': length,
+            'mel': torch.from_numpy(mel),
+            'tokens': torch.LongTensor(self.phone_encoder.encode(meta_data['ph_seq'])),
+            'ph_dur': torch.FloatTensor(meta_data['ph_dur']),
+            'interp_uv': self.binarization_args['interp_uv'],
+        }
+
+        # get ground truth f0
+        gt_f0, gt_f0_coarse, uv = get_pitch_parselmouth(
+            wav, length, hparams, interp_uv=self.binarization_args['interp_uv']
+        )
+        if uv.all():  # All unvoiced
+            raise BinarizationError(f'Empty gt f0 in \'{item_name}\'.')
+        processed_input['f0'] = torch.from_numpy(gt_f0)
+        processed_input['f0_coarse'] = torch.from_numpy(gt_f0_coarse)
+        if self.binarization_args['with_uv']:
+            processed_input['uv'] = torch.from_numpy(uv)
+
+        # get ground truth dur
+        processed_input['mel2ph'] = get_mel2ph_torch(self.lr, processed_input['ph_dur'], length, hparams)
+
+        if hparams.get('use_key_shift_embed', False):
+            processed_input['key_shift'] = 0.
+
+        if hparams.get('use_speed_embed', False):
+            processed_input['speed'] = 1.
+
+        return processed_input
 
     def arrange_data_augmentation(self, prefix):
         aug_map = {}
@@ -310,61 +344,3 @@ class AcousticBinarizer(BaseBinarizer):
             total_scale += scale
 
         return aug_map
-
-    def process_item(self, item_name, meta_data, binarization_args):
-        mel_path = f"{meta_data['wav_fn'][:-4]}_mel.npy"
-        if os.path.exists(mel_path):
-            wav = None
-            mel = np.load(mel_path)
-            print("load mel from npy")
-        else:
-            if hparams['vocoder'] in VOCODERS:
-                wav, mel = VOCODERS[hparams['vocoder']].wav2spec(meta_data['wav_fn'])
-            else:
-                wav, mel = VOCODERS[hparams['vocoder'].split('.')[-1]].wav2spec(meta_data['wav_fn'])
-        processed_input = {
-            'item_name': item_name, 'mel': mel, 'wav': wav,
-            'sec': len(mel) * hparams["hop_size"] / hparams["audio_sample_rate"], 'len': mel.shape[0]
-        }
-        processed_input = {**meta_data, **processed_input}  # merge two dicts
-        try:
-            if binarization_args['with_f0']:
-                # get ground truth f0 by self.get_pitch_algorithm
-                f0_path = f"{meta_data['wav_fn'][:-4]}_f0.npy"
-                if os.path.exists(f0_path):
-                    from utils.pitch_utils import f0_to_coarse
-                    processed_input['f0'] = np.load(f0_path)
-                    processed_input['pitch'] = f0_to_coarse(np.load(f0_path))
-                else:
-                    gt_f0, gt_pitch_coarse = get_pitch_parselmouth(wav, mel, hparams)
-                    if sum(gt_f0) == 0:
-                        raise BinarizationError("Empty **gt** f0")
-                    processed_input['f0'] = gt_f0
-                    processed_input['pitch'] = gt_pitch_coarse
-            if binarization_args['with_txt']:
-                try:
-                    processed_input['phone'] = self.phone_encoder.encode(meta_data['ph'])
-                except:
-                    traceback.print_exc()
-                    raise BinarizationError(f"Empty phoneme")
-                if binarization_args['with_align']:
-                    size = hparams['hop_size']
-                    rate = hparams['audio_sample_rate']
-                    mel2ph = np.zeros([mel.shape[0]], int)
-                    startTime = 0
-                    ph_durs = meta_data['ph_durs']
-                    processed_input['ph_durs'] = np.asarray(ph_durs, dtype=np.float32)
-                    for i_ph in range(len(ph_durs)):
-                        start_frame = int(startTime * rate / size + 0.5)
-                        end_frame = int((startTime + ph_durs[i_ph]) * rate / size + 0.5)
-                        mel2ph[start_frame:end_frame] = i_ph + 1
-                        startTime = startTime + ph_durs[i_ph]
-                    processed_input['mel2ph'] = mel2ph
-            if hparams.get('use_key_shift_embed', False):
-                processed_input['key_shift'] = 0.
-            if hparams.get('use_speed_embed', False):
-                processed_input['speed'] = 1.
-        except BinarizationError as e:
-            print(f"| Skip item ({e}). item_name: {item_name}, wav_fn: {meta_data['wav_fn']}")
-            return None
-        return processed_input

@@ -20,13 +20,11 @@ binarizer_cls: basics.base_binarizer.BaseBinarizer
 binarization_args:
   shuffle: false
   with_txt: true
-  with_wav: false
   with_align: true
   with_spk_embed: true
   with_f0: true
 
 endless_ds: true
-reset_phone_dict: true
 
 max_frames: 1550
 max_input_tokens: 1550
@@ -55,9 +53,6 @@ enc_ffn_kernel_size: 9
 ffn_act: gelu
 ffn_padding: 'SAME'
 use_pitch_embed: true
-pitch_type: ph # frame|ph|cwt
-use_uv: true
-pitch_norm: log
 use_energy_embed: false
 use_spk_id: false
 use_spk_embed: false
@@ -86,14 +81,12 @@ log_interval: 100
 num_sanity_val_steps: 5  # steps of validation at the beginning
 val_check_interval: 2000
 max_updates: 120000
-test_input_dir: ''
 max_tokens: 32000
 max_sentences: 100000
 max_eval_sentences: 1
 max_eval_tokens: 60000
 train_set_name: 'train'
 valid_set_name: 'valid'
-test_set_name: 'test'
 vocoder: ''
 vocoder_ckpt: ''
 profile_infer: false
@@ -103,6 +96,5 @@ save_f0: false
 gen_dir_name: ''
 num_valid_plots: 5
 num_test_samples: 0
-test_ids: []
 use_gt_dur: false
 use_gt_f0: false

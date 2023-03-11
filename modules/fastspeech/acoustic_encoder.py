@@ -63,7 +63,7 @@ class FastSpeech2Acoustic(nn.Module):
         if hparams['use_spk_id']:
             self.spk_embed = Embedding(hparams['num_spk'], hparams['hidden_size'])
     
-    def forward(self, txt_tokens, mel2ph=None, f0=None, uv=None, spk_embed_id=None, infer=False, **kwarg):
+    def forward(self, txt_tokens, mel2ph=None, f0=None, spk_embed_id=None, infer=False, **kwarg):
         B, T = txt_tokens.shape
         dur = mel2ph_to_dur(mel2ph, T).float()
         dur_embed = self.dur_embed(dur[:, :, None])
@@ -77,15 +77,13 @@ class FastSpeech2Acoustic(nn.Module):
         delta_l = nframes - f0.size(1)
         if delta_l > 0:
             f0 = torch.cat((f0,torch.FloatTensor([[x[-1]] * delta_l for x in f0]).to(f0.device)),1)
-        f0 = f0[:,:nframes]
+        f0 = f0[:, :nframes]
         
-        pitch_padding = (mel2ph == 0)
-        f0_denorm = denorm_f0(f0, uv, hparams, pitch_padding=pitch_padding)
         if self.f0_embed_type == 'discrete':
-            pitch = f0_to_coarse(f0_denorm)
+            pitch = f0_to_coarse(f0)
             pitch_embed = self.pitch_embed(pitch)
         else:
-            f0_mel = (1 + f0_denorm / 700).log()
+            f0_mel = (1 + f0 / 700).log()
             pitch_embed = self.pitch_embed(f0_mel[:, :, None])
 
         if hparams.get('use_key_shift_embed', False):

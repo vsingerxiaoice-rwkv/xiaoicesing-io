@@ -226,11 +226,11 @@ class GaussianDiffusion(nn.Module):
         return loss
 
     def forward(self, txt_tokens, mel2ph=None, spk_embed=None,
-                ref_mels=None, f0=None, uv=None, energy=None, infer=False, **kwargs):
+                ref_mels=None, f0=None, energy=None, infer=False, **kwargs):
         '''
             conditioning diffusion, use fastspeech2 encoder output as the condition
         '''
-        ret = self.fs2(txt_tokens, mel2ph=mel2ph, f0=f0, uv=uv, spk_embed_id=spk_embed, infer=infer, **kwargs)
+        ret = self.fs2(txt_tokens, mel2ph=mel2ph, f0=f0, spk_embed_id=spk_embed, infer=infer, **kwargs)
         cond = ret['decoder_inp'].transpose(1, 2)
         b, *_, device = *txt_tokens.shape, txt_tokens.device
 

@@ -1,3 +1,4 @@
+import os.path
 import pickle
 from copy import deepcopy
 
@@ -5,17 +6,17 @@ import numpy as np
 
 
 class IndexedDataset:
-    def __init__(self, path, num_cache=1):
+    def __init__(self, path, num_cache=0):
         super().__init__()
         self.path = path
         self.data_file = None
-        self.data_offsets = np.load(f"{path}.idx", allow_pickle=True).item()['offsets']
+        self.data_offsets = np.load(f"{path}.idx")
         self.data_file = open(f"{path}.data", 'rb', buffering=-1)
         self.cache = []
         self.num_cache = num_cache
 
     def check_index(self, i):
-        if i < 0 or i >= len(self.data_offsets) - 1:
+        if i < 0 or i >= len(self.data_offsets):
             raise IndexError('index out of range')
 
     def __del__(self):
@@ -36,22 +37,32 @@ class IndexedDataset:
         return item
 
     def __len__(self):
-        return len(self.data_offsets) - 1
+        return len(self.data_offsets)
 
 class IndexedDatasetBuilder:
-    def __init__(self, path):
+    def __init__(self, path, name, allowed_attr=None):
         self.path = path
-        self.out_file = open(f"{path}.data", 'wb')
+        self.name = name
+        self.out_file = open(os.path.join(path, f'{name}.data'), 'wb')
         self.byte_offsets = [0]
+        if allowed_attr is not None:
+            self.allowed_attr = set(allowed_attr)
 
     def add_item(self, item):
+        if self.allowed_attr is not None:
+            item = {
+                k: item.get(k)
+                for k in self.allowed_attr
+            }
         s = pickle.dumps(item)
-        bytes = self.out_file.write(s)
-        self.byte_offsets.append(self.byte_offsets[-1] + bytes)
+        n_bytes = self.out_file.write(s)
+        self.byte_offsets.append(self.byte_offsets[-1] + n_bytes)
 
     def finalize(self):
         self.out_file.close()
-        np.save(open(f"{self.path}.idx", 'wb'), {'offsets': self.byte_offsets})
+        with open(os.path.join(self.path, f'{self.name}.idx'), 'wb') as f:
+            # noinspection PyTypeChecker
+            np.save(f, self.byte_offsets[:-1])
 
 
 if __name__ == "__main__":
@@ -61,7 +72,7 @@ if __name__ == "__main__":
     size = 100
     items = [{"a": np.random.normal(size=[10000, 10]),
               "b": np.random.normal(size=[10000, 10])} for i in range(size)]
-    builder = IndexedDatasetBuilder(ds_path)
+    builder = IndexedDatasetBuilder(ds_path, 'example')
     for i in tqdm(range(size)):
         builder.add_item(items[i])
     builder.finalize()

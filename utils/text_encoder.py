@@ -32,7 +32,7 @@ class TokenTextEncoder:
 
     def encode(self, sentence):
         """Converts a space-separated string of phones to a list of ids."""
-        phones = sentence.strip().split()
+        phones = sentence.strip().split() if isinstance(sentence, str) else sentence
         return [self.vocab_list.index(ph) + self.num_reserved_ids if ph != PAD else PAD_INDEX for ph in phones]
 
     def decode(self, ids, strip_padding=False):

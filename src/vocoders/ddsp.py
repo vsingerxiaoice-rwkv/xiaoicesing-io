@@ -1,6 +1,7 @@
 import os
 import librosa
 import torch
+import torch.nn.functional as F
 import yaml
 import numpy as np
 from librosa.filters import mel as librosa_mel_fn
@@ -194,5 +195,4 @@ class DDSP(BaseVocoder):
             mel_fmax=mel_fmax).to(device)
     
         mel = mel_extractor(x_t, keyshift=keyshift, speed=speed)
-    
         return x, mel.squeeze(0).cpu().numpy()
