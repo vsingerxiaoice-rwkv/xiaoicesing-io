@@ -36,9 +36,11 @@ class AcousticDataset(BaseDataset):
         self.data_dir = hparams['binary_data_dir']
         self.prefix = prefix
         self.sizes = np.load(os.path.join(self.data_dir, f'{self.prefix}.lengths'))
-        self.indexed_ds = IndexedDataset(self.data_dir, self.prefix)
+        self.indexed_ds = None
 
     def __getitem__(self, index):
+        if self.indexed_ds is None:
+            self.indexed_ds = IndexedDataset(self.data_dir, self.prefix)
         sample = item = self.indexed_ds[index]
         return sample
         # max_frames = hparams['max_frames']
