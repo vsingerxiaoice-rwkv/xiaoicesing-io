@@ -229,7 +229,7 @@ class AcousticTask(BaseTask):
     def _training_step(self, sample, batch_idx, _):
         log_outputs = self.run_model(sample)
         total_loss = sum([v for v in log_outputs.values() if isinstance(v, torch.Tensor) and v.requires_grad])
-        log_outputs['batch_size'] = sample['txt_tokens'].size()[0]
+        log_outputs['batch_size'] = sample['tokens'].size()[0]
         log_outputs['lr'] = self.scheduler.get_lr()[0]
         return total_loss, log_outputs
 
@@ -380,8 +380,8 @@ class AcousticTask(BaseTask):
                 f0_pred = f0_pred[mel_pred_mask]
 
             str_phs = None
-            if self.phone_encoder is not None and 'txt_tokens' in prediction:
-                str_phs = self.phone_encoder.decode(prediction['txt_tokens'], strip_padding=True)
+            if self.phone_encoder is not None and 'tokens' in prediction:
+                str_phs = self.phone_encoder.decode(prediction['tokens'], strip_padding=True)
             gen_dir = os.path.join(hparams['work_dir'],
                                    f'generated_{self.trainer.global_step}_{hparams["gen_dir_name"]}')
             wav_pred = self.vocoder.spec2wav(mel_pred, f0=f0_pred)
