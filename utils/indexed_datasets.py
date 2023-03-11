@@ -47,6 +47,8 @@ class IndexedDatasetBuilder:
         self.byte_offsets = [0]
         if allowed_attr is not None:
             self.allowed_attr = set(allowed_attr)
+        else:
+            self.allowed_attr = None
 
     def add_item(self, item):
         if self.allowed_attr is not None:
