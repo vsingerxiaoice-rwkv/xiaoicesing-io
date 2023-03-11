@@ -207,8 +207,8 @@ class AcousticBinarizer(BaseBinarizer):
         )
         if uv.all():  # All unvoiced
             raise BinarizationError(f'Empty gt f0 in \'{item_name}\'.')
-        processed_input['f0'] = torch.from_numpy(gt_f0)
-        processed_input['f0_coarse'] = torch.from_numpy(gt_f0_coarse)
+        processed_input['f0'] = torch.from_numpy(gt_f0).float()
+        processed_input['f0_coarse'] = torch.from_numpy(gt_f0_coarse).long()
         if self.binarization_args['with_uv']:
             processed_input['uv'] = torch.from_numpy(uv)
 
