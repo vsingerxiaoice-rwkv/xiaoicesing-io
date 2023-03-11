@@ -83,10 +83,7 @@ class AcousticDataset(BaseDataset):
             return {}
         txt_lengths = torch.LongTensor([s['tokens'].numel() for s in samples])
         tokens = utils.collate_1d([s['tokens'] for s in samples], 0)
-        if hparams['f0_embed_type'] == 'continuous':
-            f0 = utils.collate_1d([s['f0'] for s in samples], 0.0)
-        else:
-            f0 = utils.collate_1d([s['f0_coarse'] for s in samples], 0)
+        f0 = utils.collate_1d([s['f0'] for s in samples], 0.0)
         mel_lengths = torch.LongTensor([s['mel'].shape[0] for s in samples])
         mel2ph = utils.collate_1d([s['mel2ph'] for s in samples], 0)
         mels = utils.collate_2d([s['mel'] for s in samples], 0.0)

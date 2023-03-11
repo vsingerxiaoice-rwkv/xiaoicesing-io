@@ -27,7 +27,7 @@ from utils.multiprocess_utils import chunked_multiprocess_run
 from utils.phoneme_utils import build_phoneme_list
 
 os.environ["OMP_NUM_THREADS"] = "1"
-ACOUSTIC_ITEM_ATTRIBUTES = ['mel', 'tokens', 'mel2ph', 'f0', 'f0_coarse', 'uv', 'key_shift', 'speed']
+ACOUSTIC_ITEM_ATTRIBUTES = ['mel', 'tokens', 'mel2ph', 'f0', 'uv', 'key_shift', 'speed']
 
 
 class AcousticBinarizer(BaseBinarizer):
@@ -202,13 +202,12 @@ class AcousticBinarizer(BaseBinarizer):
         }
 
         # get ground truth f0
-        gt_f0, gt_f0_coarse, uv = get_pitch_parselmouth(
+        gt_f0, _, uv = get_pitch_parselmouth(
             wav, length, hparams, interp_uv=self.binarization_args['interp_uv']
         )
         if uv.all():  # All unvoiced
             raise BinarizationError(f'Empty gt f0 in \'{item_name}\'.')
         processed_input['f0'] = torch.from_numpy(gt_f0).float()
-        processed_input['f0_coarse'] = torch.from_numpy(gt_f0_coarse).long()
         if self.binarization_args['with_uv']:
             processed_input['uv'] = torch.from_numpy(uv)
 

@@ -5,7 +5,7 @@ from torch.nn import functional as F
 from modules.commons.common_layers import Embedding, Linear
 from modules.fastspeech.tts_modules import FastSpeech2Encoder, mel2ph_to_dur
 from utils.hparams import hparams
-from utils.pitch_utils import f0_to_coarse, denorm_f0
+from utils.pitch_utils import f0_to_coarse
 from utils.text_encoder import PAD_INDEX
 
 
