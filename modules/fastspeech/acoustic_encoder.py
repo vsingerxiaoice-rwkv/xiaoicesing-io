@@ -125,5 +125,5 @@ class FastSpeech2Acoustic(nn.Module):
         else:
             spk_embed = 0
 
-        ret = {'decoder_inp': decoder_inp + pitch_embed + key_shift_embed + speed_embed + spk_embed, 'f0_denorm': f0_denorm}
+        ret = {'decoder_inp': decoder_inp + pitch_embed + key_shift_embed + speed_embed + spk_embed, 'f0_denorm': f0}
         return ret
