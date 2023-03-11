@@ -6,12 +6,12 @@ import numpy as np
 
 
 class IndexedDataset:
-    def __init__(self, path, num_cache=0):
+    def __init__(self, path, prefix, num_cache=0):
         super().__init__()
         self.path = path
         self.data_file = None
-        self.data_offsets = np.load(f"{path}.idx")
-        self.data_file = open(f"{path}.data", 'rb', buffering=-1)
+        self.data_offsets = np.load(os.path.join(path, f'{prefix}.idx'))
+        self.data_file = open(os.path.join(path, f'{prefix}.data'), 'rb', buffering=-1)
         self.cache = []
         self.num_cache = num_cache
 
@@ -40,10 +40,10 @@ class IndexedDataset:
         return len(self.data_offsets)
 
 class IndexedDatasetBuilder:
-    def __init__(self, path, name, allowed_attr=None):
+    def __init__(self, path, prefix, allowed_attr=None):
         self.path = path
-        self.name = name
-        self.out_file = open(os.path.join(path, f'{name}.data'), 'wb')
+        self.prefix = prefix
+        self.out_file = open(os.path.join(path, f'{prefix}.data'), 'wb')
         self.byte_offsets = [0]
         if allowed_attr is not None:
             self.allowed_attr = set(allowed_attr)
@@ -60,7 +60,7 @@ class IndexedDatasetBuilder:
 
     def finalize(self):
         self.out_file.close()
-        with open(os.path.join(self.path, f'{self.name}.idx'), 'wb') as f:
+        with open(os.path.join(self.path, f'{self.prefix}.idx'), 'wb') as f:
             # noinspection PyTypeChecker
             np.save(f, self.byte_offsets[:-1])
 
@@ -76,7 +76,7 @@ if __name__ == "__main__":
     for i in tqdm(range(size)):
         builder.add_item(items[i])
     builder.finalize()
-    ds = IndexedDataset(ds_path)
+    ds = IndexedDataset(ds_path, 'example')
     for i in tqdm(range(10000)):
         idx = random.randint(0, size - 1)
         assert (ds[idx]['a'] == items[idx]['a']).all()

@@ -125,7 +125,7 @@ class AcousticBinarizer(BaseBinarizer):
     def process_data_split(self, prefix, multiprocess=False, apply_augmentation=False):
         data_dir = hparams['binary_data_dir']
         args = []
-        builder = IndexedDatasetBuilder(data_dir, name=prefix, allowed_attr=ACOUSTIC_ITEM_ATTRIBUTES)
+        builder = IndexedDatasetBuilder(data_dir, prefix=prefix, allowed_attr=ACOUSTIC_ITEM_ATTRIBUTES)
         lengths = []
         total_sec = 0
         total_raw_sec = 0
