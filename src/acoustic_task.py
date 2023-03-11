@@ -8,13 +8,7 @@ import matplotlib.pyplot as plt
 import numpy as np
 import torch
 import torch.distributions
-import torch.distributions
-import torch.distributions
 import torch.optim
-import torch.optim
-import torch.optim
-import torch.utils.data
-import torch.utils.data
 import torch.utils.data
 from tqdm import tqdm
 
@@ -25,12 +19,10 @@ from basics.base_vocoder import BaseVocoder
 from data_gen.data_gen_utils import get_pitch_parselmouth
 from modules.fastspeech.tts_modules import mel2ph_to_dur
 from utils import audio
-from utils.cwt import get_lf0_cwt
 from utils.hparams import hparams
 from utils.indexed_datasets import IndexedDataset
 from utils.phoneme_utils import build_phoneme_list
-from utils.pitch_utils import denorm_f0
-from utils.pitch_utils import norm_interp_f0
+from utils.pitch_utils import denorm_f0, norm_interp_f0
 from utils.pl_utils import data_loader
 from utils.plot import spec_to_figure
 from utils.text_encoder import TokenTextEncoder
@@ -67,9 +59,6 @@ class AcousticDataset(BaseDataset):
                     self.avail_idxs = list(range(hparams['num_test_samples'])) + hparams['test_ids']
                     self.sizes = [self.sizes[i] for i in self.avail_idxs]
 
-        if hparams['pitch_type'] == 'cwt':
-            _, hparams['cwt_scales'] = get_lf0_cwt(np.ones(10))
-
     def __getitem__(self, index):
         hparams = self.hparams
         item = self._get_item(index)
@@ -102,16 +91,6 @@ class AcousticDataset(BaseDataset):
             sample["spk_embed"] = torch.Tensor(item['spk_embed'])
         if self.hparams['use_spk_id']:
             sample["spk_id"] = item['spk_id']
-        if self.hparams['pitch_type'] == 'cwt':
-            cwt_spec = torch.Tensor(item['cwt_spec'])[:max_frames]
-            f0_mean = item.get('f0_mean', item.get('cwt_mean'))
-            f0_std = item.get('f0_std', item.get('cwt_std'))
-            sample.update({"cwt_spec": cwt_spec, "f0_mean": f0_mean, "f0_std": f0_std})
-        elif self.hparams['pitch_type'] == 'ph':
-            f0_phlevel_sum = torch.zeros_like(phone).float().scatter_add(0, mel2ph - 1, f0)
-            f0_phlevel_num = torch.zeros_like(phone).float().scatter_add(
-                0, mel2ph - 1, torch.ones_like(f0)).clamp_min(1)
-            sample["f0_ph"] = f0_phlevel_sum / f0_phlevel_num
         item = self._get_item(index)
         sample['pitch_midi'] = torch.LongTensor(item['pitch_midi'])[:hparams['max_frames']]
         sample['midi_dur'] = torch.FloatTensor(item['midi_dur'])[:hparams['max_frames']]
