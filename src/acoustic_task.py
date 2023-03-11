@@ -35,7 +35,7 @@ class AcousticDataset(BaseDataset):
         super().__init__(shuffle)
         self.data_dir = hparams['binary_data_dir']
         self.prefix = prefix
-        self.sizes = np.load(f'{self.data_dir}/{self.prefix}_lengths.npy')
+        self.sizes = np.load(f'{self.data_dir}/{self.prefix}.lengths')
         self.indexed_ds = IndexedDataset(f'{self.data_dir}/{self.prefix}')
 
     def __getitem__(self, index):
