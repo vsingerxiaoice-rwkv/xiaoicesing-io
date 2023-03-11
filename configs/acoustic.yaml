@@ -3,6 +3,8 @@ base_config:
 
 task_cls: src.acoustic_task.AcousticTask
 num_spk: 1
+speakers:
+  - opencpop
 test_prefixes: [
     '2044',
     '2086',
