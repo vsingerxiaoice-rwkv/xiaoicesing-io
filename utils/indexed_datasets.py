@@ -16,7 +16,7 @@ class IndexedDataset:
         self.num_cache = num_cache
 
     def check_index(self, i):
-        if i < 0 or i >= len(self.data_offsets):
+        if i < 0 or i >= len(self.data_offsets) - 1:
             raise IndexError('index out of range')
 
     def __del__(self):
@@ -37,7 +37,7 @@ class IndexedDataset:
         return item
 
     def __len__(self):
-        return len(self.data_offsets)
+        return len(self.data_offsets) - 1
 
 class IndexedDatasetBuilder:
     def __init__(self, path, prefix, allowed_attr=None):
@@ -64,7 +64,7 @@ class IndexedDatasetBuilder:
         self.out_file.close()
         with open(os.path.join(self.path, f'{self.prefix}.idx'), 'wb') as f:
             # noinspection PyTypeChecker
-            np.save(f, self.byte_offsets[:-1])
+            np.save(f, self.byte_offsets)
 
 
 if __name__ == "__main__":
