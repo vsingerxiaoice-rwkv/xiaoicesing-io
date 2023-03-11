@@ -261,13 +261,7 @@ class AcousticTask(BaseTask):
                 key_shift=key_shift, speed=speed, ref_mels=None, infer=True
             )
 
-            if hparams.get('pe_enable') is not None and hparams['pe_enable']:
-                gt_f0 = self.pe(sample['mels'])['f0_denorm_pred']  # pe predict from GT mel
-                pred_f0 = self.pe(model_out['mel_out'])['f0_denorm_pred']  # pe predict from Pred mel
-            else:
-                gt_f0 = denorm_f0(sample['f0'], sample['uv'])
-                pred_f0 = gt_f0
-            self.plot_wav(batch_idx, sample['mels'], model_out['mel_out'], gt_f0=gt_f0, pred_f0=pred_f0)
+            self.plot_wav(batch_idx, sample['mels'], model_out['mel_out'], f0=model_out['f0_denorm'])
             self.plot_mel(batch_idx, sample['mels'], model_out['mel_out'], name=f'diffmel_{batch_idx}')
 
         return outputs
@@ -288,17 +282,16 @@ class AcousticTask(BaseTask):
     ############
     # validation plots
     ############
-    def plot_wav(self, batch_idx, gt_mel, pred_mel, gt_f0=None, pred_f0=None):
+    def plot_wav(self, batch_idx, gt_mel, pred_mel, f0=None):
         gt_mel = gt_mel[0].cpu().numpy()
         pred_mel = pred_mel[0].cpu().numpy()
-        gt_f0 = gt_f0[0].cpu().numpy()
-        pred_f0 = pred_f0[0].cpu().numpy()
+        f0 = f0[0].cpu().numpy()
         if batch_idx not in self.logged_gt_wav:
-            gt_wav = self.vocoder.spec2wav(gt_mel, f0=gt_f0)
+            gt_wav = self.vocoder.spec2wav(gt_mel, f0=f0)
             self.logger.experiment.add_audio(f'gt_{batch_idx}', gt_wav, sample_rate=hparams['audio_sample_rate'],
                                              global_step=self.global_step)
             self.logged_gt_wav.add(batch_idx)
-        pred_wav = self.vocoder.spec2wav(pred_mel, f0=pred_f0)
+        pred_wav = self.vocoder.spec2wav(pred_mel, f0=f0)
         self.logger.experiment.add_audio(f'pred_{batch_idx}', pred_wav, sample_rate=hparams['audio_sample_rate'],
                                          global_step=self.global_step)
 
