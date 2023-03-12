@@ -4,6 +4,10 @@ import os
 import pathlib
 import sys
 
+root_dir = str(pathlib.Path(__file__).parent.parent.resolve())
+os.environ['PYTHONPATH'] = root_dir
+sys.path.insert(0, root_dir)
+
 import numpy as np
 import torch
 import tqdm
@@ -12,9 +16,6 @@ from basics.base_svs_infer import BaseSVSInfer
 from utils.infer_utils import cross_fade
 from utils.audio import save_wav
 from utils.hparams import set_hparams, hparams
-
-root_dir = str(pathlib.Path(__file__).parent.parent.resolve())
-os.environ['PYTHONPATH'] = f'"{root_dir}"'
 
 parser = argparse.ArgumentParser(description='Run DiffSinger vocoder')
 parser.add_argument('mel', type=str, help='Path to the input file')

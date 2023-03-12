@@ -5,6 +5,10 @@ import os
 import pathlib
 import sys
 
+root_dir = str(pathlib.Path(__file__).parent.parent.resolve())
+os.environ['PYTHONPATH'] = root_dir
+sys.path.insert(0, root_dir)
+
 import numpy as np
 import torch
 
@@ -14,9 +18,6 @@ from utils.hparams import set_hparams, hparams
 from utils.infer_utils import cross_fade, trans_key
 from utils.slur_utils import merge_slurs
 from utils.spk_utils import parse_commandline_spk_mix
-
-root_dir = str(pathlib.Path(__file__).parent.parent.resolve())
-os.environ['PYTHONPATH'] = f'"{root_dir}"'
 
 parser = argparse.ArgumentParser(description='Run DiffSinger inference')
 parser.add_argument('proj', type=str, help='Path to the input file')
