@@ -25,12 +25,10 @@ fmax: 16000
 min_level_db: -120
 
 binarization_args:
-  num_workers: 0
-  with_spk_embed: false
-  with_align: true
-  with_uv: false
-  interp_uv: true
+  label_format: grid
   shuffle: true
+  num_workers: 0
+  interp_uv: true
 #augmentation_args:
 #  random_pitch_shifting:
 #    range: [-5., 5.]

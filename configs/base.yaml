@@ -19,10 +19,7 @@ binary_data_dir: ''
 binarizer_cls: basics.base_binarizer.BaseBinarizer
 binarization_args:
   shuffle: false
-  with_txt: true
-  with_align: true
-  with_spk_embed: true
-  with_f0: true
+  num_workers: 0
 
 endless_ds: true
 

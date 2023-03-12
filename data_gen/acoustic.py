@@ -20,14 +20,14 @@ from tqdm import tqdm
 from basics.base_binarizer import BaseBinarizer, BinarizationError
 from data_gen.data_gen_utils import get_pitch_parselmouth, get_mel2ph_torch
 from modules.fastspeech.tts_modules import LengthRegulator
-from src.vocoders.vocoder_utils import VOCODERS
+from utils.vocoder_utils import VOCODERS
 from utils.hparams import hparams
 from utils.indexed_datasets import IndexedDatasetBuilder
 from utils.multiprocess_utils import chunked_multiprocess_run
 from utils.phoneme_utils import build_phoneme_list
 
 os.environ["OMP_NUM_THREADS"] = "1"
-ACOUSTIC_ITEM_ATTRIBUTES = ['mel', 'tokens', 'mel2ph', 'f0', 'uv', 'key_shift', 'speed']
+ACOUSTIC_ITEM_ATTRIBUTES = ['mel', 'tokens', 'mel2ph', 'f0', 'key_shift', 'speed']
 
 
 class AcousticBinarizer(BaseBinarizer):
@@ -210,8 +210,6 @@ class AcousticBinarizer(BaseBinarizer):
         if uv.all():  # All unvoiced
             raise BinarizationError(f'Empty gt f0 in \'{item_name}\'.')
         processed_input['f0'] = torch.from_numpy(gt_f0).float()
-        if self.binarization_args['with_uv']:
-            processed_input['uv'] = torch.from_numpy(uv)
 
         # get ground truth dur
         processed_input['mel2ph'] = get_mel2ph_torch(self.lr, processed_input['ph_dur'], length, hparams)
