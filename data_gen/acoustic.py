@@ -65,8 +65,11 @@ class AcousticBinarizer(BaseBinarizer):
     def process(self):
         super().process()
         self.process_data_split('valid')
-        # self.process_data_split('test')
-        self.process_data_split('train', apply_augmentation=len(self.augmentation_args) > 0)
+        self.process_data_split(
+            'train',
+            num_workers=int(self.binarization_args.get('num_workers', os.getenv('N_PROC', 0))),
+            apply_augmentation=len(self.augmentation_args) > 0
+        )
 
     def check_coverage(self):
         # Group by phonemes in the dictionary.
@@ -122,7 +125,7 @@ class AcousticBinarizer(BaseBinarizer):
                                  f' (+) {sorted(unrecognizable_phones)}\n'
                                  f' (-) {sorted(missing_phones)}')
 
-    def process_data_split(self, prefix, multiprocess=False, apply_augmentation=False):
+    def process_data_split(self, prefix, num_workers=0, apply_augmentation=False):
         data_dir = hparams['binary_data_dir']
         args = []
         builder = IndexedDatasetBuilder(data_dir, prefix=prefix, allowed_attr=ACOUSTIC_ITEM_ATTRIBUTES)
@@ -156,9 +159,8 @@ class AcousticBinarizer(BaseBinarizer):
                 lengths.append(aug_item['length'])
                 total_sec += aug_item['seconds']
 
-        if multiprocess:
+        if num_workers > 0:
             # code for parallel processing
-            num_workers = int(self.binarization_args.get('num_workers', os.getenv('N_PROC', os.cpu_count() // 3)))
             for item in tqdm(
                     chunked_multiprocess_run(self.process_item, args, num_workers=num_workers),
                     total=len(list(self.meta_data_iterator(prefix)))

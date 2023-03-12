@@ -25,7 +25,7 @@ fmax: 16000
 min_level_db: -120
 
 binarization_args:
-  num_workers: 4
+  num_workers: 0
   with_spk_embed: false
   with_align: true
   with_uv: false

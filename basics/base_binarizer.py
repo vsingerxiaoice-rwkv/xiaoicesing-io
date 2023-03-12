@@ -135,7 +135,7 @@ class BaseBinarizer:
     def check_coverage(self):
         raise NotImplementedError()
 
-    def process_data_split(self, prefix, multiprocess=False, apply_augmentation=False):
+    def process_data_split(self, prefix, num_workers=0, apply_augmentation=False):
         raise NotImplementedError()
 
     def arrange_data_augmentation(self, prefix):

@@ -1,4 +1,3 @@
-import os
 import re
 import traceback
 from multiprocessing import Queue, Process, current_process
@@ -24,12 +23,10 @@ def chunked_worker(worker_id, map_func, args, results_queue=None, init_ctx_func=
             traceback.print_exc()
             results_queue.put((job_idx, None))
 
-def chunked_multiprocess_run(map_func, args, num_workers=None, ordered=True, init_ctx_func=None, q_max_size=1000):
+def chunked_multiprocess_run(map_func, args, num_workers, ordered=True, init_ctx_func=None, q_max_size=1000):
     args = zip(range(len(args)), args)
     args = list(args)
     n_jobs = len(args)
-    if num_workers is None:
-        num_workers = int(os.getenv('N_PROC', os.cpu_count()))
     results_queues = []
     if ordered:
         for i in range(num_workers):
