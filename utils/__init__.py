@@ -1,17 +1,12 @@
 import glob
-import logging
 import re
 import time
-from collections import defaultdict
 import os
 import sys
-import shutil
 import types
 import numpy as np
 import torch
 import torch.nn.functional as F
-import torch.distributed as dist
-from torch import nn
 
 
 def tensors_to_scalars(metrics):
@@ -41,38 +36,23 @@ class AvgrageMeter(object):
         self.avg = self.sum / self.cnt
 
 
-def collate_1d(values, pad_idx=0, left_pad=False, shift_right=False, max_len=None, shift_id=1):
+def collate_1d(values, pad_value=0, max_len=None):
     """Convert a list of 1d tensors into a padded 2d tensor."""
     size = max(v.size(0) for v in values) if max_len is None else max_len
-    res = values[0].new(len(values), size).fill_(pad_idx)
-
-    def copy_tensor(src, dst):
-        assert dst.numel() == src.numel()
-        if shift_right:
-            dst[1:] = src[:-1]
-            dst[0] = shift_id
-        else:
-            dst.copy_(src)
+    res = torch.full((len(values), size), fill_value=pad_value, dtype=values[0].dtype, device=values[0].device)
 
     for i, v in enumerate(values):
-        copy_tensor(v, res[i][size - len(v):] if left_pad else res[i][:len(v)])
+        res[i, :len(v)] = v
     return res
 
 
-def collate_2d(values, pad_idx=0, left_pad=False, shift_right=False, max_len=None):
+def collate_2d(values, pad_value=0, max_len=None):
     """Convert a list of 2d tensors into a padded 3d tensor."""
-    size = max(v.size(0) for v in values) if max_len is None else max_len
-    res = values[0].new(len(values), size, values[0].shape[1]).fill_(pad_idx)
-
-    def copy_tensor(src, dst):
-        assert dst.numel() == src.numel()
-        if shift_right:
-            dst[1:] = src[:-1]
-        else:
-            dst.copy_(src)
+    size = ((max(v.size(0) for v in values) if max_len is None else max_len), values[0].shape[1])
+    res = torch.full((len(values), *size), fill_value=pad_value, dtype=values[0].dtype, device=values[0].device)
 
     for i, v in enumerate(values):
-        copy_tensor(v, res[i][size - len(v):] if left_pad else res[i][:len(v)])
+        res[i, :len(v), :] = v
     return res
 
 
