@@ -4,9 +4,9 @@ import numpy as np
 import torch
 
 from basics.base_augmentation import BaseAugmentation
-from data_gen.data_gen_utils import get_pitch_parselmouth, get_mel2ph_torch
+from utils.binarizer_utils import get_pitch_parselmouth, get_mel2ph_torch
 from modules.fastspeech.tts_modules import LengthRegulator
-from src.vocoders.vocoder_utils import VOCODERS
+from modules.vocoders.registry import VOCODERS
 from utils.hparams import hparams
 from utils.pitch_utils import f0_to_coarse
 

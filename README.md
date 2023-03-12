@@ -2,9 +2,8 @@
 This is a cleaner version of Diffsinger, which provides:
 - fewer code: scripts unused in the DiffSinger are marked **\*isolated\***;
 - better readability: many important functions are annotated (however, **we assume the reader already knows how the neural networks work**);
-- abstract classes: the bass classes are filtered out into the "basics/" folder and are annotated. Other classes inherent from the base classes.
-- better file structre: tts-related files are filtered out into the "tts/" folder, as they are not used in DiffSinger.
-- **(new) Much condensed version of the preprocessing, training, and inference pipeline**. The preprocessing pipeline is at 'preprocessing/opencpop.py', the training pipeline is at 'training/diffsinger.py', the inference pipeline is at 'inference/ds_cascade.py' or 'inference/ds_e2e.py'.
+- abstract classes: the bass classes are filtered out into the "basics/" folder and are annotated. Other classes directly inherent from the base classes.
+- re-organized project structure: pipelines are seperated into preparation, preprocessing, augmentation, training, inference and deployment
 
 ## Progress since we forked into this repository
 
@@ -35,7 +34,7 @@ pip install -r requirements.txt
 
 ### Building your own dataset
 
-This [pipeline](pipelines/no_midi_preparation.ipynb) will guide you from installing dependencies to formatting your recordings and generating the final configuration file.
+This [pipeline](preparation/acoustic_preparation.ipynb) will guide you from installing dependencies to formatting your recordings and generating the final configuration file.
 
 ### Preprocessing
 
@@ -43,35 +42,35 @@ The following is **only an example** for [opencpop](http://wenet.org.cn/opencpop
 
 ```sh
 export PYTHONPATH=.
-CUDA_VISIBLE_DEVICES=0 python data_gen/binarize.py --config configs/acoustic.yaml
+CUDA_VISIBLE_DEVICES=0 python scripts/binarize.py --config configs/acoustic.yaml
 ```
 ### Training
 
 The following is **only an example** for [opencpop](http://wenet.org.cn/opencpop/) dataset.
 
 ```sh
-CUDA_VISIBLE_DEVICES=0 python run.py --config configs/acoustic.yaml --exp_name $MY_DS_EXP_NAME --reset  
+CUDA_VISIBLE_DEVICES=0 python scripts/train.py --config configs/acoustic.yaml --exp_name $MY_DS_EXP_NAME --reset  
 ```
 ### Inference
 
 #### Infer from *.ds file
 
 ```sh
-python main.py path/to/your.ds --exp $MY_DS_EXP_NAME
+python scripts/infer.py path/to/your.ds --exp $MY_DS_EXP_NAME
 ```
-See more supported arguments with `python main.py -h`. See examples of *.ds files in the [samples/](samples/) folder.
+See more supported arguments with `python scripts/infer.py -h`. See examples of *.ds files in the [samples/](samples/) folder.
 
 ### Deployment
 
 #### Export model to ONNX format
 
-Please see this [documentation](docs/README-SVS-onnx.md) before you run the following command:
+Please see this [documentation](docs/README-SVS-deployment.md) before you run the following command:
 
 ```sh
-python onnx/export/export_acoustic.py --exp $MY_DS_EXP_NAME
+python deployment/export/export_acoustic.py --exp $MY_DS_EXP_NAME
 ```
 
-See more supported arguments with `python onnx/export/export_acoustic.py -h`.
+See more supported arguments with `python deployment/export/export_acoustic.py -h`.
 
 #### Use DiffSinger via OpenUTAU editor
 

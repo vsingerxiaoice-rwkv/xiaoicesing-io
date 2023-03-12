@@ -1,6 +1,7 @@
 import importlib
-import os
+
 from utils.hparams import set_hparams, hparams
+
 set_hparams(print_hparams=False)
 
 def run_task():
@@ -13,4 +14,3 @@ def run_task():
 
 if __name__ == '__main__':
     run_task()
-

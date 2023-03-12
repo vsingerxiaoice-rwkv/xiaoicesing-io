@@ -7,8 +7,8 @@ import torch
 import torchcrepe
 import tqdm
 
-from data_gen.data_gen_utils import get_pitch_parselmouth
-from src.vocoders.nsf_hifigan import NsfHifiGAN
+from utils.binarizer_utils import get_pitch_parselmouth
+from modules.vocoders.nsf_hifigan import NsfHifiGAN
 from utils.audio import save_wav
 from utils.hparams import set_hparams, hparams
 

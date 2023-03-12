@@ -2,7 +2,7 @@ import torch
 from basics.base_svs_infer import BaseSVSInfer
 from utils import load_ckpt
 from utils.hparams import hparams
-from src.diff.diffusion import GaussianDiffusion
+from modules.diff.diffusion import GaussianDiffusion
 from modules.fastspeech.tts_modules import LengthRegulator
 import librosa
 import numpy as np
@@ -11,7 +11,7 @@ import numpy as np
 class DiffSingerCascadeInfer(BaseSVSInfer):
     def build_model(self, ckpt_steps=None):
         model = GaussianDiffusion(
-            phone_encoder=self.ph_encoder,
+            vocab_size=len(self.ph_encoder),
             out_dims=hparams['audio_num_mel_bins'],
             timesteps=hparams['timesteps'],
             K_step=hparams['K_step'],

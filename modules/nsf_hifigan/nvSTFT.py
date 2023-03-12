@@ -1,14 +1,10 @@
-import math
 import os
 os.environ["LRU_CACHE_CAPACITY"] = "3"
-import random
 import torch
 import torch.utils.data
 import numpy as np
 import librosa
-from librosa.util import normalize
 from librosa.filters import mel as librosa_mel_fn
-from scipy.io.wavfile import read
 import soundfile as sf
 import torch.nn.functional as F
 
@@ -56,7 +52,7 @@ def dynamic_range_compression_torch(x, C=1, clip_val=1e-5):
 def dynamic_range_decompression_torch(x, C=1):
     return torch.exp(x) / C
 
-class STFT():
+class STFT:
     def __init__(self, sr=22050, n_mels=80, n_fft=1024, win_size=1024, hop_length=256, fmin=20, fmax=11025, clip_val=1e-5):
         self.target_sr = sr
         
@@ -124,5 +120,3 @@ class STFT():
         audio, sr = load_wav_to_torch(audiopath, target_sr=self.target_sr)
         spect = self.get_mel(audio.unsqueeze(0)).squeeze(0)
         return spect
-
-stft = STFT()

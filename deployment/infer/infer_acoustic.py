@@ -8,9 +8,9 @@ import onnxruntime as ort
 # os.add_dll_directory(r'D:\NVIDIA GPU Computing Toolkit\CUDA\v11.6\bin')
 # os.add_dll_directory(r'D:\NVIDIA GPU Computing Toolkit\cuDNN\bin')
 
-tokens = np.load('onnx/assets/tokens.npy')
-durations = np.load('onnx/assets/durations.npy')
-f0 = np.load('onnx/assets/f0_denorm.npy')
+tokens = np.load('deployment/assets/tokens.npy')
+durations = np.load('deployment/assets/durations.npy')
+f0 = np.load('deployment/assets/f0_denorm.npy')
 speedup = np.array(50, dtype=np.int64)
 
 print('tokens', tokens.shape)
@@ -19,7 +19,7 @@ print('f0', f0.shape)
 
 options = ort.SessionOptions()
 session = ort.InferenceSession(
-    'onnx/assets/1220_zhibin_ds1000.onnx',
+    'deployment/assets/1220_zhibin_ds1000.onnx',
     providers=['CUDAExecutionProvider', 'CPUExecutionProvider'],
     sess_options=options
 )
@@ -31,4 +31,4 @@ end = time.time()
 print('mel', mel.shape)
 print('cost', end - start)
 
-np.save('onnx/assets/mel_test.npy', mel)
+np.save('deployment/assets/mel_test.npy', mel)

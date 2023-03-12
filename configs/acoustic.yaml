@@ -1,7 +1,7 @@
 base_config:
   - configs/base.yaml
 
-task_cls: src.acoustic_task.AcousticTask
+task_cls: training.acoustic.AcousticTask
 num_spk: 1
 speakers:
   - opencpop
@@ -43,7 +43,7 @@ binarization_args:
 
 raw_data_dir: 'data/opencpop/raw'
 binary_data_dir: 'data/opencpop/binary'
-binarizer_cls: data_gen.acoustic.AcousticBinarizer
+binarizer_cls: preprocessing.acoustic.AcousticBinarizer
 g2p_dictionary: dictionaries/opencpop-extension.txt
 spec_min: [-5]
 spec_max: [0]

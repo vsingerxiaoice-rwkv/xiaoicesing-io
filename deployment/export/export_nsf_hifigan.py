@@ -313,7 +313,7 @@ if __name__ == '__main__':
         '--config',
         'configs/acoustic.yaml',
     ]
-    path = 'onnx/assets/nsf_hifigan2.onnx'
+    path = 'deployment/assets/nsf_hifigan2.onnx'
     export(path)
     simplify(path, path)
     print(f'| export \'NSF-HiFiGAN\' to \'{path}\'.')

@@ -16,7 +16,7 @@ save_codes:
 sort_by_len: true
 raw_data_dir: ''
 binary_data_dir: ''
-binarizer_cls: basics.base_binarizer.BaseBinarizer
+binarizer_cls: ''
 binarization_args:
   shuffle: false
   num_workers: 0

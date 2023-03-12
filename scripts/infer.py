@@ -15,7 +15,7 @@ from utils.slur_utils import merge_slurs
 from utils.spk_utils import parse_commandline_spk_mix
 
 sys.path.insert(0, '/')
-root_dir = os.path.dirname(os.path.abspath(__file__))
+root_dir = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 os.environ['PYTHONPATH'] = f'"{root_dir}"'
 
 parser = argparse.ArgumentParser(description='Run DiffSinger inference')

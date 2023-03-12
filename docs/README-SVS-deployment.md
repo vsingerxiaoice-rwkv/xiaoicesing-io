@@ -26,7 +26,7 @@ The `onnxruntime` package is required to run inference with ONNX model and ONNXR
 Run with the command
 
 ```bash
-python onnx/export/export_acoustic.py --exp EXP [--out OUT]
+python deployment/export/export_acoustic.py --exp EXP [--out OUT]
 ```
 
 where `EXP` is the name of experiment, `OUT` is the output directory.
@@ -37,7 +37,7 @@ Note: DPM-Solver acceleration is not currently included, but PNDM is wrapped int
 
 ### 2. Inference with ONNXRuntime
 
-See `onnx/infer/infer_acoustic.py` for details.
+See `deployment/infer/infer_acoustic.py` for details.
 
 #### Issues related to CUDAExecutionProvider
 

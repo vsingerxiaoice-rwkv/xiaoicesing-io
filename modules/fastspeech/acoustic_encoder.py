@@ -37,9 +37,9 @@ class FastSpeech2AcousticEncoder(FastSpeech2Encoder):
         return x
 
 class FastSpeech2Acoustic(nn.Module):
-    def __init__(self, dictionary):
+    def __init__(self, vocab_size):
         super().__init__()
-        self.txt_embed = Embedding(len(dictionary), hparams['hidden_size'], PAD_INDEX)
+        self.txt_embed = Embedding(vocab_size, hparams['hidden_size'], PAD_INDEX)
         self.dur_embed = Linear(1, hparams['hidden_size'])
         self.encoder = FastSpeech2AcousticEncoder(
             self.txt_embed, hidden_size=hparams['hidden_size'], num_layers=hparams['enc_layers'],

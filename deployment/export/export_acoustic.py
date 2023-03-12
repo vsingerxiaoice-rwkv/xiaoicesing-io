@@ -24,8 +24,8 @@ from torch.nn import Linear, Embedding
 
 from modules.commons.common_layers import Mish
 from modules.fastspeech.acoustic_encoder import FastSpeech2AcousticEncoder
-from src.diff.diffusion import beta_schedule
-from src.diff.net import AttrDict
+from modules.diff.diffusion import beta_schedule
+from modules.diff.wavenet import AttrDict
 from utils import load_ckpt
 from utils.hparams import hparams, set_hparams
 from utils.phoneme_utils import build_phoneme_list
@@ -66,10 +66,10 @@ class LengthRegulator(nn.Module):
 
 
 class FastSpeech2Acoustic(nn.Module):
-    def __init__(self, dictionary):
+    def __init__(self, vocab_size):
         super().__init__()
         self.lr = LengthRegulator()
-        self.txt_embed = Embedding(len(dictionary), hparams['hidden_size'], PAD_INDEX)
+        self.txt_embed = Embedding(vocab_size, hparams['hidden_size'], PAD_INDEX)
         self.dur_embed = Linear(1, hparams['hidden_size'])
         self.encoder = FastSpeech2AcousticEncoder(self.txt_embed, hparams['hidden_size'], hparams['enc_layers'],
                                                   hparams['enc_ffn_kernel_size'], num_heads=hparams['num_heads'])
@@ -456,7 +456,7 @@ class GaussianDiffusion(nn.Module):
 
 def build_fs2_model(device, ckpt_steps=None):
     model = FastSpeech2Acoustic(
-        dictionary=TokenTextEncoder(vocab_list=build_phoneme_list())
+        vocab_size=len(TokenTextEncoder(vocab_list=build_phoneme_list()))
     )
     model.eval()
     load_ckpt(model, hparams['work_dir'], 'model.fs2', ckpt_steps=ckpt_steps, strict=True)
@@ -1236,7 +1236,7 @@ if __name__ == '__main__':
     if args.out:
         out = os.path.join(cwd, args.out) if not os.path.isabs(args.out) else args.out
     else:
-        out = f'onnx/assets/{exp}'
+        out = f'deployment/assets/{exp}'
     os.chdir(root_dir)
     sys.argv = [
         'inference/ds_cascade.py',
@@ -1245,9 +1245,9 @@ if __name__ == '__main__':
         '--infer'
     ]
 
-    os.makedirs(f'onnx/temp', exist_ok=True)
-    diff_model_path = f'onnx/temp/diffusion.onnx'
-    fs2_model_path = f'onnx/temp/fs2.onnx'
+    os.makedirs(f'deployment/temp', exist_ok=True)
+    diff_model_path = f'deployment/temp/diffusion.onnx'
+    fs2_model_path = f'deployment/temp/fs2.onnx'
     spk_name_pattern = r'[0-9A-Za-z_-]+'
     spk_export_paths = None
     frozen_spk_name = None
@@ -1260,11 +1260,11 @@ if __name__ == '__main__':
             if '=' in spk_export:
                 alias, mix = spk_export.split('=', maxsplit=1)
                 assert re.fullmatch(spk_name_pattern, alias) is not None, f'Invalid alias \'{alias}\' for speaker mix.'
-                spk_export_paths.append({'mix': mix, 'path': f'onnx/temp/{exp}.{alias}.emb'})
+                spk_export_paths.append({'mix': mix, 'path': f'deployment/temp/{exp}.{alias}.emb'})
             else:
                 assert re.fullmatch(spk_name_pattern, spk_export) is not None, \
                     f'Invalid alias \'{spk_export}\' for speaker mix.'
-                spk_export_paths.append({'mix': spk_export, 'path': f'onnx/temp/{exp}.{spk_export}.emb'})
+                spk_export_paths.append({'mix': spk_export, 'path': f'deployment/temp/{exp}.{spk_export}.emb'})
     elif args.freeze_spk is not None:
         assert '=' in args.freeze_spk or '|' not in args.freeze_spk, \
             'You must specify an alias with \'NAME=\' for each speaker mix.'

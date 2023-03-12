@@ -14,7 +14,7 @@ import utils
 from basics.base_dataset import BaseDataset
 from basics.base_task import BaseTask
 from basics.base_vocoder import BaseVocoder
-from data_gen.data_gen_utils import get_pitch_parselmouth
+from utils.binarizer_utils import get_pitch_parselmouth
 from modules.fastspeech.tts_modules import mel2ph_to_dur
 from utils import audio
 from utils.hparams import hparams
@@ -24,8 +24,8 @@ from utils.pitch_utils import denorm_f0
 from utils.pl_utils import data_loader
 from utils.plot import spec_to_figure
 from utils.text_encoder import TokenTextEncoder
-from .diff.diffusion import GaussianDiffusion
-from .vocoders.vocoder_utils import get_vocoder_cls
+from modules.diff.diffusion import GaussianDiffusion
+from modules.vocoders.registry import get_vocoder_cls
 
 matplotlib.use('Agg')
 
@@ -109,7 +109,7 @@ class AcousticTask(BaseTask):
     def build_model(self):
         mel_bins = hparams['audio_num_mel_bins']
         self.model = GaussianDiffusion(
-            phone_encoder=self.phone_encoder,
+            vocab_size=len(self.phone_encoder),
             out_dims=mel_bins,
             timesteps=hparams['timesteps'],
             K_step=hparams['K_step'],

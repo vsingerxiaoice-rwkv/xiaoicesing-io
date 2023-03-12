@@ -9,9 +9,6 @@ from math import sqrt
 from utils.hparams import hparams
 from modules.commons.common_layers import Mish
 
-Linear = nn.Linear
-ConvTranspose2d = nn.ConvTranspose2d
-
 
 class AttrDict(dict):
     def __init__(self, *args, **kwargs):
@@ -62,7 +59,7 @@ class ResidualBlock(nn.Module):
     def __init__(self, encoder_hidden, residual_channels, dilation):
         super().__init__()
         self.dilated_conv = Conv1d(residual_channels, 2 * residual_channels, 3, padding=dilation, dilation=dilation)
-        self.diffusion_projection = Linear(residual_channels, residual_channels)
+        self.diffusion_projection = nn.Linear(residual_channels, residual_channels)
         self.conditioner_projection = Conv1d(encoder_hidden, 2 * residual_channels, 1)
         self.output_projection = Conv1d(residual_channels, 2 * residual_channels, 1)
 

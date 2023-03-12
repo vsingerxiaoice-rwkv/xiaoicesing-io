@@ -6,7 +6,7 @@ import yaml
 import numpy as np
 from librosa.filters import mel as librosa_mel_fn
 from basics.base_vocoder import BaseVocoder
-from src.vocoders.vocoder_utils import register_vocoder
+from modules.vocoders.registry import register_vocoder
 from utils.hparams import hparams
 
 class DotDict(dict):
