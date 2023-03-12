@@ -1,7 +1,3 @@
-import os
-
-os.environ["OMP_NUM_THREADS"] = "1"
-
 import importlib
 from utils.hparams import set_hparams, hparams
 
