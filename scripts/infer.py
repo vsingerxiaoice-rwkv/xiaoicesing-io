@@ -2,6 +2,7 @@
 import argparse
 import json
 import os
+import pathlib
 import sys
 
 import numpy as np
@@ -14,8 +15,7 @@ from utils.infer_utils import cross_fade, trans_key
 from utils.slur_utils import merge_slurs
 from utils.spk_utils import parse_commandline_spk_mix
 
-sys.path.insert(0, '/')
-root_dir = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+root_dir = str(pathlib.Path(__file__).parent.parent.resolve())
 os.environ['PYTHONPATH'] = f'"{root_dir}"'
 
 parser = argparse.ArgumentParser(description='Run DiffSinger inference')

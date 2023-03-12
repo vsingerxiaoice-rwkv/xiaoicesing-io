@@ -1,6 +1,7 @@
 # coding=utf8
 import argparse
 import os
+import pathlib
 import sys
 
 import numpy as np
@@ -12,8 +13,7 @@ from utils.infer_utils import cross_fade
 from utils.audio import save_wav
 from utils.hparams import set_hparams, hparams
 
-sys.path.insert(0, '/')
-root_dir = os.path.dirname(os.path.abspath(__file__))
+root_dir = str(pathlib.Path(__file__).parent.parent.resolve())
 os.environ['PYTHONPATH'] = f'"{root_dir}"'
 
 parser = argparse.ArgumentParser(description='Run DiffSinger vocoder')
