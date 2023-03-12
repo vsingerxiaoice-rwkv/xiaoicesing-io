@@ -1,9 +1,10 @@
 # Usage of Refactor Branch
 This is a cleaner version of Diffsinger, which provides:
-- fewer code: scripts unused in the DiffSinger are marked **\*isolated\***;
+- fewer code: scripts unused or obsolete in the DiffSinger are removed;
 - better readability: many important functions are annotated (however, **we assume the reader already knows how the neural networks work**);
 - abstract classes: the bass classes are filtered out into the "basics/" folder and are annotated. Other classes directly inherent from the base classes.
-- re-organized project structure: pipelines are seperated into preparation, preprocessing, augmentation, training, inference and deployment
+- re-organized project structure: pipelines are seperated into preparation, preprocessing, augmentation, training, inference and deployment.
+- main command-line entries are collected into the "scripts/" folder.
 
 ## Progress since we forked into this repository
 
