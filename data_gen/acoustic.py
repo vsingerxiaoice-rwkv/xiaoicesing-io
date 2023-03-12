@@ -26,6 +26,7 @@ from utils.indexed_datasets import IndexedDatasetBuilder
 from utils.multiprocess_utils import chunked_multiprocess_run
 from utils.phoneme_utils import build_phoneme_list
 
+os.environ["OMP_NUM_THREADS"] = "1"
 ACOUSTIC_ITEM_ATTRIBUTES = ['mel', 'tokens', 'mel2ph', 'f0', 'uv', 'key_shift', 'speed']
 
 
