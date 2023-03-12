@@ -48,11 +48,11 @@ class AcousticDataset(BaseDataset):
         if len(samples) == 0:
             return {}
         txt_lengths = torch.LongTensor([s['tokens'].numel() for s in samples])
-        tokens = utils.collate_1d([s['tokens'] for s in samples], 0)
-        f0 = utils.collate_1d([s['f0'] for s in samples], 0.0)
+        tokens = utils.collate_nd([s['tokens'] for s in samples], 0)
+        f0 = utils.collate_nd([s['f0'] for s in samples], 0.0)
         mel_lengths = torch.LongTensor([s['mel'].shape[0] for s in samples])
-        mel2ph = utils.collate_1d([s['mel2ph'] for s in samples], 0)
-        mels = utils.collate_2d([s['mel'] for s in samples], 0.0)
+        mel2ph = utils.collate_nd([s['mel2ph'] for s in samples], 0)
+        mels = utils.collate_nd([s['mel'] for s in samples], 0.0)
         batch = {
             'nsamples': len(samples),
             'txt_lengths': txt_lengths,
@@ -63,7 +63,7 @@ class AcousticDataset(BaseDataset):
             'f0': f0,
         }
         if hparams['use_energy_embed']:
-            batch['energy'] = utils.collate_1d([s['energy'] for s in samples], 0.0)
+            batch['energy'] = utils.collate_nd([s['energy'] for s in samples], 0.0)
         if hparams.get('use_key_shift_embed', False):
             batch['key_shift'] = torch.FloatTensor([s['key_shift'] for s in samples])
         if hparams.get('use_speed_embed', False):
