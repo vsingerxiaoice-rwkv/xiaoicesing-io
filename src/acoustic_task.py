@@ -41,42 +41,8 @@ class AcousticDataset(BaseDataset):
     def __getitem__(self, index):
         if self.indexed_ds is None:
             self.indexed_ds = IndexedDataset(self.data_dir, self.prefix)
-        sample = item = self.indexed_ds[index]
+        sample = self.indexed_ds[index]
         return sample
-        # max_frames = hparams['max_frames']
-        # spec = torch.Tensor(item['mel'])[:max_frames]
-        # # energy = (spec.exp() ** 2).sum(-1).sqrt()
-        # mel2ph = torch.LongTensor(item['mel2ph'])[:max_frames] if 'mel2ph' in item else None
-        # f0, uv = interp_f0(item['f0'][:max_frames])
-        # phone = torch.LongTensor(item['phone'][:hparams['max_input_tokens']])
-        # pitch = torch.LongTensor(item.get('pitch'))[:max_frames]
-        # sample = {
-        #     'id': index,
-        #     'item_name': item['item_name'],
-        #     'text': item['txt'],
-        #     'txt_token': phone,
-        #     'mel': spec,
-        #     'pitch': pitch,
-        #     'f0': f0,
-        #     'uv': uv,
-        #     'mel2ph': mel2ph,
-        #     'mel_nonpadding': spec.abs().sum(-1) > 0,
-        # }
-        # if hparams['use_energy_embed']:
-        #     sample['energy'] = item['energy']
-        # if hparams.get('use_key_shift_embed', False):
-        #     sample['key_shift'] = item['key_shift']
-        # if hparams.get('use_speed_embed', False):
-        #     sample['speed'] = item['speed']
-        # if hparams['use_spk_embed']:
-        #     sample['spk_embed'] = torch.Tensor(item['spk_embed'])
-        # if hparams['use_spk_id']:
-        #     sample['spk_id'] = item['spk_id']
-        # sample['pitch_midi'] = torch.LongTensor(item['pitch_midi'])[:hparams['max_frames']]
-        # sample['midi_dur'] = torch.FloatTensor(item['midi_dur'])[:hparams['max_frames']]
-        # sample['is_slur'] = torch.LongTensor(item['is_slur'])[:hparams['max_frames']]
-        # sample['word_boundary'] = torch.LongTensor(item['word_boundary'])[:hparams['max_frames']]
-        # return sample
 
     def collater(self, samples):
         if len(samples) == 0:
@@ -315,22 +281,19 @@ class AcousticTask(BaseTask):
         mel2ph = sample['mel2ph']
         f0 = sample['f0']
         ref_mels = None
-        if hparams['profile_infer']:
-            pass
+        outputs = self.model(
+            txt_tokens, spk_embed=spk_embed, mel2ph=mel2ph, f0=f0,
+            ref_mels=ref_mels, infer=True
+        )
+        sample['outputs'] = self.model.out2mel(outputs['mel_out'])
+        sample['mel2ph_pred'] = outputs['mel2ph']
+        if hparams.get('pe_enable') is not None and hparams['pe_enable']:
+            sample['f0'] = self.pe(sample['mels'])['f0_denorm_pred']  # pe predict from GT mel
+            sample['f0_pred'] = self.pe(sample['outputs'])['f0_denorm_pred']  # pe predict from Pred mel
         else:
-            outputs = self.model(
-                txt_tokens, spk_embed=spk_embed, mel2ph=mel2ph, f0=f0,
-                ref_mels=ref_mels, infer=True
-            )
-            sample['outputs'] = self.model.out2mel(outputs['mel_out'])
-            sample['mel2ph_pred'] = outputs['mel2ph']
-            if hparams.get('pe_enable') is not None and hparams['pe_enable']:
-                sample['f0'] = self.pe(sample['mels'])['f0_denorm_pred']  # pe predict from GT mel
-                sample['f0_pred'] = self.pe(sample['outputs'])['f0_denorm_pred']  # pe predict from Pred mel
-            else:
-                sample['f0'] = denorm_f0(sample['f0'], sample['uv'])
-                sample['f0_pred'] = outputs.get('f0_denorm')
-            return self.after_infer(sample)
+            sample['f0'] = denorm_f0(sample['f0'], sample['uv'])
+            sample['f0_pred'] = outputs.get('f0_denorm')
+        return self.after_infer(sample)
 
     def test_end(self, outputs):
         self.saving_result_pool.close()
@@ -339,7 +302,7 @@ class AcousticTask(BaseTask):
         return {}
 
     def after_infer(self, predictions):
-        if self.saving_result_pool is None and not hparams['profile_infer']:
+        if self.saving_result_pool is None:
             self.saving_result_pool = Pool(min(int(os.getenv('N_PROC', os.cpu_count())), 16))
             self.saving_results_futures = []
         predictions = utils.unpack_dict_to_list(predictions)
@@ -384,41 +347,35 @@ class AcousticTask(BaseTask):
             gen_dir = os.path.join(hparams['work_dir'],
                                    f'generated_{self.trainer.global_step}_{hparams["gen_dir_name"]}')
             wav_pred = self.vocoder.spec2wav(mel_pred, f0=f0_pred)
-            if not hparams['profile_infer']:
-                os.makedirs(gen_dir, exist_ok=True)
-                os.makedirs(f'{gen_dir}/wavs', exist_ok=True)
-                os.makedirs(f'{gen_dir}/plot', exist_ok=True)
-                os.makedirs(os.path.join(hparams['work_dir'], 'P_mels_npy'), exist_ok=True)
-                os.makedirs(os.path.join(hparams['work_dir'], 'G_mels_npy'), exist_ok=True)
+            os.makedirs(gen_dir, exist_ok=True)
+            os.makedirs(f'{gen_dir}/wavs', exist_ok=True)
+            os.makedirs(f'{gen_dir}/plot', exist_ok=True)
+            os.makedirs(os.path.join(hparams['work_dir'], 'P_mels_npy'), exist_ok=True)
+            os.makedirs(os.path.join(hparams['work_dir'], 'G_mels_npy'), exist_ok=True)
+            self.saving_results_futures.append(
+                self.saving_result_pool.apply_async(self.save_result, args=[
+                    wav_pred, mel_pred, 'P', item_name, text, gen_dir, str_phs, mel2ph_pred, f0_gt, f0_pred]))
+
+            if mel_gt is not None and hparams['save_gt']:
+                wav_gt = self.vocoder.spec2wav(mel_gt, f0=f0_gt)
                 self.saving_results_futures.append(
                     self.saving_result_pool.apply_async(self.save_result, args=[
-                        wav_pred, mel_pred, 'P', item_name, text, gen_dir, str_phs, mel2ph_pred, f0_gt, f0_pred]))
+                        wav_gt, mel_gt, 'G', item_name, text, gen_dir, str_phs, mel2ph_gt, f0_gt, f0_pred]))
+                if hparams['save_f0']:
+                    import matplotlib.pyplot as plt
+                    # f0_pred_, _ = get_pitch(wav_pred, mel_pred, hparams)
+                    f0_pred_ = f0_pred
+                    f0_gt_, _, _ = get_pitch_parselmouth(wav_gt, len(mel_gt), hparams)
+                    fig = plt.figure()
+                    plt.plot(f0_pred_, label=r'$f0_P$')
+                    plt.plot(f0_gt_, label=r'$f0_G$')
+                    plt.legend()
+                    plt.tight_layout()
+                    plt.savefig(f'{gen_dir}/plot/[F0][{item_name}]{text}.png', format='png')
+                    plt.close(fig)
 
-                if mel_gt is not None and hparams['save_gt']:
-                    wav_gt = self.vocoder.spec2wav(mel_gt, f0=f0_gt)
-                    self.saving_results_futures.append(
-                        self.saving_result_pool.apply_async(self.save_result, args=[
-                            wav_gt, mel_gt, 'G', item_name, text, gen_dir, str_phs, mel2ph_gt, f0_gt, f0_pred]))
-                    if hparams['save_f0']:
-                        import matplotlib.pyplot as plt
-                        # f0_pred_, _ = get_pitch(wav_pred, mel_pred, hparams)
-                        f0_pred_ = f0_pred
-                        f0_gt_, _, _ = get_pitch_parselmouth(wav_gt, len(mel_gt), hparams)
-                        fig = plt.figure()
-                        plt.plot(f0_pred_, label=r'$f0_P$')
-                        plt.plot(f0_gt_, label=r'$f0_G$')
-                        plt.legend()
-                        plt.tight_layout()
-                        plt.savefig(f'{gen_dir}/plot/[F0][{item_name}]{text}.png', format='png')
-                        plt.close(fig)
-
-                t.set_description(
-                    f'Pred_shape: {mel_pred.shape}, gt_shape: {mel_gt.shape}')
-            else:
-                if 'gen_wav_time' not in self.stats:
-                    self.stats['gen_wav_time'] = 0
-                self.stats['gen_wav_time'] += len(wav_pred) / hparams['audio_sample_rate']
-                print('gen_wav_time: ', self.stats['gen_wav_time'])
+            t.set_description(
+                f'Pred_shape: {mel_pred.shape}, gt_shape: {mel_gt.shape}')
 
         return {}
 

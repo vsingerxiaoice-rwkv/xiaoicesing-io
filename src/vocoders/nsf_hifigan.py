@@ -44,7 +44,7 @@ class NsfHifiGAN(BaseVocoder):
             # log10 to log mel
             c = 2.30259 * c
             f0 = kwargs.get('f0')  # [B, T]
-            if f0 is not None and hparams.get('use_nsf'):
+            if f0 is not None:
                 y = self.model(c, f0).view(-1)
             else:
                 y = self.model(c).view(-1)
@@ -74,7 +74,7 @@ class NsfHifiGAN(BaseVocoder):
             # log10 to log mel
             c = 2.30259 * c
             f0 = kwargs.get('f0')
-            if f0 is not None and hparams.get('use_nsf'):
+            if f0 is not None:
                 f0 = torch.FloatTensor(f0[None, :]).to(self.device)
                 y = self.model(c, f0).view(-1)
             else:

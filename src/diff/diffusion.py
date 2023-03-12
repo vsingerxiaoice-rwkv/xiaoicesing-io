@@ -240,18 +240,6 @@ class GaussianDiffusion(nn.Module):
                 self.norm_spec(ref_mels), cond, ret, self.K_step, b, device
             )
         else:
-            '''
-            ret['fs2_mel'] = ret['mel_out']
-            fs2_mels = ret['mel_out']
-            t = self.K_step
-            fs2_mels = self.norm_spec(fs2_mels)
-            fs2_mels = fs2_mels.transpose(1, 2)[:, None, :, :]
-            x = self.q_sample(x_start=fs2_mels, t=torch.tensor([t - 1], device=device).long())
-            if hparams.get('gaussian_start') is not None and hparams['gaussian_start']:
-                print('===> gaussion start.')
-                shape = (cond.shape[0], 1, self.mel_bins, cond.shape[2])
-                x = torch.randn(shape, device=device)
-            '''
             t = self.K_step
             shape = (cond.shape[0], 1, self.mel_bins, cond.shape[2])
             x = torch.randn(shape, device=device)
@@ -322,38 +310,3 @@ class GaussianDiffusion(nn.Module):
 
     def out2mel(self, x):
         return x
-
-
-class OfflineGaussianDiffusion(GaussianDiffusion):
-    def forward(self, txt_tokens, mel2ph=None, spk_embed=None,
-                ref_mels=None, f0=None, uv=None, energy=None, infer=False, **kwargs):
-        b, *_, device = *txt_tokens.shape, txt_tokens.device
-
-        ret = self.fs2(txt_tokens, mel2ph, spk_embed, ref_mels, f0, uv, energy,
-                       skip_decoder=True, infer=True, **kwargs)
-        cond = ret['decoder_inp'].transpose(1, 2)
-        fs2_mels = ref_mels[1]
-        ref_mels = ref_mels[0]
-
-        if not infer:
-            t = torch.randint(0, self.K_step, (b,), device=device).long()
-            x = ref_mels
-            x = self.norm_spec(x)
-            x = x.transpose(1, 2)[:, None, :, :]  # [B, 1, M, T]
-            ret['diff_loss'] = self.p_losses(x, t, cond)
-        else:
-            t = self.K_step
-            fs2_mels = self.norm_spec(fs2_mels)
-            fs2_mels = fs2_mels.transpose(1, 2)[:, None, :, :]
-
-            x = self.q_sample(x_start=fs2_mels, t=torch.tensor([t - 1], device=device).long())
-
-            if hparams.get('gaussian_start') is not None and hparams['gaussian_start']:
-                print('===> gaussion start.')
-                shape = (cond.shape[0], 1, self.mel_bins, cond.shape[2])
-                x = torch.randn(shape, device=device)
-            for i in tqdm(reversed(range(0, t)), desc='sample time step', total=t):
-                x = self.p_sample(x, torch.full((b,), i, device=device, dtype=torch.long), cond)
-            x = x[:, 0].transpose(1, 2)
-            ret['mel_out'] = self.denorm_spec(x)
-        return ret

@@ -15,7 +15,6 @@ test_prefixes: [
 
 vocoder: NsfHifiGAN
 vocoder_ckpt: checkpoints/nsf_hifigan/model
-use_nsf: true
 audio_sample_rate: 44100
 audio_num_mel_bins: 128
 hop_size: 512            # Hop size.
@@ -63,14 +62,11 @@ use_pitch_embed: true
 f0_embed_type: continuous
 use_key_shift_embed: false
 use_speed_embed: false
-use_gt_f0: false  #  for midi exp
-use_gt_dur: false  # for further midi exp
 
 K_step: 1000
 timesteps: 1000
 max_beta: 0.02
 rel_pos: true
-gaussian_start: true
 pndm_speedup: 10
 hidden_size: 256
 residual_layers: 20
