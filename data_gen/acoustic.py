@@ -26,7 +26,7 @@ from utils.indexed_datasets import IndexedDatasetBuilder
 from utils.multiprocess_utils import chunked_multiprocess_run
 from utils.phoneme_utils import build_phoneme_list
 
-os.environ["OMP_NUM_THREADS"] = "1"
+# os.environ["OMP_NUM_THREADS"] = "1"
 ACOUSTIC_ITEM_ATTRIBUTES = ['mel', 'tokens', 'mel2ph', 'f0', 'uv', 'key_shift', 'speed']
 
 
@@ -158,7 +158,7 @@ class AcousticBinarizer(BaseBinarizer):
 
         if multiprocess:
             # code for parallel processing
-            num_workers = int(os.getenv('N_PROC', hparams.get('ds_workers', os.cpu_count() // 3)))
+            num_workers = int(self.binarization_args.get('num_workers', os.getenv('N_PROC', os.cpu_count() // 3)))
             for item in tqdm(
                     chunked_multiprocess_run(self.process_item, args, num_workers=num_workers),
                     total=len(list(self.meta_data_iterator(prefix)))
