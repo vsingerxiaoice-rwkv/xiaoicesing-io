@@ -205,7 +205,9 @@ def export(fs2_path):
         onnx.save(model, fs2_path)
         print('PyTorch ONNX export finished.')
 
-
+def export_phonemes_txt(phonemes_txt_path:str):
+    textEncoder = TokenTextEncoder(vocab_list=build_phoneme_list())
+    textEncoder.store_to_file(phonemes_txt_path)
 if __name__ == '__main__':
     parser = argparse.ArgumentParser(description='Export DiffSinger acoustic model to ONNX')
     parser.add_argument('--exp', type=str, required=True, help='Experiment to export')
@@ -229,10 +231,12 @@ if __name__ == '__main__':
 
     fs2_model_path = f'onnx/assets/{exp}.rhythmizer.onnx' if not target else target
     export(fs2_path=fs2_model_path)
-
+    phonemes_txt_path = f'onnx/assets//{exp}.phonemes.txt'
+    export_phonemes_txt(phonemes_txt_path)
     os.chdir(cwd)
     if args.target:
         log_path = os.path.abspath(args.target)
     else:
         log_path = fs2_model_path
     print(f'| export \'model.fs2\' to \'{log_path}\'.')
+
