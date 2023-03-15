@@ -14,18 +14,17 @@ import utils
 from basics.base_dataset import BaseDataset
 from basics.base_task import BaseTask
 from basics.base_vocoder import BaseVocoder
-from utils.binarizer_utils import get_pitch_parselmouth
 from modules.fastspeech.tts_modules import mel2ph_to_dur
+from modules.toplevel.acoustic_model import DiffSingerAcoustic
+from modules.vocoders.registry import get_vocoder_cls
 from utils import audio
+from utils.binarizer_utils import get_pitch_parselmouth
 from utils.hparams import hparams
 from utils.indexed_datasets import IndexedDataset
 from utils.phoneme_utils import build_phoneme_list
-from utils.pitch_utils import denorm_f0
 from utils.pl_utils import data_loader
 from utils.plot import spec_to_figure
 from utils.text_encoder import TokenTextEncoder
-from modules.diff.diffusion import GaussianDiffusion
-from modules.vocoders.registry import get_vocoder_cls
 
 matplotlib.use('Agg')
 
@@ -86,19 +85,6 @@ class AcousticTask(BaseTask):
         self.saving_result_pool = None
         self.saving_results_futures = None
         self.stats = {}
-        self.mse_loss_fn = torch.nn.MSELoss()
-        mel_losses = hparams['mel_loss'].split('|')
-        self.loss_and_lambda = {}
-        for i, l in enumerate(mel_losses):
-            if l == '':
-                continue
-            if ':' in l:
-                l, lbd = l.split(':')
-                lbd = float(lbd)
-            else:
-                lbd = 1.0
-            self.loss_and_lambda[l] = lbd
-        print('| Mel losses:', self.loss_and_lambda)
         self.logged_gt_wav = set()
 
     @staticmethod
@@ -107,17 +93,10 @@ class AcousticTask(BaseTask):
         return TokenTextEncoder(vocab_list=phone_list)
 
     def build_model(self):
-        mel_bins = hparams['audio_num_mel_bins']
-        self.model = GaussianDiffusion(
+        self.model = DiffSingerAcoustic(
             vocab_size=len(self.phone_encoder),
-            out_dims=mel_bins,
-            timesteps=hparams['timesteps'],
-            K_step=hparams['K_step'],
-            loss_type=hparams['diff_loss_type'],
-            spec_min=hparams['spec_min'], spec_max=hparams['spec_max'],
+            out_dims=hparams['audio_num_mel_bins']
         )
-        if hparams['load_ckpt'] != '':
-            self.load_ckpt(hparams['load_ckpt'], strict=True)
         utils.print_arch(self.model)
         return self.model
 
@@ -156,36 +135,32 @@ class AcousticTask(BaseTask):
             self.scheduler.step(self.global_step // hparams['accumulate_grad_batches'])
 
     def run_model(self, sample, return_output=False, infer=False):
-        '''
+        """
             steps:
             1. run the full model, calc the main loss
             2. calculate loss for dur_predictor, pitch_predictor, energy_predictor
-        '''
+        """
         txt_tokens = sample['tokens']  # [B, T_t]
         target = sample['mels']  # [B, T_s, 80]
         mel2ph = sample['mel2ph']  # [B, T_s]
         f0 = sample['f0']
-        energy = sample.get('energy')
         key_shift = sample.get('key_shift')
         speed = sample.get('speed')
 
-        if infer:
-            if hparams['use_spk_id']:
-                spk_embed = self.model.fs2.spk_embed(sample['spk_ids'])[:, None, :]
-            elif hparams['use_spk_embed']:
-                spk_embed = sample['spk_embed']
-            else:
-                spk_embed = None
-            output = self.model(txt_tokens, mel2ph=mel2ph, spk_mix_embed=spk_embed, ref_mels=target,
-                                f0=f0, energy=energy, key_shift=key_shift, speed=speed, infer=infer)
+        if hparams['use_spk_id']:
+            spk_embed_id = sample['spk_ids']
+        # elif hparams['use_spk_embed']:
+        #     spk_embed = sample['spk_embed']
         else:
-            spk_embed = sample.get('spk_ids') if hparams['use_spk_id'] else sample.get('spk_embed')
-            output = self.model(txt_tokens, mel2ph=mel2ph, spk_embed=spk_embed, ref_mels=target,
-                                f0=f0, energy=energy, key_shift=key_shift, speed=speed, infer=infer)
+            spk_embed_id = None
+        output = self.model(txt_tokens, mel2ph=mel2ph, f0=f0,
+                            key_shift=key_shift, speed=speed,
+                            spk_embed_id=spk_embed_id,
+                            gt_mel=target, infer=infer)
 
         losses = {}
-        if 'diff_loss' in output:
-            losses['mel'] = output['diff_loss']
+        if not infer:
+            losses['mel'] = output
         if not return_output:
             return losses
         else:
@@ -199,35 +174,18 @@ class AcousticTask(BaseTask):
         return total_loss, log_outputs
 
     def validation_step(self, sample, batch_idx):
-        outputs = {}
-        txt_tokens = sample['tokens']  # [B, T_t]
-
-        energy = sample.get('energy')
-        key_shift = sample.get('key_shift')
-        speed = sample.get('speed')
-        # spk_embed = sample.get('spk_embed') if not hparams['use_spk_id'] else sample.get('spk_ids')
-        mel2ph = sample['mel2ph']
-        f0 = sample['f0']
-
-        outputs['losses'], model_out = self.run_model(sample, return_output=True, infer=False)
-
-        outputs['total_loss'] = sum(outputs['losses'].values())
-        outputs['nsamples'] = sample['nsamples']
+        losses = self.run_model(sample, return_output=False, infer=False)
+        total_loss = sum(losses.values())
+        outputs = {
+            'losses': losses,
+            'total_loss': total_loss, 'nsamples': sample['nsamples']
+        }
         outputs = utils.tensors_to_scalars(outputs)
-        if batch_idx < hparams['num_valid_plots']:
-            if hparams['use_spk_id']:
-                spk_embed = self.model.fs2.spk_embed(sample['spk_ids'])[:, None, :]
-            elif hparams['use_spk_embed']:
-                spk_embed = sample['spk_embed']
-            else:
-                spk_embed = None
-            model_out = self.model(
-                txt_tokens, spk_mix_embed=spk_embed, mel2ph=mel2ph, f0=f0, energy=energy,
-                key_shift=key_shift, speed=speed, ref_mels=None, infer=True
-            )
 
-            self.plot_wav(batch_idx, sample['mels'], model_out['mel_out'], f0=model_out['f0_denorm'])
-            self.plot_mel(batch_idx, sample['mels'], model_out['mel_out'], name=f'diffmel_{batch_idx}')
+        if batch_idx < hparams['num_valid_plots']:
+            _, mel_pred = self.run_model(sample, return_output=True, infer=True)
+            self.plot_wav(batch_idx, sample['mels'], mel_pred, f0=sample['f0'])
+            self.plot_mel(batch_idx, sample['mels'], mel_pred, name=f'diffmel_{batch_idx}')
 
         return outputs
 
@@ -276,23 +234,8 @@ class AcousticTask(BaseTask):
         self.vocoder: BaseVocoder = get_vocoder_cls(hparams)()
 
     def test_step(self, sample, batch_idx):
-        spk_embed = sample.get('spk_embed') if not hparams['use_spk_id'] else sample.get('spk_ids')
-        txt_tokens = sample['tokens']
-        mel2ph = sample['mel2ph']
-        f0 = sample['f0']
-        ref_mels = None
-        outputs = self.model(
-            txt_tokens, spk_embed=spk_embed, mel2ph=mel2ph, f0=f0,
-            ref_mels=ref_mels, infer=True
-        )
-        sample['outputs'] = self.model.out2mel(outputs['mel_out'])
-        sample['mel2ph_pred'] = outputs['mel2ph']
-        if hparams.get('pe_enable') is not None and hparams['pe_enable']:
-            sample['f0'] = self.pe(sample['mels'])['f0_denorm_pred']  # pe predict from GT mel
-            sample['f0_pred'] = self.pe(sample['outputs'])['f0_denorm_pred']  # pe predict from Pred mel
-        else:
-            sample['f0'] = denorm_f0(sample['f0'], sample['uv'])
-            sample['f0_pred'] = outputs.get('f0_denorm')
+        _, mel_pred = self.run_model(sample, return_output=True, infer=True)
+        sample['outputs'] = mel_pred
         return self.after_infer(sample)
 
     def test_end(self, outputs):

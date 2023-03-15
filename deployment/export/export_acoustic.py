@@ -22,6 +22,8 @@ import torch.nn as nn
 import torch.nn.functional as F
 from torch.nn import Linear, Embedding
 
+
+from basics.base_model import CategorizedModule
 from modules.commons.common_layers import Mish
 from modules.fastspeech.acoustic_encoder import FastSpeech2AcousticEncoder
 from modules.diff.diffusion import beta_schedule
@@ -65,7 +67,7 @@ class LengthRegulator(nn.Module):
         return mel2ph
 
 
-class FastSpeech2Acoustic(nn.Module):
+class FastSpeech2Acoustic(CategorizedModule):
     def __init__(self, vocab_size):
         super().__init__()
         self.lr = LengthRegulator()
@@ -91,6 +93,10 @@ class FastSpeech2Acoustic(nn.Module):
 
         if hparams['use_spk_id']:
             self.spk_embed = Embedding(hparams['num_spk'], hparams['hidden_size'])
+
+    @property
+    def category(self):
+        return 'acoustic'
 
     def forward(self, tokens, durations, f0, gender=None, velocity=None, spk_embed=None):
         durations *= tokens > 0
@@ -325,7 +331,7 @@ class MelExtractor(nn.Module):
         return x * d + m
 
 
-class GaussianDiffusion(nn.Module):
+class GaussianDiffusion(CategorizedModule):
     def __init__(self, out_dims, timesteps=1000, k_step=1000, spec_min=None, spec_max=None):
         super().__init__()
         self.mel_bins = out_dims
@@ -366,6 +372,10 @@ class GaussianDiffusion(nn.Module):
 
         self.register_buffer('spec_min', torch.FloatTensor(spec_min)[None, None, :hparams['keep_bins']])
         self.register_buffer('spec_max', torch.FloatTensor(spec_max)[None, None, :hparams['keep_bins']])
+
+    @property
+    def category(self):
+        return 'acoustic'
 
     def build_submodules(self):
         # Move registered buffers into submodules after loading state dict.
@@ -459,7 +469,8 @@ def build_fs2_model(device, ckpt_steps=None):
         vocab_size=len(TokenTextEncoder(vocab_list=build_phoneme_list()))
     )
     model.eval()
-    load_ckpt(model, hparams['work_dir'], 'model.fs2', ckpt_steps=ckpt_steps, strict=True)
+    load_ckpt(model, hparams['work_dir'], 'model.fs2', ckpt_steps=ckpt_steps,
+              required_category='acoustic', strict=True)
     model.to(device)
     return model
 
@@ -473,7 +484,8 @@ def build_diff_model(device, ckpt_steps=None):
         spec_max=hparams['spec_max'],
     )
     model.eval()
-    load_ckpt(model, hparams['work_dir'], 'model', ckpt_steps=ckpt_steps, strict=False)
+    load_ckpt(model, hparams['work_dir'], 'model.diffusion', ckpt_steps=ckpt_steps,
+              required_category='acoustic', strict=False)
     model.build_submodules()
     model.to(device)
     return model
@@ -1190,11 +1202,13 @@ def merge(fs2_path, diff_path, target_path):
     print('FastSpeech2 and GaussianDiffusion models merged.')
     onnx.save(merged_model, target_path)
 
-def export_phonemes_txt(phonemes_txt_path:str):
-    textEncoder = TokenTextEncoder(vocab_list=build_phoneme_list())
-    textEncoder.store_to_file(phonemes_txt_path)
+
+def export_phonemes_txt(path: str):
+    TokenTextEncoder(vocab_list=build_phoneme_list()).store_to_file(path)
+
 
 if __name__ == '__main__':
+    # print('Oops, exporting ')
     parser = argparse.ArgumentParser(description='Export DiffSinger acoustic model to ONNX format.')
     parser.add_argument('--exp', type=str, required=True, help='experiment to export')
     parser.add_argument('--ckpt', type=int, required=False, help='checkpoint training steps')

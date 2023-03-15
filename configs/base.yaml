@@ -62,13 +62,11 @@ optimizer_adam_beta1: 0.9
 optimizer_adam_beta2: 0.98
 weight_decay: 0
 clip_grad_norm: 1
-mel_loss: l1:0.5|ssim:0.5 # l1|l2|gdl|ssim or l1:0.5|ssim:0.5
 dur_loss: mse # huber|mol
 
 ###########
 # train and eval
 ###########
-load_ckpt: ''
 save_ckpt: true
 save_best: false
 num_ckpt_keep: 3

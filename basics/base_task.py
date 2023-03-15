@@ -3,6 +3,8 @@ import shutil
 
 import matplotlib
 
+from basics.base_model import CategorizedModule
+
 matplotlib.use('Agg')
 
 from utils.hparams import hparams, set_hparams
@@ -78,12 +80,6 @@ class BaseTask(nn.Module):
     ###########
     def build_model(self):
         raise NotImplementedError
-
-    def load_ckpt(self, ckpt_base_dir, current_model_name=None, model_name='model', force=True, strict=True):
-        # This function is updated on 2021.12.13
-        if current_model_name is None:
-            current_model_name = model_name
-        utils.load_ckpt(self.__getattr__(current_model_name), ckpt_base_dir, current_model_name, force, strict)
 
     def on_epoch_start(self):
         self.training_losses_meter = {'total_loss': utils.AvgrageMeter()}
@@ -337,7 +333,8 @@ class BaseTask(nn.Module):
         pass
 
     def on_save_checkpoint(self, checkpoint):
-        pass
+        if isinstance(self.model, CategorizedModule):
+            checkpoint['category'] = self.model.category
 
     def on_sanity_check_start(self):
         pass

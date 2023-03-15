@@ -1,7 +1,7 @@
 base_config:
   - configs/base.yaml
 
-task_cls: training.acoustic.AcousticTask
+task_cls: training.acoustic_task.AcousticTask
 num_spk: 1
 speakers:
   - opencpop
@@ -48,7 +48,6 @@ g2p_dictionary: dictionaries/opencpop-extension.txt
 spec_min: [-5]
 spec_max: [0]
 keep_bins: 128
-mel_loss: "ssim:0.5|l1:0.5"
 mel_vmin: -6. #-6.
 mel_vmax: 1.5
 save_f0: true

@@ -2,24 +2,21 @@ import torch
 from basics.base_svs_infer import BaseSVSInfer
 from utils import load_ckpt
 from utils.hparams import hparams
-from modules.diff.diffusion import GaussianDiffusion
 from modules.fastspeech.tts_modules import LengthRegulator
+from modules.toplevel.acoustic_model import DiffSingerAcoustic
 import librosa
 import numpy as np
 
 
 class DiffSingerCascadeInfer(BaseSVSInfer):
     def build_model(self, ckpt_steps=None):
-        model = GaussianDiffusion(
+        model = DiffSingerAcoustic(
             vocab_size=len(self.ph_encoder),
-            out_dims=hparams['audio_num_mel_bins'],
-            timesteps=hparams['timesteps'],
-            K_step=hparams['K_step'],
-            loss_type=hparams['diff_loss_type'],
-            spec_min=hparams['spec_min'], spec_max=hparams['spec_max'],
+            out_dims=hparams['audio_num_mel_bins']
         )
         model.eval()
-        load_ckpt(model, hparams['work_dir'], 'model', ckpt_steps=ckpt_steps)
+        load_ckpt(model, hparams['work_dir'], 'model', ckpt_steps=ckpt_steps,
+                  required_category='acoustic', strict=True, device=self.device)
         return model
 
     def preprocess_word_level_input(self, inp):
@@ -261,14 +258,12 @@ class DiffSingerCascadeInfer(BaseSVSInfer):
                 spk_mix_embed = torch.stack(spk_mix_embed, dim=1).sum(dim=1)
             else:
                 spk_mix_embed = None
-            output = self.model(txt_tokens, spk_mix_embed=spk_mix_embed, ref_mels=None, infer=True,
-                                pitch_midi=sample['pitch_midi'], midi_dur=sample['midi_dur'],
-                                is_slur=sample['is_slur'], mel2ph=sample['mel2ph'], f0=sample['f0'],
-                                key_shift=sample['key_shift'], speed=sample['speed'])
-            mel_out = output['mel_out']  # [B, T, M]
-            f0_pred = output['f0_denorm']
+            f0 = sample['f0']
+            mel = self.model(txt_tokens, mel2ph=sample['mel2ph'], f0=sample['f0'],
+                                key_shift=sample['key_shift'], speed=sample['speed'],
+                                spk_mix_embed=spk_mix_embed, infer=True)
             if return_mel:
-                return mel_out.cpu(), f0_pred.cpu()
-            wav_out = self.run_vocoder(mel_out, f0=f0_pred)
+                return mel.cpu(), f0.cpu()
+            wav_out = self.run_vocoder(mel, f0=f0)
         wav_out = wav_out.cpu().numpy()
         return wav_out[0]

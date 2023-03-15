@@ -2,10 +2,11 @@ import matplotlib
 from torch.nn import DataParallel
 from torch.nn.parallel import DistributedDataParallel
 
+from basics.base_model import CategorizedModule
+
 matplotlib.use('Agg')
 import glob
 import itertools
-import subprocess
 import threading
 import traceback
 
@@ -474,7 +475,7 @@ class BaseTrainer:
     def data_parallel(self):
         return self.use_dp or self.use_ddp
 
-    def get_model(self):
+    def get_model(self) -> CategorizedModule:
         is_dp_module = isinstance(self.model, (DDP, DP))
         model = self.model.module if is_dp_module else self.model
         return model

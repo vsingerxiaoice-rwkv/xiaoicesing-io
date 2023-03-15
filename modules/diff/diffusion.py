@@ -8,10 +8,8 @@ import torch.nn.functional as F
 from torch import nn
 from tqdm import tqdm
 
-from modules.fastspeech.acoustic_encoder import FastSpeech2Acoustic
 from modules.diff.wavenet import DiffNet
 from utils.hparams import hparams
-
 
 DIFF_DENOISERS = {
     'wavenet': lambda hp: DiffNet(hp['audio_num_mel_bins']),
@@ -68,13 +66,12 @@ beta_schedule = {
 
 
 class GaussianDiffusion(nn.Module):
-    def __init__(self, vocab_size, out_dims, timesteps=1000, K_step=1000,
-                 loss_type=hparams.get('diff_loss_type', 'l1'), betas=None, spec_min=None,
-                 spec_max=None):
+    def __init__(self, out_dims, timesteps=1000, k_step=1000,
+                 denoiser_type=None, loss_type=None, betas=None,
+                 spec_min=None, spec_max=None):
         super().__init__()
-        self.denoise_fn = DIFF_DENOISERS[hparams['diff_decoder_type']](hparams)
-        self.fs2 = FastSpeech2Acoustic(vocab_size=vocab_size)
-        self.mel_bins = out_dims
+        self.denoise_fn = DIFF_DENOISERS[denoiser_type](hparams)
+        self.out_dims = out_dims
 
         if exists(betas):
             betas = betas.detach().cpu().numpy() if isinstance(betas, torch.Tensor) else betas
@@ -90,7 +87,7 @@ class GaussianDiffusion(nn.Module):
 
         timesteps, = betas.shape
         self.num_timesteps = int(timesteps)
-        self.K_step = K_step
+        self.K_step = k_step
         self.loss_type = loss_type
 
         self.noise_list = deque(maxlen=4)
@@ -189,7 +186,7 @@ class GaussianDiffusion(nn.Module):
             noise_pred_prime = (3 * noise_pred - noise_list[-1]) / 2
         elif len(noise_list) == 2:
             noise_pred_prime = (23 * noise_pred - 16 * noise_list[-1] + 5 * noise_list[-2]) / 12
-        elif len(noise_list) >= 3:
+        else:
             noise_pred_prime = (55 * noise_pred - 59 * noise_list[-1] + 37 * noise_list[-2] - 9 * noise_list[-3]) / 24
 
         x_prev = get_x_pred(x, noise_pred_prime, t)
@@ -224,23 +221,21 @@ class GaussianDiffusion(nn.Module):
 
         return loss
 
-    def forward(self, txt_tokens, mel2ph=None, spk_embed=None,
-                ref_mels=None, f0=None, infer=False, **kwargs):
+    def forward(self, condition, gt_spec=None, infer=True):
         """
             conditioning diffusion, use fastspeech2 encoder output as the condition
         """
-        ret = self.fs2(txt_tokens, mel2ph=mel2ph, f0=f0, spk_embed_id=spk_embed, infer=infer, **kwargs)
-        cond = ret['decoder_inp'].transpose(1, 2)
-        b, *_, device = *txt_tokens.shape, txt_tokens.device
+        cond = condition.transpose(1, 2)
+        b, device = condition.shape[0], condition.device
 
         if not infer:
-            spec = self.norm_spec(ref_mels)
+            spec = self.norm_spec(gt_spec)
             t = torch.randint(0, self.K_step, (b,), device=device).long()
             norm_spec = spec.transpose(1, 2)[:, None, :, :]  # [B, 1, M, T]
-            ret['diff_loss'] = self.p_losses(norm_spec, t, cond=cond)
+            return self.p_losses(norm_spec, t, cond=cond)
         else:
             t = self.K_step
-            shape = (cond.shape[0], 1, self.mel_bins, cond.shape[2])
+            shape = (cond.shape[0], 1, self.out_dims, cond.shape[2])
             x = torch.randn(shape, device=device)
             if hparams.get('pndm_speedup') and hparams['pndm_speedup'] > 1:
                 # obsolete: pndm_speedup, now use dpm_solver.
@@ -291,21 +286,11 @@ class GaussianDiffusion(nn.Module):
             else:
                 for i in tqdm(reversed(range(0, t)), desc='sample time step', total=t):
                     x = self.p_sample(x, torch.full((b,), i, device=device, dtype=torch.long), cond)
-            x = x[:, 0].transpose(1, 2)
-            if mel2ph is not None:  # for singing
-                ret['mel_out'] = self.denorm_spec(x) * ((mel2ph > 0).float()[:, :, None])
-            else:
-                ret['mel_out'] = self.denorm_spec(x)
-        return ret
+            x = x.squeeze(1).transpose(1, 2)  # [B, T, M]
+            return self.denorm_spec(x)
 
     def norm_spec(self, x):
         return (x - self.spec_min) / (self.spec_max - self.spec_min) * 2 - 1
 
     def denorm_spec(self, x):
         return (x + 1) / 2 * (self.spec_max - self.spec_min) + self.spec_min
-
-    def cwt2f0_norm(self, cwt_spec, mean, std, mel2ph):
-        return self.fs2.cwt2f0_norm(cwt_spec, mean, std, mel2ph)
-
-    def out2mel(self, x):
-        return x

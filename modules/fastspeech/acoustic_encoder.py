@@ -63,15 +63,15 @@ class FastSpeech2Acoustic(nn.Module):
         if hparams['use_spk_id']:
             self.spk_embed = Embedding(hparams['num_spk'], hparams['hidden_size'])
     
-    def forward(self, txt_tokens, mel2ph=None, f0=None, spk_embed_id=None, infer=False, **kwarg):
+    def forward(self, txt_tokens, mel2ph=None, f0=None, spk_embed_id=None, infer=False, **kwargs):
         B, T = txt_tokens.shape
         dur = mel2ph_to_dur(mel2ph, T).float()
         dur_embed = self.dur_embed(dur[:, :, None])
         encoder_out = self.encoder(txt_tokens, dur_embed)
         
-        decoder_inp = F.pad(encoder_out, [0, 0, 1, 0])
+        encoder_out = F.pad(encoder_out, [0, 0, 1, 0])
         mel2ph_ = mel2ph[..., None].repeat([1, 1, encoder_out.shape[-1]])
-        decoder_inp = torch.gather(decoder_inp, 1, mel2ph_)
+        condition = torch.gather(encoder_out, 1, mel2ph_)
 
         nframes = mel2ph.size(1)
         delta_l = nframes - f0.size(1)
@@ -85,9 +85,10 @@ class FastSpeech2Acoustic(nn.Module):
         else:
             f0_mel = (1 + f0 / 700).log()
             pitch_embed = self.pitch_embed(f0_mel[:, :, None])
+        condition += pitch_embed
 
         if hparams.get('use_key_shift_embed', False):
-            key_shift = kwarg['key_shift']
+            key_shift = kwargs['key_shift']
             if len(key_shift.shape) == 1:
                 key_shift_embed = self.key_shift_embed(key_shift[:, None, None])
             else:
@@ -96,11 +97,10 @@ class FastSpeech2Acoustic(nn.Module):
                     key_shift = torch.cat((key_shift, torch.FloatTensor([[x[-1]] * delta_l for x in key_shift]).to(key_shift.device)), 1)
                 key_shift = key_shift[:, :nframes]
                 key_shift_embed = self.key_shift_embed(key_shift[:, :, None])
-        else:
-            key_shift_embed = 0
+            condition += key_shift_embed
 
         if hparams.get('use_speed_embed', False):
-            speed = kwarg['speed']
+            speed = kwargs['speed']
             if len(speed.shape) == 1:
                 speed_embed = self.speed_embed(speed[:, None, None])
             else:
@@ -109,12 +109,12 @@ class FastSpeech2Acoustic(nn.Module):
                     speed = torch.cat((speed, torch.FloatTensor([[x[-1]] * delta_l for x in speed]).to(speed.device)), 1)
                 speed = speed[:, :nframes]
                 speed_embed = self.speed_embed(speed[:, :, None])
-        else:
-            speed_embed = 0
-        
+            condition += speed_embed
+
         if hparams['use_spk_id']:
-            if infer:
-                spk_embed = kwarg.get('spk_mix_embed')  # (1, t, 256)
+            spk_mix_embed = kwargs.get('spk_mix_embed')
+            if spk_mix_embed is not None:
+                spk_embed = spk_mix_embed
                 mix_frames = spk_embed.size(1)
                 if mix_frames > nframes:
                     spk_embed = spk_embed[:, :nframes, :]
@@ -122,8 +122,6 @@ class FastSpeech2Acoustic(nn.Module):
                     spk_embed = torch.cat((spk_embed, spk_embed[:, -1:, :].repeat(1, nframes - mix_frames, 1)), dim=1)
             else:
                 spk_embed = self.spk_embed(spk_embed_id)[:, None, :]
-        else:
-            spk_embed = 0
+            condition += spk_embed
 
-        ret = {'decoder_inp': decoder_inp + pitch_embed + key_shift_embed + speed_embed + spk_embed, 'f0_denorm': f0}
-        return ret
+        return condition

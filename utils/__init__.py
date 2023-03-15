@@ -4,9 +4,13 @@ import time
 import os
 import sys
 import types
+from collections import OrderedDict
+
 import numpy as np
 import torch
 import torch.nn.functional as F
+
+from basics.base_model import CategorizedModule
 
 
 def tensors_to_scalars(metrics):
@@ -147,7 +151,8 @@ def unpack_dict_to_list(samples):
     return samples_
 
 
-def load_ckpt(cur_model, ckpt_base_dir, prefix_in_ckpt='model', ckpt_steps=None, force=True, strict=True):
+def load_ckpt(cur_model, ckpt_base_dir, prefix_in_ckpt='model', required_category=None,
+              ckpt_steps=None, strict=True, device='cpu'):
     if os.path.isfile(ckpt_base_dir):
         ckpt_base_dir = os.path.dirname(ckpt_base_dir)
         checkpoint_path = [ckpt_base_dir]
@@ -165,30 +170,32 @@ def load_ckpt(cur_model, ckpt_base_dir, prefix_in_ckpt='model', ckpt_steps=None,
                 key=lambda x: int(re.findall(f'model_ckpt_steps_(\d+).ckpt', x.replace('\\', '/'))[0])
             )
         ]
-    if len(checkpoint_path) > 0:
-        checkpoint_path = checkpoint_path[-1]
-        state_dict = torch.load(checkpoint_path, map_location="cpu")["state_dict"]
-        state_dict = {k[len(prefix_in_ckpt) + 1:]: v for k, v in state_dict.items()
-                      if k.startswith(f'{prefix_in_ckpt}.')}
-        if not strict:
-            cur_model_state_dict = cur_model.state_dict()
-            unmatched_keys = []
-            for key, param in state_dict.items():
-                if key in cur_model_state_dict:
-                    new_param = cur_model_state_dict[key]
-                    if new_param.shape != param.shape:
-                        unmatched_keys.append(key)
-                        print("| Unmatched keys: ", key, new_param.shape, param.shape)
-            for key in unmatched_keys:
-                del state_dict[key]
-        cur_model.load_state_dict(state_dict, strict=strict)
-        print(f"| load '{prefix_in_ckpt}' from '{checkpoint_path}'.")
-    else:
-        e_msg = f"| ckpt not found in {ckpt_base_dir}."
-        if force:
-            assert False, e_msg
-        else:
-            print(e_msg)
+    assert len(checkpoint_path) > 0, f'| ckpt not found in {ckpt_base_dir}.'
+    checkpoint_path = checkpoint_path[-1]
+    ckpt_loaded = torch.load(checkpoint_path, map_location=device)
+    if required_category is not None:
+        if not isinstance(cur_model, CategorizedModule):
+            raise TypeError(f'The \'{required_category}\' argument can only be used '
+                            f'on a \'basics.base_model.CategorizedModule\'.')
+        cur_model.check_category(ckpt_loaded.get('category'))
+    state_dict = ckpt_loaded['state_dict']
+    state_dict = OrderedDict({
+        k[len(prefix_in_ckpt) + 1:]: v
+        for k, v in state_dict.items() if k.startswith(f'{prefix_in_ckpt}.')
+    })
+    if not strict:
+        cur_model_state_dict = cur_model.state_dict()
+        unmatched_keys = []
+        for key, param in state_dict.items():
+            if key in cur_model_state_dict:
+                new_param = cur_model_state_dict[key]
+                if new_param.shape != param.shape:
+                    unmatched_keys.append(key)
+                    print('| Unmatched keys: ', key, new_param.shape, param.shape)
+        for key in unmatched_keys:
+            del state_dict[key]
+    cur_model.load_state_dict(state_dict, strict=strict)
+    print(f'| load \'{prefix_in_ckpt}\' from \'{checkpoint_path}\'.')
 
 
 def remove_padding(x, padding_idx=0):
