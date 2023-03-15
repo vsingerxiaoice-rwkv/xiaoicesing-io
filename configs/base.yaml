@@ -7,7 +7,6 @@ debug: false
 save_codes:
   - configs
   - modules
-  - src
   - utils
 
 #############
