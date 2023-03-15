@@ -1,4 +1,3 @@
-cl	cl
 a	a
 i	i
 u	u
@@ -27,7 +26,7 @@ ne	n e
 no	n o
 ha	h a
 hi	h i
-hu	f u
+hu	h u
 fu	f u
 he	h e
 ho	h o
@@ -37,7 +36,6 @@ mu	m u
 me	m e
 mo	m o
 ya	y a
-yi	i
 yu	y u
 yo	y o
 ra	r a
