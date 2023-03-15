@@ -8,11 +8,11 @@ import torch.nn.functional as F
 from torch import nn
 from tqdm import tqdm
 
-from modules.diff.wavenet import DiffNet
+from modules.diff.wavenet import WaveNet
 from utils.hparams import hparams
 
 DIFF_DENOISERS = {
-    'wavenet': lambda hp: DiffNet(hp['audio_num_mel_bins']),
+    'wavenet': lambda hp: WaveNet(hp['audio_num_mel_bins']),
 }
 
 
