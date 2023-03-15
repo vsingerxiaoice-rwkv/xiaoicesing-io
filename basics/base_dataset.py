@@ -49,8 +49,7 @@ class BaseDataset(Dataset):
     def size(self, index):
         """Return an example's size as a float or tuple. This value is used when
         filtering a dataset with ``--max-positions``."""
-        size = min(self._sizes[index], hparams['max_frames'])
-        return size
+        return self._sizes[index]
 
     def ordered_indices(self):
         """Return an ordered list of indices. Batches will be constructed based
@@ -66,4 +65,4 @@ class BaseDataset(Dataset):
 
     @property
     def num_workers(self):
-        return int(os.getenv('NUM_WORKERS', hparams['ds_workers']))
+        return int(hparams.get('ds_workers', os.getenv('NUM_WORKERS', 0)))
