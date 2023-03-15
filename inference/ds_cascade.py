@@ -258,7 +258,13 @@ class DiffSingerCascadeInfer(BaseSVSInfer):
                 spk_mix_embed = torch.stack(spk_mix_embed, dim=1).sum(dim=1)
             else:
                 spk_mix_embed = None
+            mel2ph = sample['mel2ph']
             f0 = sample['f0']
+            nframes = mel2ph.size(1)
+            delta_l = nframes - f0.size(1)
+            if delta_l > 0:
+                f0 = torch.cat((f0,torch.FloatTensor([[x[-1]] * delta_l for x in f0]).to(f0.device)),1)
+            f0 = f0[:, :nframes]
             mel = self.model(txt_tokens, mel2ph=sample['mel2ph'], f0=sample['f0'],
                                 key_shift=sample['key_shift'], speed=sample['speed'],
                                 spk_mix_embed=spk_mix_embed, infer=True)
