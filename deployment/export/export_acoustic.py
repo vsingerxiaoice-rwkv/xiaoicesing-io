@@ -335,7 +335,7 @@ class GaussianDiffusion(CategorizedModule):
     def __init__(self, out_dims, timesteps=1000, k_step=1000, spec_min=None, spec_max=None):
         super().__init__()
         self.mel_bins = out_dims
-        self.K_step = k_step
+        self.k_step = k_step
 
         self.denoise_fn = DiffNet(out_dims)
         self.naive_noise_predictor = NaiveNoisePredictor()
@@ -402,7 +402,7 @@ class GaussianDiffusion(CategorizedModule):
 
         device = condition.device
         n_frames = condition.shape[2]
-        step_range = torch.arange(0, self.K_step, speedup, dtype=torch.long, device=device).flip(0)
+        step_range = torch.arange(0, self.k_step, speedup, dtype=torch.long, device=device).flip(0)
         x = torch.randn((1, 1, self.mel_bins, n_frames), device=device)
 
         if speedup > 1:
@@ -1208,7 +1208,6 @@ def export_phonemes_txt(path: str):
 
 
 if __name__ == '__main__':
-    # print('Oops, exporting ')
     parser = argparse.ArgumentParser(description='Export DiffSinger acoustic model to ONNX format.')
     parser.add_argument('--exp', type=str, required=True, help='experiment to export')
     parser.add_argument('--ckpt', type=int, required=False, help='checkpoint training steps')

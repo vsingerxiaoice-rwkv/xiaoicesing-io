@@ -87,7 +87,7 @@ class GaussianDiffusion(nn.Module):
 
         timesteps, = betas.shape
         self.num_timesteps = int(timesteps)
-        self.K_step = k_step
+        self.k_step = k_step
         self.loss_type = loss_type
 
         self.noise_list = deque(maxlen=4)
@@ -230,11 +230,11 @@ class GaussianDiffusion(nn.Module):
 
         if not infer:
             spec = self.norm_spec(gt_spec)
-            t = torch.randint(0, self.K_step, (b,), device=device).long()
+            t = torch.randint(0, self.k_step, (b,), device=device).long()
             norm_spec = spec.transpose(1, 2)[:, None, :, :]  # [B, 1, M, T]
             return self.p_losses(norm_spec, t, cond=cond)
         else:
-            t = self.K_step
+            t = self.k_step
             shape = (cond.shape[0], 1, self.out_dims, cond.shape[2])
             x = torch.randn(shape, device=device)
             if hparams.get('pndm_speedup') and hparams['pndm_speedup'] > 1:
