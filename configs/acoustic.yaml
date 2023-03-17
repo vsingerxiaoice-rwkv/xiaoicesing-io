@@ -54,7 +54,6 @@ save_f0: true
 
 use_spk_embed: false
 use_spk_id: false
-use_pitch_embed: true
 f0_embed_type: continuous
 use_key_shift_embed: false
 use_speed_embed: false
