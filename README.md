@@ -81,7 +81,9 @@ OpenUTAU, an open-sourced SVS editor with modern GUI, has unofficial temporary s
 
 See the original [paper](https://arxiv.org/abs/2105.02446), the [docs/](docs/) folder and [releases](https://github.com/openvpi/DiffSinger/releases) for more details.
 
+## License
 
+This forked DiffSinger is licensed under [Apache 2.0 License](LICENSE).
 
 ---
 
