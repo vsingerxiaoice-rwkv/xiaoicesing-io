@@ -46,30 +46,26 @@ class AcousticDataset(BaseDataset):
     def collater(self, samples):
         if len(samples) == 0:
             return {}
-        txt_lengths = torch.LongTensor([s['tokens'].numel() for s in samples])
         tokens = utils.collate_nd([s['tokens'] for s in samples], 0)
         f0 = utils.collate_nd([s['f0'] for s in samples], 0.0)
-        mel_lengths = torch.LongTensor([s['mel'].shape[0] for s in samples])
         mel2ph = utils.collate_nd([s['mel2ph'] for s in samples], 0)
-        mels = utils.collate_nd([s['mel'] for s in samples], 0.0)
+        mel = utils.collate_nd([s['mel'] for s in samples], 0.0)
         batch = {
-            'nsamples': len(samples),
-            'txt_lengths': txt_lengths,
+            'size': len(samples),
             'tokens': tokens,
-            'mel_lengths': mel_lengths,
             'mel2ph': mel2ph,
-            'mels': mels,
+            'mel': mel,
             'f0': f0,
         }
-        if hparams['use_energy_embed']:
-            batch['energy'] = utils.collate_nd([s['energy'] for s in samples], 0.0)
+        # if hparams['use_energy_embed']:
+        #     batch['energy'] = utils.collate_nd([s['energy'] for s in samples], 0.0)
         if hparams.get('use_key_shift_embed', False):
-            batch['key_shift'] = torch.FloatTensor([s['key_shift'] for s in samples])
+            batch['key_shift'] = torch.FloatTensor([s['key_shift'] for s in samples])[:, None]
         if hparams.get('use_speed_embed', False):
-            batch['speed'] = torch.FloatTensor([s['speed'] for s in samples])
-        if hparams['use_spk_embed']:
-            spk_embed = torch.stack([s['spk_embed'] for s in samples])
-            batch['spk_embed'] = spk_embed
+            batch['speed'] = torch.FloatTensor([s['speed'] for s in samples])[:, None]
+        # if hparams['use_spk_embed']:
+        #     spk_embed = torch.stack([s['spk_embed'] for s in samples])
+        #     batch['spk_embed'] = spk_embed
         if hparams['use_spk_id']:
             spk_ids = torch.LongTensor([s['spk_id'] for s in samples])
             batch['spk_ids'] = spk_ids
@@ -141,7 +137,7 @@ class AcousticTask(BaseTask):
             2. calculate loss for dur_predictor, pitch_predictor, energy_predictor
         """
         txt_tokens = sample['tokens']  # [B, T_t]
-        target = sample['mels']  # [B, T_s, 80]
+        target = sample['mel']  # [B, T_s, 80]
         mel2ph = sample['mel2ph']  # [B, T_s]
         f0 = sample['f0']
         key_shift = sample.get('key_shift')
@@ -178,14 +174,14 @@ class AcousticTask(BaseTask):
         total_loss = sum(losses.values())
         outputs = {
             'losses': losses,
-            'total_loss': total_loss, 'nsamples': sample['nsamples']
+            'total_loss': total_loss, 'size': sample['size']
         }
         outputs = utils.tensors_to_scalars(outputs)
 
         if batch_idx < hparams['num_valid_plots']:
             _, mel_pred = self.run_model(sample, return_output=True, infer=True)
-            self.plot_wav(batch_idx, sample['mels'], mel_pred, f0=sample['f0'])
-            self.plot_mel(batch_idx, sample['mels'], mel_pred, name=f'diffmel_{batch_idx}')
+            self.plot_wav(batch_idx, sample['mel'], mel_pred, f0=sample['f0'])
+            self.plot_mel(batch_idx, sample['mel'], mel_pred, name=f'diffmel_{batch_idx}')
 
         return outputs
 
@@ -194,7 +190,7 @@ class AcousticTask(BaseTask):
             'total_loss': utils.AvgrageMeter(),
         }
         for output in outputs:
-            n = output['nsamples']
+            n = output['size']
             for k, v in output['losses'].items():
                 if k not in all_losses_meter:
                     all_losses_meter[k] = utils.AvgrageMeter()
@@ -259,7 +255,7 @@ class AcousticTask(BaseTask):
             text = prediction.get('text').replace(':', '%3A')[:80]
 
             # remove paddings
-            mel_gt = prediction['mels']
+            mel_gt = prediction['mel']
             mel_gt_mask = np.abs(mel_gt).sum(-1) > 0
             mel_gt = mel_gt[mel_gt_mask]
             mel2ph_gt = prediction.get('mel2ph')

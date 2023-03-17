@@ -13,7 +13,7 @@ from utils.audio import save_wav
 from utils.hparams import set_hparams, hparams
 
 sys.argv = [
-    'inference/svs/ds_cascade.py',
+    'inference/svs/ds_acoustic.py',
     '--config',
     'configs/acoustic.yaml',
 ]

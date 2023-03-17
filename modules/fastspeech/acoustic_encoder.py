@@ -63,7 +63,7 @@ class FastSpeech2Acoustic(nn.Module):
         if hparams['use_spk_id']:
             self.spk_embed = Embedding(hparams['num_spk'], hparams['hidden_size'])
     
-    def forward(self, txt_tokens, mel2ph=None, f0=None, spk_embed_id=None, infer=False, **kwargs):
+    def forward(self, txt_tokens, mel2ph, f0, key_shift=None, speed=None, spk_embed_id=None, **kwargs):
         B, T = txt_tokens.shape
         dur = mel2ph_to_dur(mel2ph, T).float()
         dur_embed = self.dur_embed(dur[:, :, None])
@@ -73,12 +73,6 @@ class FastSpeech2Acoustic(nn.Module):
         mel2ph_ = mel2ph[..., None].repeat([1, 1, encoder_out.shape[-1]])
         condition = torch.gather(encoder_out, 1, mel2ph_)
 
-        nframes = mel2ph.size(1)
-        delta_l = nframes - f0.size(1)
-        if delta_l > 0:
-            f0 = torch.cat((f0,torch.FloatTensor([[x[-1]] * delta_l for x in f0]).to(f0.device)),1)
-        f0 = f0[:, :nframes]
-        
         if self.f0_embed_type == 'discrete':
             pitch = f0_to_coarse(f0)
             pitch_embed = self.pitch_embed(pitch)
@@ -88,38 +82,17 @@ class FastSpeech2Acoustic(nn.Module):
         condition += pitch_embed
 
         if hparams.get('use_key_shift_embed', False):
-            key_shift = kwargs['key_shift']
-            if len(key_shift.shape) == 1:
-                key_shift_embed = self.key_shift_embed(key_shift[:, None, None])
-            else:
-                delta_l = nframes - key_shift.size(1)
-                if delta_l > 0:
-                    key_shift = torch.cat((key_shift, torch.FloatTensor([[x[-1]] * delta_l for x in key_shift]).to(key_shift.device)), 1)
-                key_shift = key_shift[:, :nframes]
-                key_shift_embed = self.key_shift_embed(key_shift[:, :, None])
+            key_shift_embed = self.key_shift_embed(key_shift[:, :, None])
             condition += key_shift_embed
 
         if hparams.get('use_speed_embed', False):
-            speed = kwargs['speed']
-            if len(speed.shape) == 1:
-                speed_embed = self.speed_embed(speed[:, None, None])
-            else:
-                delta_l = nframes - speed.size(1)
-                if delta_l > 0:
-                    speed = torch.cat((speed, torch.FloatTensor([[x[-1]] * delta_l for x in speed]).to(speed.device)), 1)
-                speed = speed[:, :nframes]
-                speed_embed = self.speed_embed(speed[:, :, None])
+            speed_embed = self.speed_embed(speed[:, :, None])
             condition += speed_embed
 
         if hparams['use_spk_id']:
             spk_mix_embed = kwargs.get('spk_mix_embed')
             if spk_mix_embed is not None:
                 spk_embed = spk_mix_embed
-                mix_frames = spk_embed.size(1)
-                if mix_frames > nframes:
-                    spk_embed = spk_embed[:, :nframes, :]
-                elif mix_frames > 1:
-                    spk_embed = torch.cat((spk_embed, spk_embed[:, -1:, :].repeat(1, nframes - mix_frames, 1)), dim=1)
             else:
                 spk_embed = self.spk_embed(spk_embed_id)[:, None, :]
             condition += spk_embed

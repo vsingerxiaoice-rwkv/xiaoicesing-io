@@ -57,5 +57,20 @@ def trans_key(raw_data, key):
         else:
             warning_tag = True
     if warning_tag:
-        print("Warning:parts of f0_seq do not exist, please freeze the pitch line in the editor.\r\n")
+        print("Warning: parts of f0_seq do not exist, please freeze the pitch line in the editor.\r\n")
     return raw_data
+
+
+def resample_align_curve(points: np.ndarray, original_timestep: float, target_timestep: float, align_length: int):
+    t_max = (len(points) - 1) * original_timestep
+    curve_interp = np.interp(
+        np.arange(0, t_max, target_timestep),
+        original_timestep * np.arange(len(points)),
+        points
+    ).astype(points.dtype)
+    delta_l = align_length - len(curve_interp)
+    if delta_l < 0:
+        curve_interp = curve_interp[:align_length]
+    elif delta_l > 0:
+        curve_interp = np.concatenate((curve_interp, np.full(delta_l, fill_value=curve_interp[-1])), axis=0)
+    return curve_interp

@@ -82,7 +82,7 @@ Remember to put the pre-trained models in `checkpoints` directory.
 
 ### 4. Inference from raw inputs
 ```sh
-python inference/ds_cascade.py --config configs/midi/cascade/opencs/ds60_rel.yaml --exp_name $MY_DS_EXP_NAME
+python inference/ds_acoustic.py --config configs/midi/cascade/opencs/ds60_rel.yaml --exp_name $MY_DS_EXP_NAME
 ```
 Raw inputs:
 ```

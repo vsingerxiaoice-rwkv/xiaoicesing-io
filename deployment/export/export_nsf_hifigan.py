@@ -309,7 +309,7 @@ def export(model_path):
 
 if __name__ == '__main__':
     sys.argv = [
-        'inference/ds_cascade.py',
+        'inference/ds_acoustic.py',
         '--config',
         'configs/acoustic.yaml',
     ]

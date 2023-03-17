@@ -52,8 +52,6 @@ mel_vmin: -6. #-6.
 mel_vmax: 1.5
 save_f0: true
 
-max_frames: 8000
-use_midi: false
 use_spk_embed: false
 use_spk_id: false
 use_pitch_embed: true

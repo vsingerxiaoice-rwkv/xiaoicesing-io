@@ -12,7 +12,7 @@ sys.path.insert(0, root_dir)
 import numpy as np
 import torch
 
-from inference.ds_cascade import DiffSingerCascadeInfer
+from inference.ds_acoustic import DiffSingerAcousticInfer
 from utils.audio import save_wav
 from utils.hparams import set_hparams, hparams
 from utils.infer_utils import cross_fade, trans_key
@@ -59,9 +59,6 @@ sys.argv = [
     '--infer'
 ]
 
-if args.speedup > 0:
-    sys.argv += ['--hparams', f'pndm_speedup={args.speedup}']
-
 with open(args.proj, 'r', encoding='utf-8') as f:
     params = json.load(f)
 if not isinstance(params, list):
@@ -78,6 +75,9 @@ if args.gender is not None:
     assert -1 <= args.gender <= 1, 'Gender must be in [-1, 1].'
 
 set_hparams(print_hparams=False)
+if args.speedup > 0:
+    hparams['pndm_speedup'] = args.speedup
+
 sample_rate = hparams['audio_sample_rate']
 
 # Check for vocoder path
@@ -87,26 +87,18 @@ assert os.path.exists(os.path.join(root_dir, hparams['vocoder_ckpt'])), \
 
 infer_ins = None
 if len(params) > 0:
-    infer_ins = DiffSingerCascadeInfer(hparams, load_vocoder=not args.mel, ckpt_steps=args.ckpt)
+    infer_ins = DiffSingerAcousticInfer(load_vocoder=not args.mel, ckpt_steps=args.ckpt)
 
 spk_mix = parse_commandline_spk_mix(args.spk) if hparams['use_spk_id'] and args.spk is not None else None
 
 for param in params:
     if args.gender is not None and hparams.get('use_key_shift_embed'):
         param['gender'] = args.gender
+
     if spk_mix is not None:
         param['spk_mix'] = spk_mix
-    elif 'spk_mix' in param:
-        param_spk_mix = param['spk_mix']
-        for spk_name in param_spk_mix:
-            values = str(param_spk_mix[spk_name]).split()
-            if len(values) == 1:
-                param_spk_mix[spk_name] = float(values[0])
-            else:
-                param_spk_mix[spk_name] = [float(v) for v in values]
 
-    if not hparams.get('use_midi', False):
-        merge_slurs(param)
+    merge_slurs(param)
 
 
 def infer_once(path: str, save_mel=False):

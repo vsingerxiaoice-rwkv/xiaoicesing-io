@@ -981,9 +981,6 @@ def _save_speaker_embed(path: str, spk_embed: np.ndarray):
 def export(fs2_path, diff_path, ckpt_steps=None,
            expose_gender=False, expose_velocity=False,
            spk_export_list=None, frozen_spk=None):
-    if hparams.get('use_midi', True) or not hparams['use_pitch_embed']:
-        raise NotImplementedError('Only checkpoints of MIDI-less mode are supported.')
-
     # Build models to export
     device = 'cuda' if torch.cuda.is_available() else 'cpu'
     fs2 = FastSpeech2Wrapper(
@@ -1252,7 +1249,7 @@ if __name__ == '__main__':
         out = f'deployment/assets/{exp}'
     os.chdir(root_dir)
     sys.argv = [
-        'inference/ds_cascade.py',
+        'inference/ds_acoustic.py',
         '--exp_name',
         exp,
         '--infer'
