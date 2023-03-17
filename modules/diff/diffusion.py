@@ -9,10 +9,12 @@ from torch import nn
 from tqdm import tqdm
 
 from modules.diff.wavenet import WaveNet
+from modules.diff.conformer import Conformer
 from utils.hparams import hparams
 
 DIFF_DENOISERS = {
     'wavenet': lambda hp: WaveNet(hp['audio_num_mel_bins']),
+    'conformer': lambda hp: Conformer(hp['audio_num_mel_bins']),
 }
 
 
