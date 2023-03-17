@@ -63,10 +63,10 @@ max_beta: 0.02
 rel_pos: true
 pndm_speedup: 10
 hidden_size: 256
-residual_layers: 20
-residual_channels: 384
+residual_layers: 20  # less than 6 if conformer
+residual_channels: 384  # 512 if conformer
 dilation_cycle_length: 4  # *
-diff_decoder_type: 'wavenet'
+diff_decoder_type: 'wavenet'  # conformer
 diff_loss_type: l2
 schedule_type: 'linear'
 
