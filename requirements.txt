@@ -37,6 +37,7 @@ tensorboard-plugin-wit==1.8.1
 protobuf==3.13.0
 PyYAML==5.4
 pypinyin==0.39.0
+local_attention==1.8.4
 
 # It is recommended to install PyTorch manually.
 # See instructions at https://pytorch.org/get-started/previous-versions/
