@@ -14,4 +14,6 @@ def binarize():
 
 
 if __name__ == '__main__':
+    from multiprocessing import set_start_method
+    set_start_method("spawn", force=True)
     binarize()

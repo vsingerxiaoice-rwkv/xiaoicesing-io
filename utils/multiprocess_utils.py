@@ -1,8 +1,8 @@
 import re
 import traceback
-from multiprocessing import Queue, Process, current_process
+from torch.multiprocessing import Process, Manager, current_process
 
-is_main_process = not bool(re.match(r'Process-\d+', current_process().name))
+is_main_process = not bool(re.match(r'(Process)|(SyncManager)-\d+', current_process().name))
 
 
 def main_process_print(self, *args, sep=' ', end='\n', file=None):
@@ -23,6 +23,7 @@ def chunked_worker(worker_id, map_func, args, results_queue=None, init_ctx_func=
             traceback.print_exc()
             results_queue.put((job_idx, None))
 
+
 def chunked_multiprocess_run(map_func, args, num_workers, ordered=True, init_ctx_func=None, q_max_size=1000):
     args = zip(range(len(args)), args)
     args = list(args)
@@ -30,9 +31,9 @@ def chunked_multiprocess_run(map_func, args, num_workers, ordered=True, init_ctx
     results_queues = []
     if ordered:
         for i in range(num_workers):
-            results_queues.append(Queue(maxsize=q_max_size // num_workers))
+            results_queues.append(Manager().Queue(maxsize=q_max_size // num_workers))
     else:
-        results_queue = Queue(maxsize=q_max_size)
+        results_queue = Manager().Queue(maxsize=q_max_size)
         for i in range(num_workers):
             results_queues.append(results_queue)
     workers = []
