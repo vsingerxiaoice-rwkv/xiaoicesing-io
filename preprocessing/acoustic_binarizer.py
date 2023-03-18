@@ -6,6 +6,7 @@
     ph_seq: phoneme sequence
     ph_dur: phoneme durations
 """
+import csv
 import json
 import os
 import os.path
@@ -36,19 +37,36 @@ class AcousticBinarizer(BaseBinarizer):
         self.lr = LengthRegulator()
 
     def load_meta_data(self, raw_data_dir, ds_id):
-        utterance_labels = open(os.path.join(raw_data_dir, 'transcriptions.txt'), encoding='utf-8').readlines()
+        meta_info = {
+            'category': 'acoustic',
+            'format': 'grid'
+        }
+        meta_file = os.path.join(raw_data_dir, 'meta.json')
+        if os.path.exists(meta_file):
+            meta_info.update(json.load(open(meta_file, 'r', encoding='utf8')))
+        category = meta_info['category']
+        assert category == 'acoustic', \
+            f'Dataset in \'{raw_data_dir}\' is of category \'{category}\', ' \
+            f'but a dataset of category \'acoustic\' is required.'
+
         meta_data_dict = {}
-        for utterance_label in utterance_labels:
-            if self.binarization_args.get('label_format', 'grid') == 'json':
-                label_dict = json.loads(utterance_label)
-                item_name = label_dict['item_name']
+        if meta_info['format'] == 'csv':
+            for utterance_label in csv.DictReader(
+                    open(os.path.join(raw_data_dir, 'transcriptions.csv'), 'r', encoding='utf-8')
+            ):
+                item_name = utterance_label['name']
                 temp_dict = {
                     'wav_fn': f'{raw_data_dir}/wavs/{item_name}.wav',
-                    'ph_seq': label_dict['ph_seq'].split(),
-                    'ph_dur': [float(x) for x in label_dict['ph_dur'].split()],
+                    'ph_seq': utterance_label['ph_seq'].split(),
+                    'ph_dur': [float(x) for x in utterance_label['ph_dur'].split()],
                     'spk_id': ds_id
                 }
-            else:
+                assert len(temp_dict['ph_seq']) == len(temp_dict['ph_dur']), \
+                    f'Lengths of ph_seq and ph_dur mismatch in \'{item_name}\'.'
+                meta_data_dict[f'{ds_id}:{item_name}'] = temp_dict
+        else:
+            utterance_labels = open(os.path.join(raw_data_dir, 'transcriptions.txt'), 'r', encoding='utf-8').readlines()
+            for utterance_label in utterance_labels:
                 song_info = utterance_label.split('|')
                 item_name = song_info[0]
                 temp_dict = {
@@ -57,9 +75,9 @@ class AcousticBinarizer(BaseBinarizer):
                     'ph_dur': [float(x) for x in song_info[5].split()],
                     'spk_id': ds_id
                 }
-            assert len(temp_dict['ph_seq']) == len(temp_dict['ph_dur']), \
-                f'Lengths of ph_seq and ph_dur mismatch in \'{item_name}\'.'
-            meta_data_dict[f'{ds_id}:{item_name}'] = temp_dict
+                assert len(temp_dict['ph_seq']) == len(temp_dict['ph_dur']), \
+                    f'Lengths of ph_seq and ph_dur mismatch in \'{item_name}\'.'
+                meta_data_dict[f'{ds_id}:{item_name}'] = temp_dict
         self.items.update(meta_data_dict)
 
     def process(self):

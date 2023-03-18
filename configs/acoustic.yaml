@@ -25,7 +25,6 @@ fmax: 16000
 min_level_db: -120
 
 binarization_args:
-  label_format: grid
   shuffle: true
   num_workers: 0
   interp_uv: true
