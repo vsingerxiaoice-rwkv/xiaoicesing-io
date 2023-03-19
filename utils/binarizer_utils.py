@@ -49,7 +49,7 @@ def get_mel2ph_torch(lr, durs, length, hparams, device='cpu'):
     mel2ph = lr(ph_dur[None])[0]
     num_frames = mel2ph.shape[0]
     if num_frames < length:
-        mel2ph = torch.cat((mel2ph, torch.full(length - num_frames, mel2ph[-1])), dim=0)
+        mel2ph = torch.cat((mel2ph, torch.full((length - num_frames,), mel2ph[-1])), dim=0)
     elif num_frames > length:
         mel2ph = mel2ph[:length]
     return mel2ph
