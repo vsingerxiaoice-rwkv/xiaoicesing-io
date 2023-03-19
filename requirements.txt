@@ -1,6 +1,5 @@
 resemblyzer==0.1.1.dev0
 tensorboardX==2.5.1
-SoundFile==0.11.0
 h5py==3.7.0
 future==0.18.2
 g2p-en==2.1.0
