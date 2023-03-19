@@ -4,7 +4,7 @@ import traceback
 
 from torch.multiprocessing import Manager, Process, current_process, get_context
 
-is_main_process = not bool(re.match(r'(Process)|(SyncManager)|(.*PoolWorker)-\d+', current_process().name))
+is_main_process = not bool(re.match(r'((.*Process)|(SyncManager)|(.*PoolWorker))-\d+', current_process().name))
 
 
 def main_process_print(self, *args, sep=' ', end='\n', file=None):
