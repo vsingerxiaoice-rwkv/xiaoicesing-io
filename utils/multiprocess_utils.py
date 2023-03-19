@@ -1,8 +1,9 @@
+import platform
 import re
 import traceback
-from torch.multiprocessing import Process, Manager, current_process
+from torch.multiprocessing import Pool, Manager, current_process, get_context
 
-is_main_process = not bool(re.match(r'(Process)|(SyncManager)-\d+', current_process().name))
+is_main_process = not bool(re.match(r'(Process)|(SyncManager)|(.*PoolWorker)-\d+', current_process().name))
 
 
 def main_process_print(self, *args, sep=' ', end='\n', file=None):
@@ -10,44 +11,30 @@ def main_process_print(self, *args, sep=' ', end='\n', file=None):
         print(self, *args, sep=sep, end=end, file=file)
 
 
-def chunked_worker(worker_id, map_func, args, results_queue=None, init_ctx_func=None):
-    ctx = init_ctx_func(worker_id) if init_ctx_func is not None else None
-    for job_idx, arg in args:
-        try:
-            if ctx is not None:
-                res = map_func(*arg, ctx=ctx)
-            else:
-                res = map_func(*arg)
-            results_queue.put((job_idx, res))
-        except:
-            traceback.print_exc()
-            results_queue.put((job_idx, None))
+def run_and_collect_once(args):
+    map_func = args[0]
+    map_func_args = args[1]
+    result_queue = args[2]
+    # noinspection PyBroadException
+    try:
+        res = map_func(*map_func_args)
+        result_queue.put(res)
+    except:
+        traceback.print_exc()
+        result_queue.put(None)
 
 
-def chunked_multiprocess_run(map_func, args, num_workers, ordered=True, init_ctx_func=None, q_max_size=1000):
-    args = zip(range(len(args)), args)
-    args = list(args)
+def chunked_multiprocess_run(map_func, args, num_workers, q_max_size=100):
     n_jobs = len(args)
-    results_queues = []
-    if ordered:
-        for i in range(num_workers):
-            results_queues.append(Manager().Queue(maxsize=q_max_size // num_workers))
+    queue = Manager().Queue(maxsize=q_max_size)
+    if platform.system().lower() != 'windows':
+        pool_creation_func = get_context('spawn').Pool
     else:
-        results_queue = Manager().Queue(maxsize=q_max_size)
-        for i in range(num_workers):
-            results_queues.append(results_queue)
-    workers = []
-    for i in range(num_workers):
-        args_worker = args[i::num_workers]
-        p = Process(target=chunked_worker, args=(
-            i, map_func, args_worker, results_queues[i], init_ctx_func), daemon=True)
-        workers.append(p)
-        p.start()
-    for n_finished in range(n_jobs):
-        results_queue = results_queues[n_finished % num_workers]
-        job_idx, res = results_queue.get()
-        assert job_idx == n_finished or not ordered, (job_idx, n_finished)
-        yield res
-    for w in workers:
-        w.join()
-        w.close()
+        pool_creation_func = Pool
+    with pool_creation_func(processes=num_workers) as pool:
+        pool.map_async(run_and_collect_once, [(map_func, i_args, queue) for i_args in args])
+        for n_finished in range(n_jobs):
+            res = queue.get()
+            yield res
+        pool.close()
+        pool.join()

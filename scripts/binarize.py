@@ -1,5 +1,4 @@
 import importlib
-import platform
 
 from utils.hparams import set_hparams, hparams
 
@@ -16,7 +15,4 @@ def binarize():
 
 
 if __name__ == '__main__':
-    if platform.system().lower() != 'windows':
-        from multiprocessing import set_start_method
-        set_start_method('spawn', force=True)
     binarize()
