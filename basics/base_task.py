@@ -174,7 +174,7 @@ class BaseTask(nn.Module):
         return [optm]
 
     def build_dataloader(self, dataset, shuffle, max_tokens=None, max_sentences=None,
-                         required_batch_size_multiple=-1, endless=False, batch_by_size=True):
+                         required_batch_size_multiple=-1, batch_by_size=True):
         devices_cnt = torch.cuda.device_count()
         if devices_cnt == 0:
             devices_cnt = 1
@@ -202,12 +202,8 @@ class BaseTask(nn.Module):
 
         if shuffle:
             batches = shuffle_batches(list(batch_sampler))
-            if endless:
-                batches = [b for _ in range(1000) for b in shuffle_batches(list(batch_sampler))]
         else:
             batches = batch_sampler
-            if endless:
-                batches = [b for _ in range(1000) for b in batches]
         num_workers = dataset.num_workers
         if self.trainer.use_ddp:
             num_replicas = dist.get_world_size()

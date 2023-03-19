@@ -110,8 +110,7 @@ class AcousticTask(BaseTask):
     @data_loader
     def train_dataloader(self):
         train_dataset = self.dataset_cls(hparams['train_set_name'], shuffle=True)
-        return self.build_dataloader(train_dataset, True, self.max_tokens, self.max_sentences,
-                                     endless=hparams['endless_ds'])
+        return self.build_dataloader(train_dataset, True, self.max_tokens, self.max_sentences)
 
     @data_loader
     def val_dataloader(self):

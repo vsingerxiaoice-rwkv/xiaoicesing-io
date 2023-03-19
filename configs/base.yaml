@@ -21,8 +21,6 @@ binarization_args:
   shuffle: false
   num_workers: 0
 
-endless_ds: true
-
 audio_num_mel_bins: 80
 audio_sample_rate: 22050
 hop_size: 256  # For 22050Hz, 275 ~= 12.5 ms (0.0125 * sample_rate)
