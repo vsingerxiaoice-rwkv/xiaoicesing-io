@@ -1364,6 +1364,7 @@ class BaseTrainer:
             # RUN TNG EPOCH
             # -----------------
             self.run_training_epoch()
+            print()  # start a new line for the next epoch
 
             # update LR schedulers
             if self.lr_schedulers is not None:

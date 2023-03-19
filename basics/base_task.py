@@ -130,10 +130,11 @@ class BaseTask(nn.Module):
             self.scheduler.step(self.global_step // hparams['accumulate_grad_batches'])
 
     def on_epoch_end(self):
-        loss_outputs = {k: round(v.avg, 4) for k, v in self.training_losses_meter.items()}
-        print(f"\n==============\n "
-              f"Epoch {self.current_epoch} ended. Steps: {self.global_step}. {loss_outputs}"
-              f"\n==============\n")
+        pass
+        # loss_outputs = {k: round(v.avg, 4) for k, v in self.training_losses_meter.items()}
+        # print(f"\n==============\n "
+        #       f"Epoch {self.current_epoch} ended. Steps: {self.global_step}. {loss_outputs}"
+        #       f"\n==============\n")
 
     def validation_step(self, sample, batch_idx):
         """
