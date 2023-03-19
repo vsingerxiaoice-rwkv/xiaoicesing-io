@@ -1,7 +1,8 @@
 import platform
 import re
 import traceback
-from torch.multiprocessing import Pool, Manager, current_process, get_context
+
+from torch.multiprocessing import Manager, Process, current_process, get_context
 
 is_main_process = not bool(re.match(r'(Process)|(SyncManager)|(.*PoolWorker)-\d+', current_process().name))
 
@@ -11,30 +12,39 @@ def main_process_print(self, *args, sep=' ', end='\n', file=None):
         print(self, *args, sep=sep, end=end, file=file)
 
 
-def run_and_collect_once(args):
-    map_func = args[0]
-    map_func_args = args[1]
-    result_queue = args[2]
-    # noinspection PyBroadException
-    try:
-        res = map_func(*map_func_args)
-        result_queue.put(res)
-    except:
-        traceback.print_exc()
-        result_queue.put(None)
+def chunked_worker_run(map_func, args, results_queue=None):
+    for a in args:
+        # noinspection PyBroadException
+        try:
+            res = map_func(*a)
+            results_queue.put(res)
+        except:
+            traceback.print_exc()
+            results_queue.put(None)
 
 
-def chunked_multiprocess_run(map_func, args, num_workers, q_max_size=100):
-    n_jobs = len(args)
-    queue = Manager().Queue(maxsize=q_max_size)
+def chunked_multiprocess_run(map_func, args, num_workers, q_max_size=1000):
+    num_jobs = len(args)
+    if num_jobs < num_workers:
+        num_workers = num_jobs
+
+    queues = [Manager().Queue(maxsize=q_max_size // num_workers) for _ in range(num_workers)]
     if platform.system().lower() != 'windows':
-        pool_creation_func = get_context('spawn').Pool
+        process_creation_func = get_context('spawn').Process
     else:
-        pool_creation_func = Pool
-    with pool_creation_func(processes=num_workers) as pool:
-        pool.map_async(run_and_collect_once, [(map_func, i_args, queue) for i_args in args])
-        for n_finished in range(n_jobs):
-            res = queue.get()
-            yield res
-        pool.close()
-        pool.join()
+        process_creation_func = Process
+
+    workers = []
+    for i in range(num_workers):
+        worker = process_creation_func(
+            target=chunked_worker_run, args=(map_func, args[i::num_workers], queues[i]), daemon=True
+        )
+        workers.append(worker)
+        worker.start()
+
+    for i in range(num_jobs):
+        yield queues[i % num_workers].get()
+
+    for worker in workers:
+        worker.join()
+        worker.close()
