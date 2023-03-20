@@ -89,6 +89,7 @@ class FastSpeech2Acoustic(CategorizedModule):
             self.key_shift_embed = Linear(1, hparams['hidden_size'])
 
         if hparams.get('use_speed_embed', False):
+            self.speed_min, self.speed_max = hparams['augmentation_args']['random_time_stretching']['range']
             self.speed_embed = Linear(1, hparams['hidden_size'])
 
         if hparams['use_spk_id']:
@@ -121,12 +122,14 @@ class FastSpeech2Acoustic(CategorizedModule):
                     if frozen_gender >= 0. else frozen_gender * abs(self.shift_min)
                 key_shift_embed = self.key_shift_embed(key_shift[:, None, None])
             else:
+                gender = torch.clip(gender, min=-1., max=1.)
                 gender_mask = (gender < 0.).float()
                 key_shift = gender * ((1. - gender_mask) * self.shift_max + gender_mask * abs(self.shift_min))
                 key_shift_embed = self.key_shift_embed(key_shift[:, :, None])
             condition += key_shift_embed
         if hparams.get('use_speed_embed', False):
             if velocity is not None:
+                velocity = torch.clip(velocity, min=self.speed_min, max=self.speed_max)
                 speed_embed = self.speed_embed(velocity[:, :, None])
             else:
                 speed_embed = self.speed_embed(torch.FloatTensor([1.]).to(condition.device)[:, None, None])
