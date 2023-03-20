@@ -6,8 +6,8 @@ import torch
 
 
 parser = argparse.ArgumentParser(description='Migrate checkpoint files of MIDI-less acoustic models from old format')
-parser.add_argument('-i', '--input', required=True, type=str, help='Path to the input file')
-parser.add_argument('-o', '--output', required=True, type=str, help='Path to the output file')
+parser.add_argument('input', type=str, help='Path to the input file')
+parser.add_argument('output', type=str, help='Path to the output file')
 parser.add_argument('--overwrite', required=False, default=False,
                     action='store_true', help='Overwrite the existing file')
 args = parser.parse_args()

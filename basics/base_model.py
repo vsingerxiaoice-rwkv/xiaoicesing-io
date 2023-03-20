@@ -11,7 +11,7 @@ class CategorizedModule(nn.Module):
             raise RuntimeError('Category is not specified in this checkpoint.\n'
                                'If this is a checkpoint in the old format, please consider '
                                'migrating it to the new format via the following command:\n'
-                               'python scripts/migrate.py -i <INPUT_CKPT> -o <OUTPUT_CKPT>')
+                               'python scripts/migrate.py <INPUT_CKPT> <OUTPUT_CKPT>')
         elif category != self.category:
             raise RuntimeError('Category mismatches!\n'
                                f'This checkpoint is of the category \'{category}\', '
