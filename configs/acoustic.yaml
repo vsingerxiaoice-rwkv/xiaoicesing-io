@@ -77,6 +77,7 @@ decay_steps: 50000
 gamma: 0.5
 max_tokens: 80000
 max_sentences: 48
+val_with_vocoder: true
 val_check_interval: 2000
 num_valid_plots: 10
 max_updates: 320000

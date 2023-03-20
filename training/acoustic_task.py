@@ -76,8 +76,10 @@ class AcousticTask(BaseTask):
     def __init__(self):
         super().__init__()
         self.dataset_cls = AcousticDataset
-        self.vocoder: BaseVocoder = get_vocoder_cls(hparams)()
         self.phone_encoder = self.build_phone_encoder()
+        self.use_vocoder = hparams['infer'] or hparams.get('val_with_vocoder', True)
+        if self.use_vocoder:
+            self.vocoder: BaseVocoder = get_vocoder_cls(hparams)()
         self.saving_result_pool = None
         self.saving_results_futures = None
         self.stats = {}
@@ -179,7 +181,8 @@ class AcousticTask(BaseTask):
 
         if batch_idx < hparams['num_valid_plots']:
             _, mel_pred = self.run_model(sample, return_output=True, infer=True)
-            self.plot_wav(batch_idx, sample['mel'], mel_pred, f0=sample['f0'])
+            if self.use_vocoder:
+                self.plot_wav(batch_idx, sample['mel'], mel_pred, f0=sample['f0'])
             self.plot_mel(batch_idx, sample['mel'], mel_pred, name=f'diffmel_{batch_idx}')
 
         return outputs
