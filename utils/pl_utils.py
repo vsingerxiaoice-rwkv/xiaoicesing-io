@@ -1415,13 +1415,13 @@ class BaseTrainer:
                 self.run_evaluation(test=self.testing)
 
             # when logs should be saved
-            should_save_log = (batch_idx + 1) % self.log_save_interval == 0 or early_stop_epoch
+            should_save_log = (self.total_batch_idx + 1) % self.log_save_interval == 0 or early_stop_epoch
             if should_save_log:
                 if self.proc_rank == 0 and self.logger is not None:
                     self.logger.save()
 
             # when metrics should be logged
-            should_log_metrics = batch_idx % self.row_log_interval == 0 or early_stop_epoch
+            should_log_metrics = self.total_batch_idx % self.row_log_interval == 0 or early_stop_epoch
             if should_log_metrics:
                 # logs user requested information to logger
                 self.log_metrics(batch_step_metrics, grad_norm_dic)
