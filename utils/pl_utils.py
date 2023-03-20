@@ -1354,7 +1354,7 @@ class BaseTrainer:
 
             # reset progress bar
             # .reset() doesn't work on disabled progress bar so we should check
-            desc = f'Epoch {epoch + 1}' if not self.is_iterable_train_dataloader else ''
+            desc = f'Epoch {epoch}' if not self.is_iterable_train_dataloader else ''
             self.main_progress_bar.set_description(desc)
 
             # changing gradient according accumulation_scheduler
