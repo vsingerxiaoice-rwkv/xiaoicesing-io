@@ -11,6 +11,7 @@ import json
 import os
 import os.path
 import random
+import shutil
 from copy import deepcopy
 
 import matplotlib.pyplot as plt
@@ -25,7 +26,7 @@ from modules.vocoders.registry import VOCODERS
 from utils.hparams import hparams
 from utils.indexed_datasets import IndexedDatasetBuilder
 from utils.multiprocess_utils import chunked_multiprocess_run
-from utils.phoneme_utils import build_phoneme_list
+from utils.phoneme_utils import build_phoneme_list, locate_dictionary
 
 os.environ["OMP_NUM_THREADS"] = "1"
 ACOUSTIC_ITEM_ATTRIBUTES = ['spk_id', 'mel', 'tokens', 'mel2ph', 'f0', 'key_shift', 'speed']
@@ -142,6 +143,9 @@ class AcousticBinarizer(BaseBinarizer):
             raise BinarizationError('transcriptions and dictionary mismatch.\n'
                                  f' (+) {sorted(unrecognizable_phones)}\n'
                                  f' (-) {sorted(missing_phones)}')
+
+        # Copy dictionary to binary data dir
+        shutil.copy(locate_dictionary(), os.path.join(hparams['binary_data_dir'], 'dictionary.txt'))
 
     def process_data_split(self, prefix, num_workers=0, apply_augmentation=False):
         data_dir = hparams['binary_data_dir']

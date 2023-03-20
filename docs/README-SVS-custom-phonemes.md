@@ -58,7 +58,7 @@ It is reasonable for the dictionary to design a unique symbol for each pronuncia
 To preprocess your data with a customized dictionary, you should specify the dictionary path in the config file:
 
 ```yaml
-g2p_dictionary: path/to/your/dictionary.txt
+dictionary: path/to/your/dictionary.txt
 ```
 
 If not specified, this hyperparamerter will fall back to `dictionaries/opencpop.txt` for backward compatibility.

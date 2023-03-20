@@ -1,26 +1,54 @@
+import pathlib
+
+from utils.hparams import hparams
 from utils.multiprocess_utils import main_process_print
 
 _initialized = False
 _ALL_CONSONANTS_SET = set()
 _ALL_VOWELS_SET = set()
-_g2p_dictionary = {
+_dictionary = {
     'AP': ['AP'],
     'SP': ['SP']
 }
 _phoneme_list: list
 
 
+def locate_dictionary():
+    """
+    Search and locate the dictionary file.
+    Order:
+        1. hparams['dictionary']
+        1. hparams['g2p_dictionary']
+        2. 'dictionary.txt' in hparams['work_dir']
+        3. file with same name as hparams['g2p_dictionary'] in hparams['work_dir']
+    :return: pathlib.Path of the dictionary file
+    """
+    assert 'dictionary' in hparams or 'g2p_dictionary' in hparams, \
+        'Please specify a dictionary file in your config.'
+    config_dict_path = pathlib.Path(hparams.get('dictionary', hparams.get('g2p_dictionary')))
+    if config_dict_path.exists():
+        return config_dict_path
+    work_dir = pathlib.Path(hparams['work_dir'])
+    ckpt_dict_path = work_dir.joinpath(config_dict_path.name)
+    if ckpt_dict_path.exists():
+        return ckpt_dict_path
+    ckpt_dict_path = work_dir.joinpath('dictionary.txt')
+    if ckpt_dict_path.exists():
+        return ckpt_dict_path
+    raise FileNotFoundError('Unable to locate the dictionary file. '
+                            'Please specify the right dictionary in your config.')
+
+
 def _build_dict_and_list():
-    from utils.hparams import hparams
-    global _g2p_dictionary, _phoneme_list
+    global _dictionary, _phoneme_list
 
     _set = set()
-    with open(hparams['g2p_dictionary'], 'r', encoding='utf8') as _df:
+    with open(locate_dictionary(), 'r', encoding='utf8') as _df:
         _lines = _df.readlines()
     for _line in _lines:
         _pinyin, _ph_str = _line.strip().split('\t')
-        _g2p_dictionary[_pinyin] = _ph_str.split()
-    for _list in _g2p_dictionary.values():
+        _dictionary[_pinyin] = _ph_str.split()
+    for _list in _dictionary.values():
         [_set.add(ph) for ph in _list]
     _phoneme_list = sorted(list(_set))
     main_process_print('| load phoneme set:', _phoneme_list)
@@ -28,7 +56,7 @@ def _build_dict_and_list():
 
 def _initialize_consonants_and_vowels():
     # Currently we only support two-part consonant-vowel phoneme systems.
-    for _ph_list in _g2p_dictionary.values():
+    for _ph_list in _dictionary.values():
         _ph_count = len(_ph_list)
         if _ph_count == 0 or _ph_list[0] in ['AP', 'SP']:
             continue
@@ -57,9 +85,9 @@ def get_all_vowels():
     return sorted(_ALL_VOWELS_SET)
 
 
-def build_g2p_dictionary() -> dict:
+def build_dictionary() -> dict:
     _initialize()
-    return _g2p_dictionary
+    return _dictionary
 
 
 def build_phoneme_list() -> list:

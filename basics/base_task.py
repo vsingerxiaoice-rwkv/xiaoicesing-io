@@ -1,5 +1,6 @@
-from datetime import datetime
+import pathlib
 import shutil
+from datetime import datetime
 
 import matplotlib
 
@@ -13,6 +14,7 @@ import sys
 import numpy as np
 import torch.distributed as dist
 from pytorch_lightning.loggers import TensorBoardLogger
+from utils.phoneme_utils import locate_dictionary
 from utils.pl_utils import LatestModelCheckpoint, BaseTrainer, data_loader, DDP
 from torch import nn
 import torch.utils.data
@@ -236,7 +238,7 @@ class BaseTask(nn.Module):
         random.seed(hparams['seed'])
         np.random.seed(hparams['seed'])
         task = cls()
-        work_dir = hparams['work_dir']
+        work_dir = pathlib.Path(hparams['work_dir'])
         trainer = BaseTrainer(
             checkpoint_callback=LatestModelCheckpoint(
                 filepath=work_dir,
@@ -250,7 +252,7 @@ class BaseTask(nn.Module):
                 period=1 if hparams['save_ckpt'] else 100000
             ),
             logger=TensorBoardLogger(
-                save_dir=work_dir,
+                save_dir=str(work_dir),
                 name='lightning_logs',
                 version='lastest'
             ),
@@ -266,17 +268,27 @@ class BaseTask(nn.Module):
             copy_code = True  # backup code every time
             if copy_code:
                 t = datetime.now().strftime('%Y%m%d%H%M%S')
-                code_dir = f'{work_dir}/codes/{t}'
-                os.makedirs(code_dir, exist_ok=True)
+                code_dir = work_dir.joinpath('codes').joinpath(str(t))
+                code_dir.mkdir(exist_ok=True, parents=True)
                 for c in hparams['save_codes']:
                     shutil.copytree(c, code_dir, dirs_exist_ok=True)
-                print(f"| Copied codes to {code_dir}.")
-            # Copy spk_map.json to work dir
-            spk_map = os.path.join(work_dir, 'spk_map.json')
-            spk_map_orig = os.path.join(hparams['binary_data_dir'], 'spk_map.json')
-            if not os.path.exists(spk_map) and os.path.exists(spk_map_orig):
-                shutil.copy(spk_map_orig, spk_map)
-                print(f"| Copied spk map to {spk_map}.")
+                print(f'| Copied codes to {code_dir}.')
+            # Copy spk_map.json and dictionary.txt to work dir
+            binary_dir = pathlib.Path(hparams['binary_data_dir'])
+            spk_map = work_dir.joinpath('spk_map.json')
+            spk_map_src = binary_dir.joinpath('spk_map.json')
+            if not spk_map.exists() and spk_map_src.exists():
+                shutil.copy(spk_map_src, spk_map)
+                print(f'| Copied spk map to {spk_map}.')
+            dictionary = work_dir.joinpath('dictionary.txt')
+            dict_src = binary_dir.joinpath('dictionary.txt')
+            if not dictionary.exists():
+                if dict_src.exists():
+                    shutil.copy(dict_src, dictionary)
+                else:
+                    shutil.copy(locate_dictionary(), dictionary)
+                print(f'| Copied dictionary to {dictionary}.')
+
             trainer.checkpoint_callback.task = task
             trainer.fit(task)
         else:
