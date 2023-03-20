@@ -66,6 +66,8 @@ class DiffSingerAcousticInfer(BaseSVSInfer):
         batch['mel2ph'] = mel2ph
         length = mel2ph.size(1)  # => T
 
+        print(f'Length: {txt_tokens.size(1)} token(s), {length} frame(s), {length * self.timestep:.2f} second(s)')
+
         if hparams['use_spk_id']:
             spk_mix_map = param.get('spk_mix')  # { spk_name: value } or { spk_name: "value value value ..." }
             dynamic = False
