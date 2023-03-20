@@ -111,8 +111,12 @@ class AcousticTask(BaseTask):
 
     @data_loader
     def train_dataloader(self):
-        train_dataset = self.dataset_cls(hparams['train_set_name'], shuffle=True)
-        return self.build_dataloader(train_dataset, True, self.max_tokens, self.max_sentences)
+        if self.persistent_dataloader is None:
+            train_dataset = self.dataset_cls(hparams['train_set_name'], shuffle=True)
+            self.persistent_dataloader = self.build_dataloader(
+                train_dataset, True, self.max_tokens, self.max_sentences, persistent=True
+            )
+        return self.persistent_dataloader
 
     @data_loader
     def val_dataloader(self):

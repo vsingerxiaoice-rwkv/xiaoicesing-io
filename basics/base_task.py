@@ -75,6 +75,7 @@ class BaseTask(nn.Module):
             hparams['max_eval_sentences'] = self.max_eval_sentences = self.max_sentences
 
         self.model = None
+        self.persistent_dataloader = None
         self.training_losses_meter = None
 
     ###########
@@ -177,7 +178,7 @@ class BaseTask(nn.Module):
         return [optm]
 
     def build_dataloader(self, dataset, shuffle, max_tokens=None, max_sentences=None,
-                         required_batch_size_multiple=-1, batch_by_size=True):
+                         required_batch_size_multiple=-1, batch_by_size=True, persistent=False):
         devices_cnt = torch.cuda.device_count()
         if devices_cnt == 0:
             devices_cnt = 1
@@ -216,7 +217,8 @@ class BaseTask(nn.Module):
                                            collate_fn=dataset.collater,
                                            batch_sampler=batches,
                                            num_workers=num_workers,
-                                           pin_memory=False)
+                                           pin_memory=False,
+                                           persistent_workers=persistent)
 
     def test_start(self):
         pass
