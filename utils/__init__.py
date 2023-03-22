@@ -45,7 +45,7 @@ def collate_nd(values, pad_value=0, max_len=None):
     Pad a list of Nd tensors on their first dimension and stack them into a (N+1)d tensor.
     """
     size = ((max(v.size(0) for v in values) if max_len is None else max_len), *values[0].shape[1:])
-    res = torch.full((len(values), *size), fill_value=pad_value, dtype=values[0].dtype, device=values[0].device)
+    res = torch.full((len(values), *size), fill_value=pad_value, dtype=values[0].dtype)
 
     for i, v in enumerate(values):
         res[i, :len(v), ...] = v
@@ -64,7 +64,7 @@ def _is_batch_full(batch, num_tokens, max_tokens, max_sentences):
 
 def batch_by_size(
         indices, num_tokens_fn, max_tokens=None, max_sentences=None,
-        required_batch_size_multiple=1, distributed=False
+        required_batch_size_multiple=1
 ):
     """
     Yield mini-batches of indices bucketed by size. Batches may contain

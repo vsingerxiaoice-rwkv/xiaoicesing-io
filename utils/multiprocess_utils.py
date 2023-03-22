@@ -8,7 +8,8 @@ is_main_process = not bool(re.match(r'((.*Process)|(SyncManager)|(.*PoolWorker))
 
 
 def main_process_print(self, *args, sep=' ', end='\n', file=None):
-    if is_main_process:
+    from utils.hparams import hparams
+    if hparams['is_main_process']:
         print(self, *args, sep=sep, end=end, file=file)
 
 

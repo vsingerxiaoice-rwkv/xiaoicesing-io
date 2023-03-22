@@ -185,12 +185,13 @@ class AcousticBinarizer(BaseBinarizer):
             # code for parallel processing
             for item in tqdm(
                     chunked_multiprocess_run(self.process_item, args, num_workers=num_workers),
-                    total=len(list(self.meta_data_iterator(prefix)))
+                    total=len(list(self.meta_data_iterator(prefix))),
+                    ncols=80
             ):
                 postprocess(item)
         else:
             # code for single cpu processing
-            for a in tqdm(args):
+            for a in tqdm(args, ncols=80):
                 item = self.process_item(*a)
                 postprocess(item)
 
@@ -219,9 +220,9 @@ class AcousticBinarizer(BaseBinarizer):
             'spk_id': meta_data['spk_id'],
             'seconds': seconds,
             'length': length,
-            'mel': torch.from_numpy(mel),
-            'tokens': torch.LongTensor(self.phone_encoder.encode(meta_data['ph_seq'])),
-            'ph_dur': torch.FloatTensor(meta_data['ph_dur']),
+            'mel': mel,
+            'tokens': np.array(self.phone_encoder.encode(meta_data['ph_seq']), dtype=np.int64),
+            'ph_dur': np.array(meta_data['ph_dur']),
             'interp_uv': self.binarization_args['interp_uv'],
         }
 
@@ -231,10 +232,10 @@ class AcousticBinarizer(BaseBinarizer):
         )
         if uv.all():  # All unvoiced
             raise BinarizationError(f'Empty gt f0 in \'{item_name}\'.')
-        processed_input['f0'] = torch.from_numpy(gt_f0).float()
+        processed_input['f0'] = gt_f0.astype(np.float32)
 
         # get ground truth dur
-        processed_input['mel2ph'] = get_mel2ph_torch(self.lr, processed_input['ph_dur'], length, hparams)
+        processed_input['mel2ph'] = get_mel2ph_torch(self.lr, torch.from_numpy(processed_input['ph_dur']), length, hparams).cpu().numpy()
 
         if hparams.get('use_key_shift_embed', False):
             processed_input['key_shift'] = 0.

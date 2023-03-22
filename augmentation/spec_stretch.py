@@ -31,7 +31,7 @@ class SpectrogramStretchAugmentation(BaseAugmentation):
                 aug_item['wav_fn'], keyshift=key_shift, speed=speed
             )
 
-        aug_item['mel'] = torch.from_numpy(mel)
+        aug_item['mel'] = mel
 
         if speed != 1. or hparams.get('use_speed_embed', False):
             aug_item['length'] = mel.shape[0]
@@ -39,18 +39,18 @@ class SpectrogramStretchAugmentation(BaseAugmentation):
             aug_item['seconds'] /= aug_item['speed']
             aug_item['ph_dur'] /= aug_item['speed']
             aug_item['mel2ph'] = get_mel2ph_torch(
-                self.lr, aug_item['ph_dur'], aug_item['length'], hparams, device=self.device
-            )
+                self.lr, torch.from_numpy(aug_item['ph_dur']), aug_item['length'], hparams, device=self.device
+            ).cpu().numpy()
             f0, f0_coarse, _ = get_pitch_parselmouth(
                 wav, aug_item['length'], hparams, speed=speed, interp_uv=item['interp_uv']
             )
             aug_item['f0'], aug_item['f0_coarse'] = \
-                torch.from_numpy(f0), torch.from_numpy(f0_coarse)
+                f0.astype(np.float32), f0_coarse
 
         if key_shift != 0. or hparams.get('use_key_shift_embed', False):
             aug_item['key_shift'] = key_shift
             aug_item['f0'] *= 2 ** (key_shift / 12)
-            aug_item['f0_coarse'] = torch.from_numpy(f0_to_coarse(aug_item['f0'].numpy()))
+            aug_item['f0_coarse'] = f0_to_coarse(aug_item['f0'])
 
         if replace_spk_id is not None:
             aug_item['spk_id'] = replace_spk_id

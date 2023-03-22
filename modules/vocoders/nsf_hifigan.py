@@ -70,12 +70,12 @@ class NsfHifiGAN(BaseVocoder):
         if self.h.fmax != hparams['fmax']:
             print('Mismatch parameters: hparams[\'fmax\']=', hparams['fmax'], '!=', self.h.fmax, '(vocoder)')
         with torch.no_grad():
-            c = torch.FloatTensor(mel).unsqueeze(0).transpose(2, 1).to(self.device)
+            c = torch.FloatTensor(mel).unsqueeze(0).transpose(2, 1)#.to(self.device)
             # log10 to log mel
             c = 2.30259 * c
             f0 = kwargs.get('f0')
             if f0 is not None:
-                f0 = torch.FloatTensor(f0[None, :]).to(self.device)
+                f0 = torch.FloatTensor(f0[None, :])#.to(self.device)
                 y = self.model(c, f0).view(-1)
             else:
                 y = self.model(c).view(-1)
