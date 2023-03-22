@@ -3,8 +3,7 @@ import os
 
 import yaml
 
-from utils.multiprocess_utils import is_main_process
-
+from utils.multiprocess_utils import is_main_process as mp_is_main_process
 global_print_hparams = True
 hparams = {}
 
@@ -23,7 +22,7 @@ def override_config(old_config: dict, new_config: dict):
             old_config[k] = v
 
 
-def set_hparams(config='', exp_name='', hparams_str='', print_hparams=True, global_hparams=True):
+def set_hparams(config='', exp_name='', hparams_str='', print_hparams=True, global_hparams=True, is_main_process=None):
     """
         Load hparams from multiple sources:
         1. config chain (i.e. first load base_config, then load config);
@@ -47,6 +46,9 @@ def set_hparams(config='', exp_name='', hparams_str='', print_hparams=True, glob
         args = Args(config=config, exp_name=exp_name, hparams=hparams_str,
                     infer=False, validate=False, reset=False, debug=False)
 
+    if is_main_process is None:
+        is_main_process = mp_is_main_process
+    
     args_work_dir = ''
     if args.exp_name != '':
         args.work_dir = args.exp_name
@@ -117,6 +119,7 @@ def set_hparams(config='', exp_name='', hparams_str='', print_hparams=True, glob
     if global_hparams:
         hparams.clear()
         hparams.update(hparams_)
+        hparams['is_main_process'] = is_main_process
 
     if is_main_process and print_hparams and global_print_hparams and global_hparams:
         print('| Hparams chains: ', config_chains)

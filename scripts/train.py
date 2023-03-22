@@ -2,7 +2,7 @@ import importlib
 
 from utils.hparams import set_hparams, hparams
 
-set_hparams(print_hparams=False)
+set_hparams(is_main_process=False)
 
 def run_task():
     assert hparams['task_cls'] != ''

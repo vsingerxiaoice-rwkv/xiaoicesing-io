@@ -62,7 +62,7 @@ dur_loss: mse # huber|mol
 # train and eval
 ###########
 save_ckpt: true
-save_best: false
+save_last: false
 num_ckpt_keep: 3
 accumulate_grad_batches: 1
 log_interval: 100
