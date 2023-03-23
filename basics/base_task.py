@@ -13,6 +13,7 @@ import random
 import sys
 import numpy as np
 import pytorch_lightning as pl
+from pytorch_lightning.callbacks import RichProgressBar
 from pytorch_lightning.loggers import TensorBoardLogger
 from pytorch_lightning.utilities import grad_norm
 from utils.phoneme_utils import locate_dictionary
@@ -71,6 +72,7 @@ class BaseTask(pl.LightningModule):
             hparams['max_eval_sentences'] = self.max_eval_sentences = self.max_sentences
 
         self.training_losses_meter = None
+        self.training_sampler = None
         
         self.model = None
 
@@ -83,6 +85,8 @@ class BaseTask(pl.LightningModule):
 
     def on_train_epoch_start(self):
         self.training_losses_meter = {'total_loss': utils.AvgrageMeter()}
+        if self.training_sampler is not None:
+            self.training_sampler.set_epoch(self.current_epoch)
 
     def _training_step(self, sample, batch_idx, optimizer_idx):
         """
@@ -117,8 +121,8 @@ class BaseTask(pl.LightningModule):
         # log_outputs['all_loss'] = total_loss.item()
         progress_bar_log = log_outputs | {'step': self.global_step}
         tb_log = {f'tr/{k}': v for k, v in log_outputs.items()}
-        self.log_dict(progress_bar_log, prog_bar=True, logger=False, on_step=True, on_epoch=False, rank_zero_only=True)
-        self.log_dict(tb_log, prog_bar=False, logger=True, on_step=True, on_epoch=False, rank_zero_only=True)
+        self.log_dict(progress_bar_log, prog_bar=True, on_step=True, on_epoch=False)
+        self.log_dict(tb_log, logger=True, on_step=True, on_epoch=False)
         return {
             'loss': total_loss
         }
@@ -131,7 +135,7 @@ class BaseTask(pl.LightningModule):
         #       f"\n==============\n")
     
     def on_before_optimizer_step(self, optimizer):
-        self.log_dict(grad_norm(self, norm_type=2), rank_zero_only=True)
+        self.log_dict(grad_norm(self, norm_type=2))
     
     def on_validation_start(self):
         self.validation_step_outputs = []
@@ -186,27 +190,22 @@ class BaseTask(pl.LightningModule):
             "lr_scheduler": {
                 "scheduler": scheduler,
                 "interval": "step",
-                "frequency": hparams['accumulate_grad_batches'],
+                "frequency": 1
             }
         }
 
-    def build_batch_sampler(self, dataset, shuffle, max_tokens=None, max_sentences=None,
-                            required_batch_size_multiple=-1, batch_by_size=True):
-        devices_cnt = torch.cuda.device_count()
-        if devices_cnt == 0:
-            devices_cnt = 1
-        if required_batch_size_multiple == -1:
-            required_batch_size_multiple = devices_cnt
-        
+    def build_batch_sampler(self, dataset, max_tokens, max_sentences, batch_by_size=True, shuffle=False):
         batch_sampler_cls = partial(BatchSamplerSimilarLength,
-                                    max_tokens=max_tokens, max_sentences=max_sentences, 
-                                    required_batch_size_multiple=required_batch_size_multiple, 
+                                    max_tokens=max_tokens, max_sentences=max_sentences,
                                     batch_by_size=batch_by_size)
         if self.trainer.distributed_sampler_kwargs:
-            sampler = DistributedBatchSamplerSimilarLength(dataset, batch_sampler_cls=batch_sampler_cls, 
-                                                           shuffle=shuffle, **self.trainer.distributed_sampler_kwargs)
+            sampler = DistributedBatchSamplerSimilarLength(dataset,
+                                                           batch_sampler_cls=batch_sampler_cls,
+                                                           seed=hparams['seed'],
+                                                           shuffle=shuffle,
+                                                           **self.trainer.distributed_sampler_kwargs)
         else:
-            sampler = batch_sampler_cls(dataset=dataset, indices=dataset.ordered_indices(), shuffle=shuffle)
+            sampler = batch_sampler_cls(dataset, seed=hparams['seed'], shuffle=shuffle)
         return sampler
 
     def on_test_start(self):
@@ -242,8 +241,9 @@ class BaseTask(pl.LightningModule):
                     save_top_k=hparams['num_ckpt_keep'],
                     save_on_train_epoch_end=True,
                     auto_insert_metric_name=False,
-                    verbose=True
-                )
+                    # verbose=True
+                ),
+                # RichProgressBar()
             ],
             logger=TensorBoardLogger(
                 save_dir=str(work_dir),

@@ -22,11 +22,6 @@ class DiffModelCheckpoint(ModelCheckpoint):
         from pytorch_lightning.trainer.states import RunningStage
         return trainer.state.stage == RunningStage.TRAINING and super()._should_save_on_train_epoch_end(trainer)
 
-    # @classmethod
-    # def _format_checkpoint_name(cls, filename, metrics, prefix = "", auto_insert_metric_name = True):
-    #     # metrics = {k: v + 1 if k == 'step' or k == 'epoch' else v for k, v in metrics.items()}
-    #     return super()._format_checkpoint_name(filename, metrics, prefix, auto_insert_metric_name)
-
 def get_latest_checkpoint_path(work_dir):
     if not os.path.exists(work_dir):
         return None
@@ -51,4 +46,4 @@ def get_stategy_obj(strategy):
     if strategy == 'ddp_gloo':
         return DDPStrategy(process_group_backend='gloo')
     else:
-        return 'auto'
+        return strategy
