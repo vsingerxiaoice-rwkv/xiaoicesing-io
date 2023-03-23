@@ -63,7 +63,7 @@ def _is_batch_full(batch, num_tokens, max_tokens, max_sentences):
 
 
 def batch_by_size(
-        indices, num_tokens_fn, max_tokens=None, max_sentences=None,
+        indices, num_tokens_fn, max_tokens=80000, max_sentences=48,
         required_batch_size_multiple=1
 ):
     """
@@ -75,14 +75,10 @@ def batch_by_size(
         num_tokens_fn (callable): function that returns the number of tokens at
             a given index
         max_tokens (int, optional): max number of tokens in each batch
-            (default: None).
+            (default: 80000).
         max_sentences (int, optional): max number of sentences in each
-            batch (default: None).
-        required_batch_size_multiple (int, optional): require batch size to
-            be a multiple of N (default: 1).
+            batch (default: 48).
     """
-    max_tokens = max_tokens if max_tokens is not None else sys.maxsize
-    max_sentences = max_sentences if max_sentences is not None else sys.maxsize
     bsz_mult = required_batch_size_multiple
 
     if isinstance(indices, types.GeneratorType):

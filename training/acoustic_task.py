@@ -25,6 +25,7 @@ from utils.indexed_datasets import IndexedDataset
 from utils.phoneme_utils import build_phoneme_list
 from utils.plot import spec_to_figure
 from utils.text_encoder import TokenTextEncoder
+from utils.training_utils import WarmupCosineSchedule
 
 matplotlib.use('Agg')
 
@@ -64,6 +65,15 @@ class AcousticDataset(BaseDataset):
             spk_ids = torch.LongTensor([int(s['spk_id']) for s in samples])
             batch['spk_ids'] = spk_ids
         return batch
+
+class MyScheduler(torch.optim.lr_scheduler.StepLR):
+    def __init__(self, optimizer, step_size, gamma=0.1, last_epoch=- 1, verbose=False):
+        super().__init__(optimizer, step_size, gamma, last_epoch, verbose)
+    
+    def get_lr(self):
+        ret = super().get_lr()
+        print("------GET_LR", self.last_epoch, self._step_count, ret)
+        return ret
 
 class AcousticTask(BaseTask):
     def __init__(self):
@@ -106,20 +116,29 @@ class AcousticTask(BaseTask):
         return optimizer
 
     def build_scheduler(self, optimizer):
+        # return WarmupCosineSchedule(optimizer,
+        #                             warmup_steps=hparams['warmup_updates'],
+        #                             t_total=hparams['max_updates'] // hparams['accumulate_grad_batches'],
+        #                             eta_min=0)
         return torch.optim.lr_scheduler.StepLR(optimizer, hparams['decay_steps'], gamma=hparams.get('gamma', 0.5))
     
     def train_dataloader(self):
-        sampler = self.build_batch_sampler(self.train_dataset, True, self.max_tokens, self.max_sentences)
+        self.training_sampler = self.build_batch_sampler(self.train_dataset,
+                                                         max_tokens=self.max_tokens,
+                                                         max_sentences=self.max_sentences,
+                                                         shuffle=True)
         return torch.utils.data.DataLoader(self.train_dataset,
                                            collate_fn=self.train_dataset.collater,
-                                           batch_sampler=sampler,
+                                           batch_sampler=self.training_sampler,
                                            num_workers=self.train_dataset.num_workers,
                                            prefetch_factor=4,
                                            pin_memory=False,
                                            persistent_workers=True)
 
     def val_dataloader(self):
-        sampler = self.build_batch_sampler(self.valid_dataset, False, self.max_tokens, self.max_sentences)
+        sampler = self.build_batch_sampler(self.valid_dataset,
+                                           max_tokens=self.max_tokens,
+                                           max_sentences=self.max_sentences)
         return torch.utils.data.DataLoader(self.valid_dataset,
                                            collate_fn=self.valid_dataset.collater,
                                            batch_sampler=sampler,
