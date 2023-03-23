@@ -12,14 +12,12 @@ from utils.hparams import hparams, set_hparams
 import random
 import sys
 import numpy as np
-import torch.distributed as dist
 import pytorch_lightning as pl
-from pytorch_lightning.callbacks import ModelCheckpoint
 from pytorch_lightning.loggers import TensorBoardLogger
-from pytorch_lightning.strategies import DDPStrategy
-from pytorch_lightning.utilities import grad_norm, rank_zero_only
+from pytorch_lightning.utilities import grad_norm
 from utils.phoneme_utils import locate_dictionary
 from utils.training_utils import BatchSamplerSimilarLength, DistributedBatchSamplerSimilarLength
+from utils.pl_utils import DiffModelCheckpoint, get_latest_checkpoint_path, get_stategy_obj
 from torch import nn
 import torch.utils.data
 import utils
@@ -119,8 +117,8 @@ class BaseTask(pl.LightningModule):
         # log_outputs['all_loss'] = total_loss.item()
         progress_bar_log = log_outputs | {'step': self.global_step}
         tb_log = {f'tr/{k}': v for k, v in log_outputs.items()}
-        self.log_dict(progress_bar_log, prog_bar=True, logger=False, on_step=True, on_epoch=False)
-        self.log_dict(tb_log)
+        self.log_dict(progress_bar_log, prog_bar=True, logger=False, on_step=True, on_epoch=False, rank_zero_only=True)
+        self.log_dict(tb_log, prog_bar=False, logger=True, on_step=True, on_epoch=False, rank_zero_only=True)
         return {
             'loss': total_loss
         }
@@ -133,7 +131,7 @@ class BaseTask(pl.LightningModule):
         #       f"\n==============\n")
     
     def on_before_optimizer_step(self, optimizer):
-        self.log_dict(grad_norm(self, norm_type=2))
+        self.log_dict(grad_norm(self, norm_type=2), rank_zero_only=True)
     
     def on_validation_start(self):
         self.validation_step_outputs = []
@@ -156,10 +154,7 @@ class BaseTask(pl.LightningModule):
         """
         outputs = self._validation_step(sample, batch_idx)
         self.validation_step_outputs.append(outputs)
-        
-        return {
-            'val_loss': outputs['total_loss']
-        }
+        return outputs
 
     def _on_validation_end(self, outputs):
         """
@@ -171,13 +166,11 @@ class BaseTask(pl.LightningModule):
 
     def on_validation_epoch_end(self):
         loss_output = self._on_validation_end(self.validation_step_outputs)
-        print(f"\n==============\n "
-              f"valid results: {loss_output}"
-              f"\n==============\n")
-        self.log_dict({f'val/{k}': v for k, v in loss_output.items()}, on_epoch=True)
-        return {
-            'val_loss': loss_output['total_loss']
-        }
+        # print(f"\n==============\n "
+        #       f"valid results: {loss_output}"
+        #       f"\n==============\n")
+        self.log('val_loss', loss_output['total_loss'], on_epoch=True, prog_bar=True, logger=False, sync_dist=True)
+        self.log_dict({f'val/{k}': v for k, v in loss_output.items()}, on_epoch=True, prog_bar=False, logger=True, sync_dist=True)
 
     def build_scheduler(self, optimizer):
         raise NotImplementedError
@@ -231,24 +224,24 @@ class BaseTask(pl.LightningModule):
 
     @classmethod
     def start(cls):
-        random.seed(hparams['seed'])
-        np.random.seed(hparams['seed'])
+        pl.seed_everything(hparams['seed'], workers=True)
         task = cls()
         work_dir = pathlib.Path(hparams['work_dir'])
         trainer = pl.Trainer(
-            accelerator='gpu',
-            devices=4,
-            strategy=DDPStrategy(find_unused_parameters=False, process_group_backend='gloo'),
-            precision="bf16",
+            accelerator=hparams['pl_trainer_accelerator'],
+            devices=hparams['pl_trainer_devices'],
+            strategy=get_stategy_obj(hparams['pl_trainer_strategy']),
+            precision=hparams['pl_trainer_precision'],
             callbacks=[
-                ModelCheckpoint(
+                DiffModelCheckpoint(
                     dirpath=work_dir,
-                    filename='model_ckpt_steps_{step}.ckpt',
+                    filename='model_ckpt_steps_{step}',
                     monitor='val_loss',
                     mode='min',
                     save_last=hparams['save_last'],
                     save_top_k=hparams['num_ckpt_keep'],
-                    every_n_train_steps=hparams['val_check_interval'],
+                    save_on_train_epoch_end=True,
+                    auto_insert_metric_name=False,
                     verbose=True
                 )
             ],
@@ -257,14 +250,13 @@ class BaseTask(pl.LightningModule):
                 name='lightning_logs',
                 version='lastest'
             ),
-            num_sanity_val_steps=0,
             gradient_clip_val=hparams['clip_grad_norm'],
             val_check_interval=hparams['val_check_interval'],
             check_val_every_n_epoch=None,
             log_every_n_steps=hparams['log_interval'],
             max_steps=hparams['max_updates'],
             use_distributed_sampler=False,
-            # num_sanity_val_steps=hparams['num_sanity_val_steps'] if not hparams['validate'] else 10000,
+            num_sanity_val_steps=hparams['num_sanity_val_steps'] if not hparams['validate'] else 10000,
             accumulate_grad_batches=hparams['accumulate_grad_batches']
         )
         if not hparams['infer']:  # train
@@ -293,9 +285,7 @@ class BaseTask(pl.LightningModule):
                     else:
                         shutil.copy(locate_dictionary(), dictionary)
                     print(f'| Copied dictionary to {dictionary}.')
-            trainer.fit(task)
-            if trainer.local_rank == 0:
-                trainer.callbacks[0].on_validation_end(trainer, task)
+            trainer.fit(task, ckpt_path=get_latest_checkpoint_path(work_dir))
         else:
             trainer.test(task)
 

@@ -23,7 +23,6 @@ from utils.binarizer_utils import get_pitch_parselmouth
 from utils.hparams import hparams
 from utils.indexed_datasets import IndexedDataset
 from utils.phoneme_utils import build_phoneme_list
-from utils.pl_utils import data_loader
 from utils.plot import spec_to_figure
 from utils.text_encoder import TokenTextEncoder
 
