@@ -147,6 +147,7 @@ class DiffSingerAcousticInfer(BaseSVSInfer):
 
         if hparams.get('use_key_shift_embed', False):
             shift_min, shift_max = hparams['augmentation_args']['random_pitch_shifting']['range']
+            gender = param.get('gender', 0.)
             if isinstance(param['gender'], float):  # static gender value
                 gender = param['gender']
                 print(f'Using static gender value: {gender:.3f}')
@@ -155,7 +156,7 @@ class DiffSingerAcousticInfer(BaseSVSInfer):
             else:
                 print('Using dynamic gender curve')
                 gender_seq = resample_align_curve(
-                    np.array(param['gender'].split(), np.float32),
+                    np.array(gender.split(), np.float32),
                     original_timestep=float(param['gender_timestep']),
                     target_timestep=self.timestep,
                     align_length=length
@@ -168,7 +169,7 @@ class DiffSingerAcousticInfer(BaseSVSInfer):
                 )
 
         if hparams.get('use_speed_embed', False):
-            if param['velocity'] is None:
+            if param.get('velocity') is None:
                 print('Using default velocity curve')
                 batch['speed'] = torch.FloatTensor([1.]).to(self.device)[:, None]  # => [B=1, T=1]
             else:
