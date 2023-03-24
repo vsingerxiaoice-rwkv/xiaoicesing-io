@@ -71,15 +71,6 @@ class AcousticDataset(BaseDataset):
             batch['spk_ids'] = spk_ids
         return batch
 
-class MyScheduler(torch.optim.lr_scheduler.StepLR):
-    def __init__(self, optimizer, step_size, gamma=0.1, last_epoch=- 1, verbose=False):
-        super().__init__(optimizer, step_size, gamma, last_epoch, verbose)
-    
-    def get_lr(self):
-        ret = super().get_lr()
-        print("------GET_LR", self.last_epoch, self._step_count, ret)
-        return ret
-
 class AcousticTask(BaseTask):
     def __init__(self):
         super().__init__()

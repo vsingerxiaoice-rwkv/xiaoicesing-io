@@ -1,7 +1,8 @@
 import pathlib
 
+from pytorch_lightning.utilities.rank_zero import rank_zero_info
+
 from utils.hparams import hparams
-from utils.multiprocess_utils import main_process_print
 
 _initialized = False
 _ALL_CONSONANTS_SET = set()
@@ -51,7 +52,7 @@ def _build_dict_and_list():
     for _list in _dictionary.values():
         [_set.add(ph) for ph in _list]
     _phoneme_list = sorted(list(_set))
-    main_process_print('| load phoneme set:', _phoneme_list)
+    rank_zero_info('| load phoneme set: ' + str(_phoneme_list))
 
 
 def _initialize_consonants_and_vowels():
