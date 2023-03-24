@@ -16,7 +16,7 @@ import pytorch_lightning as pl
 from pytorch_lightning.callbacks import RichProgressBar, ModelSummary
 from pytorch_lightning.loggers import TensorBoardLogger
 from pytorch_lightning.utilities import grad_norm
-from pytorch_lightning.utilities.rank_zero import rank_zero_debug
+from pytorch_lightning.utilities.rank_zero import rank_zero_debug, rank_zero_only
 from utils.phoneme_utils import locate_dictionary
 from utils.training_utils import BatchSamplerSimilarLength, DistributedBatchSamplerSimilarLength
 from utils.pl_utils import DiffModelCheckpoint, get_latest_checkpoint_path, get_stategy_obj
@@ -272,8 +272,8 @@ class BaseTask(pl.LightningModule):
             accumulate_grad_batches=hparams['accumulate_grad_batches']
         )
         if not hparams['infer']:  # train
-            if trainer.local_rank == 0:
-                set_hparams(print_hparams=True, is_main_process=True)
+            @rank_zero_only
+            def train_payload_copy():
                 # copy_code = input(f'{hparams["save_codes"]} code backup? y/n: ') == 'y'
                 copy_code = True  # backup code every time
                 if copy_code:
@@ -297,7 +297,7 @@ class BaseTask(pl.LightningModule):
                     else:
                         shutil.copy(locate_dictionary(), dictionary)
                     print(f'| Copied dictionary to {dictionary}.')
-            hparams['disable_sample_tqdm'] = True
+            train_payload_copy()
             trainer.fit(task, ckpt_path=get_latest_checkpoint_path(work_dir))
         else:
             trainer.test(task)

@@ -75,6 +75,8 @@ if args.gender is not None:
     assert -1 <= args.gender <= 1, 'Gender must be in [-1, 1].'
 
 set_hparams(print_hparams=False)
+hparams['disable_sample_tqdm'] = False
+
 if args.speedup > 0:
     hparams['pndm_speedup'] = args.speedup
 
