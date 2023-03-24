@@ -8,7 +8,7 @@ import warnings
 import torch
 
 import pytorch_lightning as pl
-from pytorch_lightning.callbacks import ModelCheckpoint
+from pytorch_lightning.callbacks import ModelCheckpoint, TQDMProgressBar
 from pytorch_lightning.strategies import DDPStrategy
 from pytorch_lightning.trainer.states import RunningStage
 from pytorch_lightning.utilities.rank_zero import rank_zero_info
@@ -124,6 +124,7 @@ class DiffModelCheckpoint(ModelCheckpoint):
                     return
         trainer.strategy.remove_checkpoint(filepath)
 
+
 def get_latest_checkpoint_path(work_dir):
     if not os.path.exists(work_dir):
         return None
@@ -141,6 +142,23 @@ def get_latest_checkpoint_path(work_dir):
                 last_ckpt_name = name
                     
     return last_ckpt_name if last_ckpt_name is not None else None
+
+
+class DiffTQDMProgressBar(TQDMProgressBar):
+    def __init__(self, refresh_rate: int = 1, process_position: int = 0):
+        super().__init__(refresh_rate, process_position)
+
+    def get_metrics(self, trainer, model):
+        items = super().get_metrics(trainer, model)
+        for name in ['step', 'batch_size']:
+            if name in items:
+                items[name] = int(items[name])
+        for k, v in items.items():
+            if isinstance(v, float):
+                if 0.00001 <= v < 10:
+                    items[k] = f"{v:.5f}"
+        return items
+
 
 def get_stategy_obj(strategy):
     if strategy == 'ddp_gloo':
