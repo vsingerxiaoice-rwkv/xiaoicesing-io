@@ -61,10 +61,7 @@ class IndexedDatasetBuilder:
         for k, v in item.items():
             if v is None:
                 continue
-            if isinstance(v, np.ndarray):
-                self.dset.create_dataset(f'{item_no}/{k}', data=v, compression="gzip", compression_opts=4)
-            else:
-                self.dset.create_dataset(f'{item_no}/{k}', data=v)
+            self.dset.create_dataset(f'{item_no}/{k}', data=v)
 
     def finalize(self):
         del self.dset
