@@ -2,7 +2,8 @@ import importlib
 
 from utils.hparams import set_hparams, hparams
 
-set_hparams(is_main_process=False)
+set_hparams()
+hparams['disable_sample_tqdm'] = True
 
 def run_task():
     assert hparams['task_cls'] != ''

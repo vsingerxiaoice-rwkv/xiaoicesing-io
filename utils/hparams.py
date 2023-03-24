@@ -1,9 +1,8 @@
 import argparse
 import os
-
 import yaml
 
-from utils.multiprocess_utils import is_main_process as mp_is_main_process
+from pytorch_lightning.utilities.rank_zero import rank_zero_only
 global_print_hparams = True
 hparams = {}
 
@@ -22,7 +21,7 @@ def override_config(old_config: dict, new_config: dict):
             old_config[k] = v
 
 
-def set_hparams(config='', exp_name='', hparams_str='', print_hparams=True, global_hparams=True, is_main_process=None):
+def set_hparams(config='', exp_name='', hparams_str='', print_hparams=True, global_hparams=True):
     """
         Load hparams from multiple sources:
         1. config chain (i.e. first load base_config, then load config);
@@ -45,9 +44,6 @@ def set_hparams(config='', exp_name='', hparams_str='', print_hparams=True, glob
     else:
         args = Args(config=config, exp_name=exp_name, hparams=hparams_str,
                     infer=False, validate=False, reset=False, debug=False)
-
-    if is_main_process is None:
-        is_main_process = mp_is_main_process
     
     args_work_dir = ''
     if args.exp_name != '':
@@ -103,31 +99,36 @@ def set_hparams(config='', exp_name='', hparams_str='', print_hparams=True, glob
             else:
                 hparams_[k] = type(hparams_[k])(v)
 
-    if args_work_dir != '' and (not os.path.exists(ckpt_config_path) or args.reset) and not args.infer:
-        os.makedirs(hparams_['work_dir'], exist_ok=True)
-        if is_main_process:
+    @rank_zero_only
+    def dump_hparams():
+        if args_work_dir != '' and (not os.path.exists(ckpt_config_path) or args.reset) and not args.infer:
+            os.makedirs(hparams_['work_dir'], exist_ok=True)
             # Only the main process will save the config file
             with open(ckpt_config_path, 'w', encoding='utf-8') as f:
                 hparams_non_recursive = hparams_.copy()
                 hparams_non_recursive['base_config'] = []
                 yaml.safe_dump(hparams_non_recursive, f, allow_unicode=True, encoding='utf-8')
+    dump_hparams()
 
     hparams_['infer'] = args.infer
     hparams_['debug'] = args.debug
     hparams_['validate'] = args.validate
-    global global_print_hparams
     if global_hparams:
         hparams.clear()
         hparams.update(hparams_)
-        hparams['is_main_process'] = is_main_process
-
-    if is_main_process and print_hparams and global_print_hparams and global_hparams:
-        print('| Hparams chains: ', config_chains)
-        print('| Hparams: ')
-        for i, (k, v) in enumerate(sorted(hparams_.items())):
-            print(f"\033[;33;m{k}\033[0m: {v}, ", end="\n" if i % 5 == 4 else "")
-        print("")
-        global_print_hparams = False
+    
+    @rank_zero_only
+    def print_hparams():
+        global global_print_hparams
+        if print_hparams and global_print_hparams and global_hparams:
+            print('| Hparams chains: ', config_chains)
+            print('| Hparams: ')
+            for i, (k, v) in enumerate(sorted(hparams_.items())):
+                print(f"\033[;33;m{k}\033[0m: {v}, ", end="\n" if i % 5 == 4 else "")
+            print("")
+            global_print_hparams = False
+    print_hparams()
+    
     # print(hparams_.keys())
     if hparams.get('exp_name') is None:
         hparams['exp_name'] = args.exp_name
