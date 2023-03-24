@@ -185,13 +185,12 @@ class AcousticBinarizer(BaseBinarizer):
             # code for parallel processing
             for item in tqdm(
                     chunked_multiprocess_run(self.process_item, args, num_workers=num_workers),
-                    total=len(list(self.meta_data_iterator(prefix))),
-                    ncols=80
+                    total=len(list(self.meta_data_iterator(prefix)))
             ):
                 postprocess(item)
         else:
             # code for single cpu processing
-            for a in tqdm(args, ncols=80):
+            for a in tqdm(args):
                 item = self.process_item(*a)
                 postprocess(item)
 
