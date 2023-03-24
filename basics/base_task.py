@@ -13,13 +13,12 @@ import random
 import sys
 import numpy as np
 import pytorch_lightning as pl
-from pytorch_lightning.callbacks import RichProgressBar, ModelSummary
 from pytorch_lightning.loggers import TensorBoardLogger
 from pytorch_lightning.utilities import grad_norm
 from pytorch_lightning.utilities.rank_zero import rank_zero_debug, rank_zero_only
 from utils.phoneme_utils import locate_dictionary
 from utils.training_utils import BatchSamplerSimilarLength, DistributedBatchSamplerSimilarLength
-from utils.pl_utils import DiffModelCheckpoint, get_latest_checkpoint_path, get_stategy_obj
+from utils.pl_utils import DiffModelCheckpoint, DiffTQDMProgressBar, get_latest_checkpoint_path, get_stategy_obj
 from torch import nn
 import torch.utils.data
 import utils
@@ -252,10 +251,8 @@ class BaseTask(pl.LightningModule):
                     max_updates=hparams['max_updates'],
                     permanent_ckpt_start=hparams['permanent_ckpt_start'],
                     permanent_ckpt_interval=hparams['permanent_ckpt_interval'],
-                    # verbose=True
                 ),
-                # RichProgressBar(),
-                # ModelSummary(max_depth=-1),
+                DiffTQDMProgressBar(),
             ],
             logger=TensorBoardLogger(
                 save_dir=str(work_dir),
