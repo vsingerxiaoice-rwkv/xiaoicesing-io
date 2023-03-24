@@ -13,9 +13,10 @@ import random
 import sys
 import numpy as np
 import pytorch_lightning as pl
-from pytorch_lightning.callbacks import RichProgressBar
+from pytorch_lightning.callbacks import RichProgressBar, ModelSummary
 from pytorch_lightning.loggers import TensorBoardLogger
 from pytorch_lightning.utilities import grad_norm
+from pytorch_lightning.utilities.rank_zero import rank_zero_debug
 from utils.phoneme_utils import locate_dictionary
 from utils.training_utils import BatchSamplerSimilarLength, DistributedBatchSamplerSimilarLength
 from utils.pl_utils import DiffModelCheckpoint, get_latest_checkpoint_path, get_stategy_obj
@@ -73,6 +74,8 @@ class BaseTask(pl.LightningModule):
 
         self.training_losses_meter = None
         self.training_sampler = None
+        self.skip_immediate_validation = False
+        self.skip_immediate_ckpt_save = False
         
         self.model = None
 
@@ -156,6 +159,9 @@ class BaseTask(pl.LightningModule):
         :param batch_idx:
         :return: output: dict
         """
+        if self.skip_immediate_validation:
+            rank_zero_debug('In validation step, skip immediate validation!')
+            return {}
         outputs = self._validation_step(sample, batch_idx)
         self.validation_step_outputs.append(outputs)
         return outputs
@@ -169,12 +175,16 @@ class BaseTask(pl.LightningModule):
         raise NotImplementedError
 
     def on_validation_epoch_end(self):
+        if self.skip_immediate_validation:
+            self.skip_immediate_validation = False
+            self.skip_immediate_ckpt_save = True
+            return
         loss_output = self._on_validation_end(self.validation_step_outputs)
         # print(f"\n==============\n "
         #       f"valid results: {loss_output}"
         #       f"\n==============\n")
-        self.log('val_loss', loss_output['total_loss'], on_epoch=True, prog_bar=True, logger=False, sync_dist=True)
-        self.log_dict({f'val/{k}': v for k, v in loss_output.items()}, on_epoch=True, prog_bar=False, logger=True, sync_dist=True)
+        self.log('val_loss', loss_output['total_loss'], on_epoch=True, prog_bar=True, sync_dist=True)
+        self.log_dict({f'val/{k}': v for k, v in loss_output.items()}, on_epoch=True, logger=True, sync_dist=True)
 
     def build_scheduler(self, optimizer):
         raise NotImplementedError
@@ -235,15 +245,17 @@ class BaseTask(pl.LightningModule):
                 DiffModelCheckpoint(
                     dirpath=work_dir,
                     filename='model_ckpt_steps_{step}',
-                    monitor='val_loss',
-                    mode='min',
+                    monitor='step',
+                    mode='max',
                     save_last=hparams['save_last'],
                     save_top_k=hparams['num_ckpt_keep'],
-                    save_on_train_epoch_end=True,
-                    auto_insert_metric_name=False,
+                    max_updates=hparams['max_updates'],
+                    permanent_ckpt_start=hparams['permanent_ckpt_start'],
+                    permanent_ckpt_interval=hparams['permanent_ckpt_interval'],
                     # verbose=True
                 ),
-                # RichProgressBar()
+                # RichProgressBar(),
+                # ModelSummary(max_depth=-1),
             ],
             logger=TensorBoardLogger(
                 save_dir=str(work_dir),
@@ -285,6 +297,7 @@ class BaseTask(pl.LightningModule):
                     else:
                         shutil.copy(locate_dictionary(), dictionary)
                     print(f'| Copied dictionary to {dictionary}.')
+            hparams['disable_sample_tqdm'] = True
             trainer.fit(task, ckpt_path=get_latest_checkpoint_path(work_dir))
         else:
             trainer.test(task)
@@ -292,3 +305,9 @@ class BaseTask(pl.LightningModule):
     def on_save_checkpoint(self, checkpoint):
         if isinstance(self.model, CategorizedModule):
             checkpoint['category'] = self.model.category
+        checkpoint['trainer_stage'] = self.trainer.state.stage.value
+    
+    def on_load_checkpoint(self, checkpoint):
+        from pytorch_lightning.trainer.states import RunningStage
+        if checkpoint.get('trainer_stage', '') == RunningStage.VALIDATING.value:
+            self.skip_immediate_validation = True

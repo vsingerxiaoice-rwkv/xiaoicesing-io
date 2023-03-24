@@ -1,6 +1,7 @@
 import os
 
 import torch
+from pytorch_lightning.utilities.rank_zero import rank_zero_info
 
 from modules.nsf_hifigan.models import load_model
 from modules.nsf_hifigan.nvSTFT import load_wav_to_torch, STFT
@@ -17,7 +18,7 @@ class NsfHifiGAN(BaseVocoder):
         self.device = device
         model_path = hparams['vocoder_ckpt']
         assert os.path.exists(model_path), 'HifiGAN model file is not found!'
-        print('| Load HifiGAN: ', model_path)
+        rank_zero_info('| Load HifiGAN: ' + model_path)
         self.model, self.h = load_model(model_path, device=self.device)
 
     def spec2wav_torch(self, mel, **kwargs):  # mel: [B, T, bins]
