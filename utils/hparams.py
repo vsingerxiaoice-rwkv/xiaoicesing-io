@@ -3,6 +3,8 @@ import os
 import yaml
 
 from pytorch_lightning.utilities.rank_zero import rank_zero_only
+
+from utils.multiprocess_utils import is_main_process as mp_is_main_process
 global_print_hparams = True
 hparams = {}
 
@@ -103,11 +105,12 @@ def set_hparams(config='', exp_name='', hparams_str='', print_hparams=True, glob
     def dump_hparams():
         if args_work_dir != '' and (not os.path.exists(ckpt_config_path) or args.reset) and not args.infer:
             os.makedirs(hparams_['work_dir'], exist_ok=True)
-            # Only the main process will save the config file
-            with open(ckpt_config_path, 'w', encoding='utf-8') as f:
-                hparams_non_recursive = hparams_.copy()
-                hparams_non_recursive['base_config'] = []
-                yaml.safe_dump(hparams_non_recursive, f, allow_unicode=True, encoding='utf-8')
+            if mp_is_main_process:
+                # Only the main process will save the config file
+                with open(ckpt_config_path, 'w', encoding='utf-8') as f:
+                    hparams_non_recursive = hparams_.copy()
+                    hparams_non_recursive['base_config'] = []
+                    yaml.safe_dump(hparams_non_recursive, f, allow_unicode=True, encoding='utf-8')
     dump_hparams()
 
     hparams_['infer'] = args.infer
@@ -120,7 +123,7 @@ def set_hparams(config='', exp_name='', hparams_str='', print_hparams=True, glob
     @rank_zero_only
     def print_hparams():
         global global_print_hparams
-        if print_hparams and global_print_hparams and global_hparams:
+        if mp_is_main_process and print_hparams and global_print_hparams and global_hparams:
             print('| Hparams chains: ', config_chains)
             print('| Hparams: ')
             for i, (k, v) in enumerate(sorted(hparams_.items())):
