@@ -21,7 +21,7 @@ matplotlib==3.6.2
 torchcrepe==0.0.17
 python-dateutil==2.8.2
 python-Levenshtein==0.12.2
-pytorch-lightning==2.0.0
+lightning==2.0.0
 six==1.16.0
 tqdm==4.65.0
 resampy==0.4.2
@@ -36,11 +36,11 @@ torchmetrics==0.11.4
 tensorboard==2.11.0
 tensorboard-plugin-wit==1.8.1
 protobuf==3.13.0
-PyYAML==5.4
+PyYAML==6.0
 pypinyin==0.39.0
 
 # It is recommended to install PyTorch manually.
 # See instructions at https://pytorch.org/get-started/previous-versions/
-# torch==2.0.0
-# torchaudio==2.0.0
-# torchvision==0.15.0
+# torch==1.13.1
+# torchaudio==0.13.1
+# torchvision==0.14.1

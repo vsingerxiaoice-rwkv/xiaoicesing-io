@@ -1,6 +1,6 @@
 import pathlib
 
-from pytorch_lightning.utilities.rank_zero import rank_zero_info
+from lightning.pytorch.utilities.rank_zero import rank_zero_info
 
 from utils.hparams import hparams
 

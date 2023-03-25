@@ -12,10 +12,10 @@ from utils.hparams import hparams, set_hparams
 import random
 import sys
 import numpy as np
-import pytorch_lightning as pl
-from pytorch_lightning.loggers import TensorBoardLogger
-from pytorch_lightning.utilities import grad_norm
-from pytorch_lightning.utilities.rank_zero import rank_zero_debug, rank_zero_only
+import lightning.pytorch as pl
+from lightning.pytorch.loggers import TensorBoardLogger
+from lightning.pytorch.utilities import grad_norm
+from lightning.pytorch.utilities.rank_zero import rank_zero_debug, rank_zero_only
 from utils.phoneme_utils import locate_dictionary
 from utils.training_utils import DsBatchSampler, DsDistributedBatchSampler
 from utils.pl_utils import DsModelCheckpoint, DsTQDMProgressBar, get_latest_checkpoint_path, get_stategy_obj
@@ -136,7 +136,7 @@ class BaseTask(pl.LightningModule):
         #       f"Epoch {self.current_epoch} ended. Steps: {self.global_step}. {loss_outputs}"
         #       f"\n==============\n")
     
-    def on_before_optimizer_step(self, optimizer):
+    def on_before_optimizer_step(self, *args, **kwargs):
         self.log_dict(grad_norm(self, norm_type=2))
     
     def on_validation_start(self):
@@ -305,6 +305,6 @@ class BaseTask(pl.LightningModule):
         checkpoint['trainer_stage'] = self.trainer.state.stage.value
     
     def on_load_checkpoint(self, checkpoint):
-        from pytorch_lightning.trainer.states import RunningStage
+        from lightning.pytorch.trainer.states import RunningStage
         if checkpoint.get('trainer_stage', '') == RunningStage.VALIDATING.value:
             self.skip_immediate_validation = True

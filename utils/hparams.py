@@ -2,7 +2,7 @@ import argparse
 import os
 import yaml
 
-from pytorch_lightning.utilities.rank_zero import rank_zero_only
+from lightning.pytorch.utilities.rank_zero import rank_zero_only
 
 from utils.multiprocess_utils import is_main_process as mp_is_main_process
 global_print_hparams = True
