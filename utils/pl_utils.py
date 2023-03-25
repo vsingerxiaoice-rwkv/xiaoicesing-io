@@ -13,7 +13,7 @@ from pytorch_lightning.strategies import DDPStrategy
 from pytorch_lightning.trainer.states import RunningStage
 from pytorch_lightning.utilities.rank_zero import rank_zero_info
 
-class DiffModelCheckpoint(ModelCheckpoint):
+class DsModelCheckpoint(ModelCheckpoint):
     def __init__(
         self,          
         dirpath,
@@ -144,7 +144,7 @@ def get_latest_checkpoint_path(work_dir):
     return last_ckpt_name if last_ckpt_name is not None else None
 
 
-class DiffTQDMProgressBar(TQDMProgressBar):
+class DsTQDMProgressBar(TQDMProgressBar):
     def __init__(self, refresh_rate: int = 1, process_position: int = 0):
         super().__init__(refresh_rate, process_position)
 

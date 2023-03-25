@@ -17,8 +17,8 @@ from pytorch_lightning.loggers import TensorBoardLogger
 from pytorch_lightning.utilities import grad_norm
 from pytorch_lightning.utilities.rank_zero import rank_zero_debug, rank_zero_only
 from utils.phoneme_utils import locate_dictionary
-from utils.training_utils import BatchSamplerSimilarLength, DistributedBatchSamplerSimilarLength
-from utils.pl_utils import DiffModelCheckpoint, DiffTQDMProgressBar, get_latest_checkpoint_path, get_stategy_obj
+from utils.training_utils import DsBatchSampler, DsDistributedBatchSampler
+from utils.pl_utils import DsModelCheckpoint, DsTQDMProgressBar, get_latest_checkpoint_path, get_stategy_obj
 from torch import nn
 import torch.utils.data
 import utils
@@ -204,15 +204,15 @@ class BaseTask(pl.LightningModule):
         }
 
     def build_batch_sampler(self, dataset, max_tokens, max_sentences, batch_by_size=True, shuffle=False):
-        batch_sampler_cls = partial(BatchSamplerSimilarLength,
+        batch_sampler_cls = partial(DsBatchSampler,
                                     max_tokens=max_tokens, max_sentences=max_sentences,
-                                    batch_by_size=batch_by_size)
+                                    batch_by_size=batch_by_size, sort_by_similar_size=hparams['sort_by_len'])
         if self.trainer.distributed_sampler_kwargs:
-            sampler = DistributedBatchSamplerSimilarLength(dataset,
-                                                           batch_sampler_cls=batch_sampler_cls,
-                                                           seed=hparams['seed'],
-                                                           shuffle=shuffle,
-                                                           **self.trainer.distributed_sampler_kwargs)
+            sampler = DsDistributedBatchSampler(dataset,
+                                                batch_sampler_cls=batch_sampler_cls,
+                                                seed=hparams['seed'],
+                                                shuffle=shuffle,
+                                                **self.trainer.distributed_sampler_kwargs)
         else:
             sampler = batch_sampler_cls(dataset, seed=hparams['seed'], shuffle=shuffle)
         return sampler
@@ -241,7 +241,7 @@ class BaseTask(pl.LightningModule):
             strategy=get_stategy_obj(hparams['pl_trainer_strategy']),
             precision=hparams['pl_trainer_precision'],
             callbacks=[
-                DiffModelCheckpoint(
+                DsModelCheckpoint(
                     dirpath=work_dir,
                     filename='model_ckpt_steps_{step}',
                     monitor='step',
@@ -252,7 +252,7 @@ class BaseTask(pl.LightningModule):
                     permanent_ckpt_start=hparams['permanent_ckpt_start'],
                     permanent_ckpt_interval=hparams['permanent_ckpt_interval'],
                 ),
-                DiffTQDMProgressBar(),
+                DsTQDMProgressBar(),
             ],
             logger=TensorBoardLogger(
                 save_dir=str(work_dir),

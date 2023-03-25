@@ -53,13 +53,14 @@ class WarmupCosineSchedule(LambdaLR):
         progress = (step - self.warmup_steps) / max(1, self.t_total - self.warmup_steps)
         return max(self.eta_min, 0.5 * (1. + math.cos(math.pi * self.cycles * 2.0 * progress)))
 
-class BatchSamplerSimilarLength(Sampler):
-    def __init__(self, dataset, max_tokens, max_sentences, indices=None, batch_by_size=True, seed=0, shuffle=True):
+class DsBatchSampler(Sampler):
+    def __init__(self, dataset, max_tokens, max_sentences, indices=None, batch_by_size=True, sort_by_similar_size=True, seed=0, shuffle=True):
         self.dataset = dataset
         self.sub_indices = indices
         self.max_tokens = max_tokens
         self.max_sentences = max_sentences
         self.batch_by_size = batch_by_size
+        self.sort_by_similar_size = sort_by_similar_size
         self.shuffle = shuffle
         self.seed = seed
         self.epoch = 0
@@ -73,7 +74,7 @@ class BatchSamplerSimilarLength(Sampler):
                 indices = np.array(self.sub_indices)
             else:
                 indices = rng.permutation(len(self.dataset))
-            if self.dataset.sort_by_len:
+            if self.sort_by_similar_size:
                 grid = hparams.get('sampler_frame_count_grid', 100)
                 sizes = (np.round(np.array(self.dataset._sizes)[indices] / grid) * grid).clip(grid, None).astype(np.int64)
                 indices = indices[np.argsort(sizes, kind='mergesort')]
@@ -97,7 +98,7 @@ class BatchSamplerSimilarLength(Sampler):
     def set_epoch(self, epoch):
         self.epoch = epoch
 
-class DistributedBatchSamplerSimilarLength(DistributedSampler):
+class DsDistributedBatchSampler(DistributedSampler):
     def __init__(self, dataset, num_replicas=None,
                  rank=None, shuffle=True,
                  seed=0, drop_last=False, batch_sampler_cls=None) -> None:

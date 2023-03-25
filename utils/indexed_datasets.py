@@ -1,9 +1,9 @@
 import pathlib
 import multiprocessing
-from copy import deepcopy
+from collections import deque
+
 import h5py
 import torch
-
 import numpy as np
 
 
@@ -12,7 +12,7 @@ class IndexedDataset:
         super().__init__()
         self.path = pathlib.Path(path)
         self.dset = h5py.File(self.path / f'{prefix}.hdf5', 'r')
-        self.cache = []
+        self.cache = deque(maxlen=num_cache)
         self.num_cache = num_cache
 
     def check_index(self, i):
@@ -31,7 +31,7 @@ class IndexedDataset:
                     return c[1]
         item = {k: v[()] if v.shape == () else torch.from_numpy(v[()]) for k, v in self.dset[str(i)].items()}
         if self.num_cache > 0:
-            self.cache = [(i, deepcopy(item))] + self.cache[:-1]
+            self.cache.appendleft((i, item))
         return item
 
     def __len__(self):

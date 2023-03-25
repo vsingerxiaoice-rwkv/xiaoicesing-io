@@ -31,16 +31,14 @@ matplotlib.use('Agg')
 
 
 class AcousticDataset(BaseDataset):
-    def __init__(self, prefix, shuffle=False):
-        super().__init__(shuffle)
+    def __init__(self, prefix):
+        super().__init__()
         self.data_dir = hparams['binary_data_dir']
         self.prefix = prefix
         self.sizes = np.load(os.path.join(self.data_dir, f'{self.prefix}.lengths'))
         self.indexed_ds = IndexedDataset(self.data_dir, self.prefix)
 
     def __getitem__(self, index):
-        # if self.indexed_ds is None:
-        #     self.indexed_ds = IndexedDataset(self.data_dir, self.prefix)
         return self.indexed_ds[index]
 
     def collater(self, samples):
@@ -81,8 +79,8 @@ class AcousticTask(BaseTask):
     def setup(self, stage):
         self.phone_encoder = self.build_phone_encoder()
         self.model = self.build_model()
-        self.train_dataset = self.dataset_cls(hparams['train_set_name'], shuffle=True)
-        self.valid_dataset = self.dataset_cls(hparams['valid_set_name'], shuffle=False)
+        self.train_dataset = self.dataset_cls(hparams['train_set_name'])
+        self.valid_dataset = self.dataset_cls(hparams['valid_set_name'])
 
     @staticmethod
     def build_phone_encoder():
@@ -121,9 +119,9 @@ class AcousticTask(BaseTask):
         return torch.utils.data.DataLoader(self.train_dataset,
                                            collate_fn=self.train_dataset.collater,
                                            batch_sampler=self.training_sampler,
-                                           num_workers=self.train_dataset.num_workers,
-                                           prefetch_factor=4,
-                                           pin_memory=False,
+                                           num_workers=int(hparams.get('ds_workers', os.getenv('NUM_WORKERS', 1))),
+                                           prefetch_factor=hparams.get('dataloader_prefetch_factor', 2),
+                                           pin_memory=True,
                                            persistent_workers=True)
 
     def val_dataloader(self):
@@ -133,8 +131,8 @@ class AcousticTask(BaseTask):
         return torch.utils.data.DataLoader(self.valid_dataset,
                                            collate_fn=self.valid_dataset.collater,
                                            batch_sampler=sampler,
-                                           num_workers=self.valid_dataset.num_workers,
-                                           prefetch_factor=4,
+                                           num_workers=int(hparams.get('ds_workers', os.getenv('NUM_WORKERS', 1))),
+                                           prefetch_factor=hparams.get('dataloader_prefetch_factor', 2),
                                            shuffle=False)
 
     def test_dataloader(self):

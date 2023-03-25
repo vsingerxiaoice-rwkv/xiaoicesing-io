@@ -9,12 +9,9 @@ from utils.hparams import hparams
 class BaseDataset(Dataset):
     '''
         Base class for datasets.
-        1. *ordered_indices*:
-            if self.shuffle == True, shuffle the indices;
-            if self.sort_by_len == True, sort data by length;
-        2. *sizes*:
+        1. *sizes*:
             clipped length if "max_frames" is set;
-        3. *num_tokens*:
+        2. *num_tokens*:
             unclipped length.
 
         Subclasses should define:
@@ -23,11 +20,9 @@ class BaseDataset(Dataset):
         2. *__getitem__*:
             the index function.
     '''
-    def __init__(self, shuffle):
+    def __init__(self):
         super().__init__()
         self.hparams = hparams
-        self.shuffle = shuffle
-        self.sort_by_len = hparams['sort_by_len']
         self.sizes = None
 
     @property
@@ -50,19 +45,3 @@ class BaseDataset(Dataset):
         """Return an example's size as a float or tuple. This value is used when
         filtering a dataset with ``--max-positions``."""
         return self._sizes[index]
-
-    def ordered_indices(self):
-        """Return an ordered list of indices. Batches will be constructed based
-        on this order."""
-        if self.shuffle:
-            indices = np.random.permutation(len(self))
-            if self.sort_by_len:
-                indices = indices[np.argsort(np.array(self._sizes)[indices], kind='mergesort')]
-                # 先random, 然后稳定排序, 保证排序后同长度的数据顺序是依照random permutation的 (被其随机打乱).
-        else:
-            indices = np.arange(len(self))
-        return indices
-
-    @property
-    def num_workers(self):
-        return int(hparams.get('ds_workers', os.getenv('NUM_WORKERS', 0)))
