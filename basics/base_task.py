@@ -121,9 +121,9 @@ class BaseTask(pl.LightningModule):
             pass
 
         # log_outputs['all_loss'] = total_loss.item()
-        progress_bar_log = log_outputs | {'step': self.global_step}
+        log_outputs.update({'step': self.global_step})
         tb_log = {f'tr/{k}': v for k, v in log_outputs.items()}
-        self.log_dict(progress_bar_log, prog_bar=True, on_step=True, on_epoch=False)
+        self.log_dict(log_outputs, prog_bar=True, on_step=True, on_epoch=False)
         self.log_dict(tb_log, logger=True, on_step=True, on_epoch=False)
         return {
             'loss': total_loss
