@@ -57,15 +57,10 @@ class AcousticDataset(BaseDataset):
             'mel': mel,
             'f0': f0,
         }
-        # if hparams['use_energy_embed']:
-        #     batch['energy'] = utils.collate_nd([s['energy'] for s in samples], 0.0)
         if hparams.get('use_key_shift_embed', False):
             batch['key_shift'] = torch.FloatTensor([s['key_shift'] for s in samples])[:, None]
         if hparams.get('use_speed_embed', False):
             batch['speed'] = torch.FloatTensor([s['speed'] for s in samples])[:, None]
-        # if hparams['use_spk_embed']:
-        #     spk_embed = torch.stack([s['spk_embed'] for s in samples])
-        #     batch['spk_embed'] = spk_embed
         if hparams['use_spk_id']:
             spk_ids = torch.LongTensor([s['spk_id'] for s in samples])
             batch['spk_ids'] = spk_ids
@@ -150,8 +145,6 @@ class AcousticTask(BaseTask):
 
         if hparams['use_spk_id']:
             spk_embed_id = sample['spk_ids']
-        # elif hparams['use_spk_embed']:
-        #     spk_embed = sample['spk_embed']
         else:
             spk_embed_id = None
         output = self.model(txt_tokens, mel2ph=mel2ph, f0=f0,

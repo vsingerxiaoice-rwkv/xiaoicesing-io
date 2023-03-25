@@ -51,7 +51,6 @@ mel_vmin: -6. #-6.
 mel_vmax: 1.5
 save_f0: true
 
-use_spk_embed: false
 use_spk_id: false
 f0_embed_type: continuous
 use_key_shift_embed: false

@@ -168,8 +168,6 @@ class AcousticBinarizer(BaseBinarizer):
             nonlocal total_sec, total_raw_sec
             if _item is None:
                 return
-            # item_['spk_embed'] = voice_encoder.embed_utterance(item_['wav']) \
-            #     if self.binarization_args['with_spk_embed'] else None
             builder.add_item(_item)
             lengths.append(_item['length'])
             total_sec += _item['seconds']

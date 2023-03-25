@@ -45,9 +45,7 @@ num_heads: 2
 enc_ffn_kernel_size: 9
 ffn_act: gelu
 ffn_padding: 'SAME'
-use_energy_embed: false
 use_spk_id: false
-use_spk_embed: false
 
 ###########
 # optimization
