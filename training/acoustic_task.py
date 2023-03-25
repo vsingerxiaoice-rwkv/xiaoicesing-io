@@ -172,7 +172,6 @@ class AcousticTask(BaseTask):
         log_outputs = self.run_model(sample)
         total_loss = sum([v for v in log_outputs.values() if isinstance(v, torch.Tensor) and v.requires_grad])
         log_outputs['batch_size'] = sample['tokens'].size()[0]
-        log_outputs['lr'] = self.lr_schedulers().get_lr()[0]
         return total_loss, log_outputs
 
     def _validation_step(self, sample, batch_idx):
