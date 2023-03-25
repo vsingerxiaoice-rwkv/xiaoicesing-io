@@ -56,11 +56,11 @@ class AcousticDataset(BaseDataset):
             'f0': f0,
         }
         if hparams.get('use_key_shift_embed', False):
-            batch['key_shift'] = torch.FloatTensor([float(s['key_shift']) for s in samples])[:, None]
+            batch['key_shift'] = torch.FloatTensor([s['key_shift'] for s in samples])[:, None]
         if hparams.get('use_speed_embed', False):
             batch['speed'] = torch.FloatTensor([s['speed'] for s in samples])[:, None]
         if hparams['use_spk_id']:
-            spk_ids = torch.LongTensor([int(s['spk_id']) for s in samples])
+            spk_ids = torch.LongTensor([s['spk_id'] for s in samples])
             batch['spk_ids'] = spk_ids
         return batch
 
