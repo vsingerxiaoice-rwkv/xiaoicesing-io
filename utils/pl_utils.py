@@ -157,6 +157,7 @@ class DiffTQDMProgressBar(TQDMProgressBar):
             if isinstance(v, float):
                 if 0.00001 <= v < 10:
                     items[k] = f"{v:.5f}"
+        items.pop("v_num", None)
         return items
 
 

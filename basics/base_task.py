@@ -260,7 +260,7 @@ class BaseTask(pl.LightningModule):
                 version='lastest'
             ),
             gradient_clip_val=hparams['clip_grad_norm'],
-            val_check_interval=hparams['val_check_interval'],
+            val_check_interval=hparams['val_check_interval'] * hparams['accumulate_grad_batches'], # so this is global_steps
             check_val_every_n_epoch=None,
             log_every_n_steps=hparams['log_interval'],
             max_steps=hparams['max_updates'],
