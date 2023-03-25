@@ -8,7 +8,7 @@ import torch
 import torch.distributions
 import torch.optim
 import torch.utils.data
-import lightning.pytorch as pl
+from lightning.pytorch.utilities.rank_zero import rank_zero_only
 from tqdm import tqdm
 
 import utils
@@ -92,8 +92,10 @@ class AcousticTask(BaseTask):
             vocab_size=len(self.phone_encoder),
             out_dims=hparams['audio_num_mel_bins']
         )
-        if self.trainer.local_rank == 0:
+        @rank_zero_only
+        def print_arch():
             utils.print_arch(model)
+        print_arch()
         return model
 
     def build_optimizer(self, model):
