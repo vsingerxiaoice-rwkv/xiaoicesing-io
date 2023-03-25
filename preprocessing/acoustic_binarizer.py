@@ -120,8 +120,8 @@ class AcousticBinarizer(BaseBinarizer):
 
         # Draw graph.
         plt.figure(figsize=(int(len(ph_required) * 0.8), 10))
-        x = list(phoneme_map.keys())
-        values = list(phoneme_map.values())
+        x = sorted(phoneme_map.keys())
+        values = [phoneme_map[k] for k in x]
         plt.bar(x=x, height=values)
         plt.tick_params(labelsize=15)
         plt.xlim(-1, len(ph_required))
@@ -141,8 +141,8 @@ class AcousticBinarizer(BaseBinarizer):
             unrecognizable_phones = ph_occurred.difference(ph_required)
             missing_phones = ph_required.difference(ph_occurred)
             raise BinarizationError('transcriptions and dictionary mismatch.\n'
-                                 f' (+) {sorted(unrecognizable_phones)}\n'
-                                 f' (-) {sorted(missing_phones)}')
+                                    f' (+) {sorted(unrecognizable_phones)}\n'
+                                    f' (-) {sorted(missing_phones)}')
 
         # Copy dictionary to binary data dir
         shutil.copy(locate_dictionary(), os.path.join(hparams['binary_data_dir'], 'dictionary.txt'))
