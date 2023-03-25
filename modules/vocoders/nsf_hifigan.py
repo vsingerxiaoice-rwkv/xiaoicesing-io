@@ -1,7 +1,7 @@
 import os
 
 import torch
-from pytorch_lightning.utilities.rank_zero import rank_zero_info
+from lightning.pytorch.utilities.rank_zero import rank_zero_info
 
 from modules.nsf_hifigan.models import load_model
 from modules.nsf_hifigan.nvSTFT import load_wav_to_torch, STFT

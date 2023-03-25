@@ -7,11 +7,11 @@ import warnings
 
 import torch
 
-import pytorch_lightning as pl
-from pytorch_lightning.callbacks import ModelCheckpoint, TQDMProgressBar
-from pytorch_lightning.strategies import DDPStrategy
-from pytorch_lightning.trainer.states import RunningStage
-from pytorch_lightning.utilities.rank_zero import rank_zero_info
+import lightning.pytorch as pl
+from lightning.pytorch.callbacks import ModelCheckpoint, TQDMProgressBar
+from lightning.pytorch.strategies import DDPStrategy
+from lightning.pytorch.trainer.states import RunningStage
+from lightning.pytorch.utilities.rank_zero import rank_zero_info
 
 class DsModelCheckpoint(ModelCheckpoint):
     def __init__(

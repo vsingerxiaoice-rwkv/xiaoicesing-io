@@ -8,7 +8,7 @@ import torch
 import torch.distributions
 import torch.optim
 import torch.utils.data
-import pytorch_lightning as pl
+import lightning.pytorch as pl
 from tqdm import tqdm
 
 import utils
