@@ -71,7 +71,6 @@ class BaseTask(pl.LightningModule):
         if self.max_eval_sentences == -1:
             hparams['max_eval_sentences'] = self.max_eval_sentences = self.max_sentences
 
-        self.training_losses_meter = None
         self.training_sampler = None
         self.skip_immediate_validation = False
         self.skip_immediate_ckpt_save = False
@@ -86,7 +85,6 @@ class BaseTask(pl.LightningModule):
         raise NotImplementedError
 
     def on_train_epoch_start(self):
-        self.training_losses_meter = {'total_loss': utils.AvgrageMeter()}
         if self.training_sampler is not None:
             self.training_sampler.set_epoch(self.current_epoch)
 
@@ -100,34 +98,13 @@ class BaseTask(pl.LightningModule):
         raise NotImplementedError
 
     def training_step(self, sample, batch_idx, optimizer_idx=-1):
-        loss_ret = self._training_step(sample, batch_idx, optimizer_idx)
-        self.opt_idx = optimizer_idx
-        if loss_ret is None:
-            return {'loss': None}
-        total_loss, log_outputs = loss_ret
-        log_outputs = utils.tensors_to_scalars(log_outputs)
-        for k, v in log_outputs.items():
-            if k not in self.training_losses_meter:
-                self.training_losses_meter[k] = utils.AvgrageMeter()
-            if not np.isnan(v):
-                self.training_losses_meter[k].update(v)
-        self.training_losses_meter['total_loss'].update(total_loss.item())
+        total_loss, log_outputs = self._training_step(sample, batch_idx, optimizer_idx)
 
-        try:
-            log_outputs['lr'] = self.scheduler.get_lr()
-            if isinstance(log_outputs['lr'], list):
-                log_outputs['lr'] = log_outputs['lr'][0]
-        except:
-            pass
-
-        # log_outputs['all_loss'] = total_loss.item()
-        log_outputs.update({'step': self.global_step})
+        log_outputs.update({'step': self.global_step, 'lr': self.lr_schedulers().get_lr()[0]})
         tb_log = {f'tr/{k}': v for k, v in log_outputs.items()}
         self.log_dict(log_outputs, prog_bar=True, on_step=True, on_epoch=False)
         self.log_dict(tb_log, logger=True, on_step=True, on_epoch=False)
-        return {
-            'loss': total_loss
-        }
+        return total_loss
 
     def on_train_epoch_end(self):
         pass
@@ -179,9 +156,6 @@ class BaseTask(pl.LightningModule):
             self.skip_immediate_ckpt_save = True
             return
         loss_output = self._on_validation_end(self.validation_step_outputs)
-        # print(f"\n==============\n "
-        #       f"valid results: {loss_output}"
-        #       f"\n==============\n")
         self.log('val_loss', loss_output['total_loss'], on_epoch=True, prog_bar=True, sync_dist=True)
         self.log_dict({f'val/{k}': v for k, v in loss_output.items()}, on_epoch=True, logger=True, sync_dist=True)
 

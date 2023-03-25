@@ -1,4 +1,6 @@
+import os
 import importlib
+os.environ['TORCH_CUDNN_V8_API_ENABLED'] = '1' # Prevent unacceptable slowdowns when using 16 precision
 
 from utils.hparams import set_hparams, hparams
 
