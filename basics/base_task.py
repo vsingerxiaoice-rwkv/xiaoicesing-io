@@ -1,30 +1,25 @@
+from datetime import datetime
+from functools import partial
+import logging
+import os
 import pathlib
 import shutil
-from datetime import datetime
+import sys
 
 import matplotlib
-
-from basics.base_model import CategorizedModule
-
 matplotlib.use('Agg')
 
-from utils.hparams import hparams, set_hparams
-import random
-import sys
-import numpy as np
+import torch.utils.data
 import lightning.pytorch as pl
 from lightning.pytorch.loggers import TensorBoardLogger
 from lightning.pytorch.utilities import grad_norm
 from lightning.pytorch.utilities.rank_zero import rank_zero_debug, rank_zero_only
-from utils.phoneme_utils import locate_dictionary
+
+from basics.base_model import CategorizedModule
+from utils.hparams import hparams
 from utils.training_utils import DsBatchSampler, DsDistributedBatchSampler
-from utils.pl_utils import DsModelCheckpoint, DsTQDMProgressBar, get_latest_checkpoint_path, get_stategy_obj
-from torch import nn
-import torch.utils.data
-import utils
-import logging
-from functools import partial
-import os
+from utils.phoneme_utils import locate_dictionary
+from utils.pl_utils import DsModelCheckpoint, DsTQDMProgressBar, get_latest_checkpoint_path, get_stategy
 
 torch.multiprocessing.set_sharing_strategy(os.getenv('TORCH_SHARE_STRATEGY', 'file_system'))
 
@@ -102,7 +97,7 @@ class BaseTask(pl.LightningModule):
 
         log_outputs.update({'step': self.global_step, 'lr': self.lr_schedulers().get_lr()[0]})
         tb_log = {f'tr/{k}': v for k, v in log_outputs.items()}
-        self.log_dict(log_outputs, prog_bar=True, on_step=True, on_epoch=False)
+        self.log_dict(log_outputs, prog_bar=True, logger=False, on_step=True, on_epoch=False)
         self.log_dict(tb_log, logger=True, on_step=True, on_epoch=False)
         return total_loss
 
@@ -156,7 +151,7 @@ class BaseTask(pl.LightningModule):
             self.skip_immediate_ckpt_save = True
             return
         loss_output = self._on_validation_end(self.validation_step_outputs)
-        self.log('val_loss', loss_output['total_loss'], on_epoch=True, prog_bar=True, sync_dist=True)
+        self.log('val_loss', loss_output['total_loss'], on_epoch=True, prog_bar=True, logger=False, sync_dist=True)
         self.log_dict({f'val/{k}': v for k, v in loss_output.items()}, on_epoch=True, logger=True, sync_dist=True)
 
     def build_scheduler(self, optimizer):
@@ -168,6 +163,8 @@ class BaseTask(pl.LightningModule):
     def configure_optimizers(self):
         optm = self.build_optimizer(self.model)
         scheduler = self.build_scheduler(optm)
+        if scheduler is None:
+            return optm
         return {
             "optimizer": optm,
             "lr_scheduler": {
@@ -212,7 +209,14 @@ class BaseTask(pl.LightningModule):
         trainer = pl.Trainer(
             accelerator=hparams['pl_trainer_accelerator'],
             devices=hparams['pl_trainer_devices'],
-            strategy=get_stategy_obj(hparams['pl_trainer_strategy']),
+            num_nodes=hparams['pl_trainer_num_nodes'],
+            strategy=get_stategy(
+                accelerator=hparams['pl_trainer_accelerator'],
+                devices=hparams['pl_trainer_devices'],
+                num_nodes=hparams['pl_trainer_num_nodes'],
+                strategy=hparams['pl_trainer_strategy'],
+                backend=hparams['ddp_backend']
+            ),
             precision=hparams['pl_trainer_precision'],
             callbacks=[
                 DsModelCheckpoint(

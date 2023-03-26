@@ -161,8 +161,48 @@ class DsTQDMProgressBar(TQDMProgressBar):
         return items
 
 
-def get_stategy_obj(strategy):
-    if strategy == 'ddp_gloo':
-        return DDPStrategy(process_group_backend='gloo')
-    else:
+def get_stategy(accelerator, devices, num_nodes, strategy, backend):
+    if accelerator != 'auto' and accelerator != 'gpu':
         return strategy
+    
+    from lightning_fabric.utilities.imports import _IS_INTERACTIVE
+    from lightning.pytorch.accelerators import AcceleratorRegistry
+    from lightning.pytorch.accelerators.cuda import CUDAAccelerator
+    from lightning.pytorch.accelerators.mps import MPSAccelerator
+    from pytorch_lightning.utilities.exceptions import MisconfigurationException
+
+    def _choose_gpu_accelerator_backend():
+        if MPSAccelerator.is_available():
+            return "mps"
+        if CUDAAccelerator.is_available():
+            return "cuda"
+        raise MisconfigurationException("No supported gpu backend found!")
+    _accelerator_flag = _choose_gpu_accelerator_backend()
+    
+    _num_nodes_flag = int(num_nodes) if num_nodes is not None else 1
+    _devices_flag = devices
+    
+    accelerator = AcceleratorRegistry.get(_accelerator_flag)
+    accelerator_cls = accelerator.__class__
+
+    if _devices_flag == "auto":
+        _devices_flag = accelerator.auto_device_count()
+    
+    _devices_flag = accelerator_cls.parse_devices(_devices_flag)
+    _parallel_devices = accelerator_cls.get_parallel_devices(_devices_flag)
+    
+    def get_ddp_strategy(_backend):
+        if _backend == 'gloo':
+            return DDPStrategy(process_group_backend='gloo')
+        elif _backend == 'nccl' or _backend == 'nccl_no_p2p':
+            return DDPStrategy(process_group_backend='nccl')
+        else:
+            raise ValueError(f'backend {_backend} is not valid.')
+    
+    if _num_nodes_flag > 1:
+        return get_ddp_strategy(backend)
+    if len(_parallel_devices) <= 1:
+        return strategy
+    if len(_parallel_devices) > 1 and _IS_INTERACTIVE:
+        return strategy
+    return get_ddp_strategy(backend)
