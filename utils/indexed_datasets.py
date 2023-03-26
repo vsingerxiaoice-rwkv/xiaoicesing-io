@@ -54,12 +54,12 @@ class IndexedDatasetBuilder:
     def add_item(self, item):
         if self.allowed_attr is not None:
             item = {
-                k: item.get(k)
+                k: item[k]
                 for k in self.allowed_attr
+                if k in item
             }
-        with self.lock:
-            item_no = self.counter
-            self.counter += 1
+        item_no = self.counter
+        self.counter += 1
         for k, v in item.items():
             if v is None:
                 continue
