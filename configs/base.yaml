@@ -87,4 +87,4 @@ num_valid_plots: 5
 
 pl_trainer_num_nodes: 1
 pl_trainer_strategy: 'auto'
-ddp_backend: 'gloo' # choose from 'gloo', 'nccl', 'nccl_no_p2p'
+ddp_backend: 'nccl' # choose from 'gloo', 'nccl', 'nccl_no_p2p'
