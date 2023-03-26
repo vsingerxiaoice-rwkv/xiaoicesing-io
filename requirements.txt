@@ -41,6 +41,6 @@ pypinyin==0.39.0
 
 # It is recommended to install PyTorch manually.
 # See instructions at https://pytorch.org/get-started/previous-versions/
-# torch==1.13.1
-# torchaudio==0.13.1
-# torchvision==0.14.1
+# torch==2.0.0
+# torchaudio==2.0.0
+# torchvision==0.15.0

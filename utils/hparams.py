@@ -43,6 +43,10 @@ def set_hparams(config='', exp_name='', hparams_str='', print_hparams=True, glob
         parser.add_argument('--reset', action='store_true', help='reset hparams')
         parser.add_argument('--debug', action='store_true', help='debug')
         args, unknown = parser.parse_known_args()
+        
+        tmp_args_hparams = args.hparams.split(',') if args.hparams.strip() != '' else []
+        tmp_args_hparams.extend(hparams_str.split(',') if hparams_str.strip() != '' else [])
+        args.hparams = ','.join(tmp_args_hparams)
     else:
         args = Args(config=config, exp_name=exp_name, hparams=hparams_str,
                     infer=False, validate=False, reset=False, debug=False)
@@ -93,6 +97,8 @@ def set_hparams(config='', exp_name='', hparams_str='', print_hparams=True, glob
 
     if args.hparams != "":
         for new_hparam in args.hparams.split(","):
+            if new_hparam.strip() == "":
+                continue
             k, v = new_hparam.split("=")
             if k not in hparams_:
                 hparams_[k] = eval(v)
@@ -120,6 +126,11 @@ def set_hparams(config='', exp_name='', hparams_str='', print_hparams=True, glob
         hparams.clear()
         hparams.update(hparams_)
     
+    if hparams.get('exp_name') is None:
+        hparams['exp_name'] = args.exp_name
+    if hparams_.get('exp_name') is None:
+        hparams_['exp_name'] = args.exp_name
+    
     @rank_zero_only
     def print_hparams():
         global global_print_hparams
@@ -132,9 +143,4 @@ def set_hparams(config='', exp_name='', hparams_str='', print_hparams=True, glob
             global_print_hparams = False
     print_hparams()
     
-    # print(hparams_.keys())
-    if hparams.get('exp_name') is None:
-        hparams['exp_name'] = args.exp_name
-    if hparams_.get('exp_name') is None:
-        hparams_['exp_name'] = args.exp_name
     return hparams_

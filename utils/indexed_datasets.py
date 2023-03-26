@@ -10,8 +10,10 @@ import numpy as np
 class IndexedDataset:
     def __init__(self, path, prefix, num_cache=0):
         super().__init__()
-        self.path = pathlib.Path(path)
-        self.dset = h5py.File(self.path / f'{prefix}.hdf5', 'r')
+        self.path = pathlib.Path(path) / f'{prefix}.data'
+        if not self.path.exists():
+            raise FileNotFoundError(f'IndexedDataset not found: {self.path}')
+        self.dset = h5py.File(self.path, 'r')
         self.cache = deque(maxlen=num_cache)
         self.num_cache = num_cache
 

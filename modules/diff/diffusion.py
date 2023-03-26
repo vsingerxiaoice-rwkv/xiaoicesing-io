@@ -274,7 +274,7 @@ class GaussianDiffusion(nn.Module):
                 dpm_solver = DPM_Solver(model_fn, noise_schedule)
 
                 steps = t // hparams["pndm_speedup"]
-                self.bar = tqdm(desc="sample time step", total=steps, disable=hparams['disable_sample_tqdm'])
+                self.bar = tqdm(desc="sample time step", total=steps, disable=not hparams['infer'])
                 x = dpm_solver.sample(
                     x,
                     steps=steps,
@@ -284,7 +284,7 @@ class GaussianDiffusion(nn.Module):
                 )
                 self.bar.close()
             else:
-                for i in tqdm(reversed(range(0, t)), desc='sample time step', total=t, disable=hparams['disable_sample_tqdm']):
+                for i in tqdm(reversed(range(0, t)), desc='sample time step', total=t, disable=not hparams['infer']):
                     x = self.p_sample(x, torch.full((b,), i, device=device, dtype=torch.long), cond)
             x = x.squeeze(1).transpose(1, 2)  # [B, T, M]
             return self.denorm_spec(x)
