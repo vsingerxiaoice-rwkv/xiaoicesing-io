@@ -13,13 +13,14 @@ from utils.hparams import hparams
 @register_vocoder
 class NsfHifiGAN(BaseVocoder):
     def __init__(self, device=None):
-        if device is None:
-            device = 'cuda' if torch.cuda.is_available() else 'cpu'
-        self.device = device
         model_path = hparams['vocoder_ckpt']
         assert os.path.exists(model_path), 'HifiGAN model file is not found!'
         rank_zero_info('| Load HifiGAN: ' + model_path)
-        self.model, self.h = load_model(model_path, device=self.device)
+        self.model, self.h = load_model(model_path)
+    
+    @property
+    def device(self):
+        return next(self.model.parameters()).device
 
     def spec2wav_torch(self, mel, **kwargs):  # mel: [B, T, bins]
         if self.h.sampling_rate != hparams['audio_sample_rate']:
@@ -71,12 +72,12 @@ class NsfHifiGAN(BaseVocoder):
         if self.h.fmax != hparams['fmax']:
             print('Mismatch parameters: hparams[\'fmax\']=', hparams['fmax'], '!=', self.h.fmax, '(vocoder)')
         with torch.no_grad():
-            c = torch.FloatTensor(mel).unsqueeze(0).transpose(2, 1)#.to(self.device)
+            c = torch.FloatTensor(mel).unsqueeze(0).transpose(2, 1).to(self.device)
             # log10 to log mel
             c = 2.30259 * c
             f0 = kwargs.get('f0')
             if f0 is not None:
-                f0 = torch.FloatTensor(f0[None, :])#.to(self.device)
+                f0 = torch.FloatTensor(f0[None, :]).to(self.device)
                 y = self.model(c, f0).view(-1)
             else:
                 y = self.model(c).view(-1)

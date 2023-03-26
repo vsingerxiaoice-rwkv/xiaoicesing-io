@@ -23,9 +23,9 @@ def load_model(model_path, device='cuda'):
     json_config = json.loads(data)
     h = AttrDict(json_config)
 
-    generator = Generator(h)#.to(device)
+    generator = Generator(h)
 
-    cp_dict = torch.load(model_path)#, map_location=device)
+    cp_dict = torch.load(model_path, map_location='cpu')
     generator.load_state_dict(cp_dict['generator'])
     generator.eval()
     generator.remove_weight_norm()
