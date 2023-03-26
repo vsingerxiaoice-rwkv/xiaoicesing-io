@@ -21,7 +21,7 @@ assert args.overwrite or not output_ckpt.exists(), \
     'and you may be at risk of losing your model.\n' \
     'If you are sure to OVERWRITE the existing file, please re-run this script with the \'--overwrite\' argument.'
 
-ckpt_loaded = torch.load(input_ckpt)
+ckpt_loaded = torch.load(input_ckpt, map_location='cpu')
 if 'category' in ckpt_loaded:
     print('This checkpoint file is already in the new format.')
     exit(0)
