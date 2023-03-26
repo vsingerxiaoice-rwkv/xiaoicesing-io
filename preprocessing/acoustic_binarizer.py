@@ -228,7 +228,8 @@ class AcousticBinarizer(BaseBinarizer):
             wav, length, hparams, interp_uv=self.binarization_args['interp_uv']
         )
         if uv.all():  # All unvoiced
-            raise BinarizationError(f'Empty gt f0 in \'{item_name}\'.')
+            print(f'Skipped \'{item_name}\': empty gt f0')
+            return None
         processed_input['f0'] = gt_f0.astype(np.float32)
 
         # get ground truth dur
