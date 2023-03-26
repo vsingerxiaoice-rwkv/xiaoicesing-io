@@ -148,8 +148,7 @@ class DiffSingerAcousticInfer(BaseSVSInfer):
         if hparams.get('use_key_shift_embed', False):
             shift_min, shift_max = hparams['augmentation_args']['random_pitch_shifting']['range']
             gender = param.get('gender', 0.)
-            if isinstance(param['gender'], float):  # static gender value
-                gender = param['gender']
+            if isinstance(gender, float):  # static gender value
                 print(f'Using static gender value: {gender:.3f}')
                 key_shift_value = gender * shift_max if gender >= 0 else gender * abs(shift_min)
                 batch['key_shift'] = torch.FloatTensor([key_shift_value]).to(self.device)[:, None]  # => [B=1, T=1]
