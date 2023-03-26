@@ -31,7 +31,7 @@ class IndexedDataset:
             for c in self.cache:
                 if c[0] == i:
                     return c[1]
-        item = {k: v[()] if v.shape == () else torch.from_numpy(v[()]) for k, v in self.dset[str(i)].items()}
+        item = {k: v[()].item() if v.shape == () else torch.from_numpy(v[()]) for k, v in self.dset[str(i)].items()}
         if self.num_cache > 0:
             self.cache.appendleft((i, item))
         return item
