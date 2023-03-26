@@ -50,7 +50,7 @@ def set_hparams(config='', exp_name='', hparams_str='', print_hparams=True, glob
     else:
         args = Args(config=config, exp_name=exp_name, hparams=hparams_str,
                     infer=False, validate=False, reset=False, debug=False)
-    
+
     args_work_dir = ''
     if args.exp_name != '':
         args.work_dir = args.exp_name
