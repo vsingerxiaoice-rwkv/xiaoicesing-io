@@ -43,7 +43,7 @@ class IndexedDatasetBuilder:
     def __init__(self, path, prefix, allowed_attr=None):
         self.path = pathlib.Path(path)
         self.prefix = prefix
-        self.dset = h5py.File(self.path / f'{prefix}.hdf5', 'w')
+        self.dset = h5py.File(self.path / f'{prefix}.data', 'w')
         self.counter = 0
         self.lock = multiprocessing.Lock()
         if allowed_attr is not None:
