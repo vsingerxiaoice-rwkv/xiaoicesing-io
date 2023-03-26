@@ -17,9 +17,12 @@ from lightning.pytorch.utilities.rank_zero import rank_zero_debug, rank_zero_onl
 
 from basics.base_model import CategorizedModule
 from utils.hparams import hparams
-from utils.training_utils import DsBatchSampler, DsDistributedBatchSampler
+from utils.training_utils import (
+    DsBatchSampler, DsDistributedBatchSampler,
+    DsModelCheckpoint, DsTQDMProgressBar,
+    get_latest_checkpoint_path, get_stategy
+)
 from utils.phoneme_utils import locate_dictionary
-from utils.pl_utils import DsModelCheckpoint, DsTQDMProgressBar, get_latest_checkpoint_path, get_stategy
 
 torch.multiprocessing.set_sharing_strategy(os.getenv('TORCH_SHARE_STRATEGY', 'file_system'))
 
@@ -100,13 +103,6 @@ class BaseTask(pl.LightningModule):
         self.log_dict(log_outputs, prog_bar=True, logger=False, on_step=True, on_epoch=False)
         self.log_dict(tb_log, logger=True, on_step=True, on_epoch=False)
         return total_loss
-
-    def on_train_epoch_end(self):
-        pass
-        # loss_outputs = {k: round(v.avg, 4) for k, v in self.training_losses_meter.items()}
-        # print(f"\n==============\n "
-        #       f"Epoch {self.current_epoch} ended. Steps: {self.global_step}. {loss_outputs}"
-        #       f"\n==============\n")
     
     def on_before_optimizer_step(self, *args, **kwargs):
         self.log_dict(grad_norm(self, norm_type=2))
@@ -174,9 +170,10 @@ class BaseTask(pl.LightningModule):
             }
         }
 
-    def build_batch_sampler(self, dataset, max_tokens, max_sentences, batch_by_size=True, shuffle=False):
+    def build_batch_sampler(self, dataset, max_tokens, max_sentences, required_batch_count_multiple=1, batch_by_size=True, shuffle=False):
         batch_sampler_cls = partial(DsBatchSampler,
                                     max_tokens=max_tokens, max_sentences=max_sentences,
+                                    required_batch_count_multiple=required_batch_count_multiple,
                                     batch_by_size=batch_by_size, sort_by_similar_size=hparams['sort_by_len'])
         if self.trainer.distributed_sampler_kwargs:
             sampler = DsDistributedBatchSampler(dataset,
@@ -224,7 +221,7 @@ class BaseTask(pl.LightningModule):
                     filename='model_ckpt_steps_{step}',
                     monitor='step',
                     mode='max',
-                    save_last=hparams['save_last'],
+                    save_last=False,
                     save_top_k=hparams['num_ckpt_keep'],
                     max_updates=hparams['max_updates'],
                     permanent_ckpt_start=hparams['permanent_ckpt_start'],
