@@ -155,10 +155,6 @@ class AcousticBinarizer(BaseBinarizer):
         total_sec = 0
         total_raw_sec = 0
 
-        # if self.binarization_args['with_spk_embed']:
-        #     from resemblyzer import VoiceEncoder
-        #     voice_encoder = VoiceEncoder().cuda()
-
         for item_name, meta_data in self.meta_data_iterator(prefix):
             args.append([item_name, meta_data, self.binarization_args])
 
@@ -220,12 +216,11 @@ class AcousticBinarizer(BaseBinarizer):
             'mel': mel,
             'tokens': np.array(self.phone_encoder.encode(meta_data['ph_seq']), dtype=np.int64),
             'ph_dur': np.array(meta_data['ph_dur']),
-            'interp_uv': self.binarization_args['interp_uv'],
         }
 
         # get ground truth f0
         gt_f0, _, uv = get_pitch_parselmouth(
-            wav, length, hparams, interp_uv=self.binarization_args['interp_uv']
+            wav, length, hparams, interp_uv=hparams['interp_uv']
         )
         if uv.all():  # All unvoiced
             print(f'Skipped \'{item_name}\': empty gt f0')

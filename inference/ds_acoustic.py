@@ -148,8 +148,7 @@ class DiffSingerAcousticInfer(BaseSVSInfer):
         if hparams.get('use_key_shift_embed', False):
             shift_min, shift_max = hparams['augmentation_args']['random_pitch_shifting']['range']
             gender = param.get('gender', 0.)
-            if isinstance(param['gender'], float):  # static gender value
-                gender = param['gender']
+            if isinstance(gender, (int, float, bool)):  # static gender value
                 print(f'Using static gender value: {gender:.3f}')
                 key_shift_value = gender * shift_max if gender >= 0 else gender * abs(shift_min)
                 batch['key_shift'] = torch.FloatTensor([key_shift_value]).to(self.device)[:, None]  # => [B=1, T=1]
@@ -164,13 +163,13 @@ class DiffSingerAcousticInfer(BaseSVSInfer):
                 gender_mask = gender_seq >= 0
                 key_shift_seq = gender_seq * (gender_mask * shift_max + (1 - gender_mask) * abs(shift_min))
                 batch['key_shift'] = torch.clip(
-                    torch.from_numpy(key_shift_seq).to(self.device)[None],  # => [B=1, T]
+                    torch.from_numpy(key_shift_seq.astype(np.float32)).to(self.device)[None],  # => [B=1, T]
                     min=shift_min, max=shift_max
                 )
 
         if hparams.get('use_speed_embed', False):
             if param.get('velocity') is None:
-                print('Using default velocity curve')
+                print('Using default velocity value')
                 batch['speed'] = torch.FloatTensor([1.]).to(self.device)[:, None]  # => [B=1, T=1]
             else:
                 print('Using manual velocity curve')
@@ -182,7 +181,7 @@ class DiffSingerAcousticInfer(BaseSVSInfer):
                     align_length=length
                 )
                 batch['speed'] = torch.clip(
-                    torch.from_numpy(speed_seq).to(self.device)[None],  # => [B=1, T]
+                    torch.from_numpy(speed_seq.astype(np.float32)).to(self.device)[None],  # => [B=1, T]
                     min=speed_min, max=speed_max
                 )
 

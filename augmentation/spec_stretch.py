@@ -3,12 +3,11 @@ from copy import deepcopy
 import numpy as np
 import torch
 
-from basics.base_augmentation import BaseAugmentation
-from utils.binarizer_utils import get_pitch_parselmouth, get_mel2ph_torch
+from basics.base_augmentation import BaseAugmentation, require_same_keys
 from modules.fastspeech.tts_modules import LengthRegulator
 from modules.vocoders.registry import VOCODERS
+from utils.binarizer_utils import get_pitch_parselmouth, get_mel2ph_torch
 from utils.hparams import hparams
-from utils.pitch_utils import f0_to_coarse
 
 
 class SpectrogramStretchAugmentation(BaseAugmentation):
@@ -20,6 +19,7 @@ class SpectrogramStretchAugmentation(BaseAugmentation):
         self.device = 'cuda' if torch.cuda.is_available() else 'cpu'
         self.lr = LengthRegulator().to(self.device)
 
+    @require_same_keys
     def process_item(self, item: dict, key_shift=0., speed=1., replace_spk_id=None) -> dict:
         aug_item = deepcopy(item)
         if hparams['vocoder'] in VOCODERS:
@@ -41,16 +41,14 @@ class SpectrogramStretchAugmentation(BaseAugmentation):
             aug_item['mel2ph'] = get_mel2ph_torch(
                 self.lr, torch.from_numpy(aug_item['ph_dur']), aug_item['length'], hparams, device=self.device
             ).cpu().numpy()
-            f0, f0_coarse, _ = get_pitch_parselmouth(
+            f0, _, _ = get_pitch_parselmouth(
                 wav, aug_item['length'], hparams, speed=speed, interp_uv=item['interp_uv']
             )
-            aug_item['f0'], aug_item['f0_coarse'] = \
-                f0.astype(np.float32), f0_coarse
+            aug_item['f0'] = f0.astype(np.float32)
 
         if key_shift != 0. or hparams.get('use_key_shift_embed', False):
             aug_item['key_shift'] = key_shift
             aug_item['f0'] *= 2 ** (key_shift / 12)
-            aug_item['f0_coarse'] = f0_to_coarse(aug_item['f0'])
 
         if replace_spk_id is not None:
             aug_item['spk_id'] = replace_spk_id

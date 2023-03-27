@@ -12,6 +12,7 @@ from utils.text_encoder import TokenTextEncoder
 class BinarizationError(Exception):
     pass
 
+
 class BaseBinarizer:
     """
         Base class for data processing.
@@ -33,6 +34,7 @@ class BaseBinarizer:
         3. load_ph_set:
             the phoneme set.
     """
+
     def __init__(self, data_dir=None):
         if data_dir is None:
             data_dir = hparams['raw_data_dir']
@@ -42,8 +44,9 @@ class BaseBinarizer:
         assert len(speakers) == len(set(speakers)), 'Speakers cannot contain duplicate names'
 
         self.raw_data_dirs = data_dir if isinstance(data_dir, list) else [data_dir]
-        assert len(speakers) == len(self.raw_data_dirs), \
-            'Number of raw data dirs must equal number of speaker names!'
+        if hparams['use_spk_id']:
+            assert len(speakers) == len(self.raw_data_dirs), \
+                'Number of raw data dirs must equal number of speaker names!'
 
         self.binarization_args = hparams['binarization_args']
         self.augmentation_args = hparams.get('augmentation_args', {})
