@@ -3,12 +3,11 @@ from copy import deepcopy
 import numpy as np
 import torch
 
-from basics.base_augmentation import BaseAugmentation
-from utils.binarizer_utils import get_pitch_parselmouth, get_mel2ph_torch
+from basics.base_augmentation import BaseAugmentation, require_same_keys
 from modules.fastspeech.tts_modules import LengthRegulator
 from modules.vocoders.registry import VOCODERS
+from utils.binarizer_utils import get_pitch_parselmouth, get_mel2ph_torch
 from utils.hparams import hparams
-from utils.pitch_utils import f0_to_coarse
 
 
 class SpectrogramStretchAugmentation(BaseAugmentation):
@@ -20,6 +19,7 @@ class SpectrogramStretchAugmentation(BaseAugmentation):
         self.device = 'cuda' if torch.cuda.is_available() else 'cpu'
         self.lr = LengthRegulator().to(self.device)
 
+    @require_same_keys
     def process_item(self, item: dict, key_shift=0., speed=1., replace_spk_id=None) -> dict:
         aug_item = deepcopy(item)
         if hparams['vocoder'] in VOCODERS:
