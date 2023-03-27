@@ -155,10 +155,6 @@ class AcousticBinarizer(BaseBinarizer):
         total_sec = 0
         total_raw_sec = 0
 
-        # if self.binarization_args['with_spk_embed']:
-        #     from resemblyzer import VoiceEncoder
-        #     voice_encoder = VoiceEncoder().cuda()
-
         for item_name, meta_data in self.meta_data_iterator(prefix):
             args.append([item_name, meta_data, self.binarization_args])
 
