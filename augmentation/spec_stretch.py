@@ -41,16 +41,14 @@ class SpectrogramStretchAugmentation(BaseAugmentation):
             aug_item['mel2ph'] = get_mel2ph_torch(
                 self.lr, aug_item['ph_dur'], aug_item['length'], hparams, device=self.device
             )
-            f0, f0_coarse, _ = get_pitch_parselmouth(
-                wav, aug_item['length'], hparams, speed=speed, interp_uv=item['interp_uv']
+            f0, _, _ = get_pitch_parselmouth(
+                wav, aug_item['length'], hparams, speed=speed, interp_uv=hparams['interp_uv']
             )
-            aug_item['f0'], aug_item['f0_coarse'] = \
-                torch.from_numpy(f0), torch.from_numpy(f0_coarse)
+            aug_item['f0'] = torch.from_numpy(f0)
 
         if key_shift != 0. or hparams.get('use_key_shift_embed', False):
             aug_item['key_shift'] = key_shift
             aug_item['f0'] *= 2 ** (key_shift / 12)
-            aug_item['f0_coarse'] = torch.from_numpy(f0_to_coarse(aug_item['f0'].numpy()))
 
         if replace_spk_id is not None:
             aug_item['spk_id'] = replace_spk_id

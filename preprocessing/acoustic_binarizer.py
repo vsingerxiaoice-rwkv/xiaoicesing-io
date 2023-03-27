@@ -220,12 +220,11 @@ class AcousticBinarizer(BaseBinarizer):
             'mel': torch.from_numpy(mel),
             'tokens': torch.LongTensor(self.phone_encoder.encode(meta_data['ph_seq'])),
             'ph_dur': torch.FloatTensor(meta_data['ph_dur']),
-            'interp_uv': self.binarization_args['interp_uv'],
         }
 
         # get ground truth f0
         gt_f0, _, uv = get_pitch_parselmouth(
-            wav, length, hparams, interp_uv=self.binarization_args['interp_uv']
+            wav, length, hparams, interp_uv=hparams['interp_uv']
         )
         if uv.all():  # All unvoiced
             print(f'Skipped \'{item_name}\': empty gt f0')
