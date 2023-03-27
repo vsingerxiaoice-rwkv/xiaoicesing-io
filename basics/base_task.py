@@ -11,6 +11,7 @@ matplotlib.use('Agg')
 
 import torch.utils.data
 import lightning.pytorch as pl
+from lightning.pytorch.callbacks import LearningRateMonitor
 from lightning.pytorch.loggers import TensorBoardLogger
 from lightning.pytorch.utilities import grad_norm
 from lightning.pytorch.utilities.rank_zero import rank_zero_debug, rank_zero_only
@@ -70,9 +71,6 @@ class BaseTask(pl.LightningModule):
             hparams['max_eval_sentences'] = self.max_eval_sentences = self.max_sentences
 
         self.training_sampler = None
-        self.skip_immediate_validation = False
-        self.skip_immediate_ckpt_save = False
-        
         self.model = None
 
     ###########
@@ -98,7 +96,6 @@ class BaseTask(pl.LightningModule):
     def training_step(self, sample, batch_idx, optimizer_idx=-1):
         total_loss, log_outputs = self._training_step(sample, batch_idx, optimizer_idx)
 
-        log_outputs.update({'step': self.global_step, 'lr': self.lr_schedulers().get_lr()[0]})
         tb_log = {f'tr/{k}': v for k, v in log_outputs.items()}
         self.log_dict(log_outputs, prog_bar=True, logger=False, on_step=True, on_epoch=False)
         self.log_dict(tb_log, logger=True, on_step=True, on_epoch=False)
@@ -126,9 +123,6 @@ class BaseTask(pl.LightningModule):
         :param batch_idx:
         :return: output: dict
         """
-        if self.skip_immediate_validation:
-            rank_zero_debug('In validation step, skip immediate validation!')
-            return {}
         outputs = self._validation_step(sample, batch_idx)
         self.validation_step_outputs.append(outputs)
         return outputs
@@ -142,10 +136,6 @@ class BaseTask(pl.LightningModule):
         raise NotImplementedError
 
     def on_validation_epoch_end(self):
-        if self.skip_immediate_validation:
-            self.skip_immediate_validation = False
-            self.skip_immediate_ckpt_save = True
-            return
         loss_output = self._on_validation_end(self.validation_step_outputs)
         self.log('val_loss', loss_output['total_loss'], on_epoch=True, prog_bar=True, logger=False, sync_dist=True)
         self.log_dict({f'val/{k}': v for k, v in loss_output.items()}, on_epoch=True, logger=True, sync_dist=True)
@@ -219,14 +209,16 @@ class BaseTask(pl.LightningModule):
                 DsModelCheckpoint(
                     dirpath=work_dir,
                     filename='model_ckpt_steps_{step}',
+                    auto_insert_metric_name=False,
                     monitor='step',
                     mode='max',
                     save_last=False,
+                    every_n_train_steps=hparams['val_check_interval'],
                     save_top_k=hparams['num_ckpt_keep'],
-                    max_updates=hparams['max_updates'],
                     permanent_ckpt_start=hparams['permanent_ckpt_start'],
                     permanent_ckpt_interval=hparams['permanent_ckpt_interval'],
                 ),
+                LearningRateMonitor(logging_interval='step'),
                 DsTQDMProgressBar(),
             ],
             logger=TensorBoardLogger(

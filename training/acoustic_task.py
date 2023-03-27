@@ -117,7 +117,6 @@ class AcousticTask(BaseTask):
         self.training_sampler = self.build_batch_sampler(self.train_dataset,
                                                          max_tokens=self.max_tokens,
                                                          max_sentences=self.max_sentences,
-                                                         required_batch_count_multiple=hparams['accumulate_grad_batches'],
                                                          shuffle=True)
         return torch.utils.data.DataLoader(self.train_dataset,
                                            collate_fn=self.train_dataset.collater,
