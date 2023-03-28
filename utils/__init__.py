@@ -224,7 +224,7 @@ class Timer:
 
 def print_arch(model, model_name='model'):
     print(f"| {model_name} Arch: ", model)
-    num_params(model, model_name=model_name)
+    # num_params(model, model_name=model_name)
 
 
 def num_params(model, print_out=True, model_name="model"):
