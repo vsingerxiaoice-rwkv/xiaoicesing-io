@@ -83,6 +83,13 @@ save_f0: false
 gen_dir_name: ''
 num_valid_plots: 5
 
+###########
+# pytorch lightning
+# Read https://lightning.ai/docs/pytorch/stable/common/trainer.html#trainer-class-api for possible values
+###########
+pl_trainer_accelerator: 'auto'
+pl_trainer_devices: 'auto'
+pl_trainer_precision: '32-true'
 pl_trainer_num_nodes: 1
 pl_trainer_strategy: 'auto'
 ddp_backend: 'nccl' # choose from 'gloo', 'nccl', 'nccl_no_p2p'
