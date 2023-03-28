@@ -129,7 +129,7 @@ class AcousticTask(BaseTask):
     def val_dataloader(self):
         sampler = self.build_batch_sampler(self.valid_dataset,
                                            max_tokens=self.max_tokens,
-                                           max_sentences=self.max_sentences)
+                                           max_sentences=self.max_eval_sentences)
         return torch.utils.data.DataLoader(self.valid_dataset,
                                            collate_fn=self.valid_dataset.collater,
                                            batch_sampler=sampler,
