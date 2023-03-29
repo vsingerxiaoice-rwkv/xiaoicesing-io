@@ -223,16 +223,41 @@ def get_stategy(accelerator, devices, num_nodes, strategy, backend):
     from lightning_fabric.utilities.imports import _IS_INTERACTIVE
     from lightning.pytorch.accelerators import AcceleratorRegistry
     from lightning.pytorch.accelerators.cuda import CUDAAccelerator
+    from lightning.pytorch.accelerators.hpu import HPUAccelerator
+    from lightning.pytorch.accelerators.ipu import IPUAccelerator
     from lightning.pytorch.accelerators.mps import MPSAccelerator
-    from pytorch_lightning.utilities.exceptions import MisconfigurationException
+    from lightning.pytorch.accelerators.tpu import TPUAccelerator
+    from lightning.pytorch.utilities.exceptions import MisconfigurationException
 
+    def _choose_auto_accelerator():
+        if TPUAccelerator.is_available():
+            return "tpu"
+        if IPUAccelerator.is_available():
+            return "ipu"
+        if HPUAccelerator.is_available():
+            return "hpu"
+        if MPSAccelerator.is_available():
+            return "mps"
+        if CUDAAccelerator.is_available():
+            return "cuda"
+        return "cpu"
+    
     def _choose_gpu_accelerator_backend():
         if MPSAccelerator.is_available():
             return "mps"
         if CUDAAccelerator.is_available():
             return "cuda"
         raise MisconfigurationException("No supported gpu backend found!")
-    _accelerator_flag = _choose_gpu_accelerator_backend()
+    
+    if accelerator == "auto":
+        _accelerator_flag = _choose_auto_accelerator()
+    elif accelerator == "gpu":
+        _accelerator_flag = _choose_gpu_accelerator_backend()
+    else:
+        return strategy
+    
+    if _accelerator_flag != "mps" and _accelerator_flag != "cuda":
+        return strategy
     
     _num_nodes_flag = int(num_nodes) if num_nodes is not None else 1
     _devices_flag = devices
