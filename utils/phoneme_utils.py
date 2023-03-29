@@ -1,6 +1,9 @@
 import pathlib
 
-from lightning.pytorch.utilities.rank_zero import rank_zero_info
+try:
+    from lightning.pytorch.utilities.rank_zero import rank_zero_info
+except ModuleNotFoundError:
+    rank_zero_info = print
 
 from utils.hparams import hparams
 

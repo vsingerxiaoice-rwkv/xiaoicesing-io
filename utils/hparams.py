@@ -2,7 +2,11 @@ import argparse
 import os
 import yaml
 
-from lightning.pytorch.utilities.rank_zero import rank_zero_only
+try:
+    from lightning.pytorch.utilities.rank_zero import rank_zero_only
+except ModuleNotFoundError:
+    def rank_zero_only(f):
+        return f
 
 from utils.multiprocess_utils import is_main_process as mp_is_main_process
 global_print_hparams = True
