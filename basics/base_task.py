@@ -101,8 +101,8 @@ class BaseTask(pl.LightningModule):
         self.log_dict(tb_log, logger=True, on_step=True, on_epoch=False)
         return total_loss
     
-    def on_before_optimizer_step(self, *args, **kwargs):
-        self.log_dict(grad_norm(self, norm_type=2))
+    # def on_before_optimizer_step(self, *args, **kwargs):
+    #     self.log_dict(grad_norm(self, norm_type=2))
     
     def on_validation_start(self):
         self.validation_step_outputs = []
