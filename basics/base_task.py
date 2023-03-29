@@ -95,7 +95,7 @@ class BaseTask(pl.LightningModule):
 
     def training_step(self, sample, batch_idx, optimizer_idx=-1):
         total_loss, log_outputs = self._training_step(sample, batch_idx, optimizer_idx)
-
+        log_outputs['lr'] = self.lr_schedulers().get_lr()[0]
         tb_log = {f'tr/{k}': v for k, v in log_outputs.items()}
         self.log_dict(log_outputs, prog_bar=True, logger=False, on_step=True, on_epoch=False)
         self.log_dict(tb_log, logger=True, on_step=True, on_epoch=False)
