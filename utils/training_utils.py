@@ -133,15 +133,20 @@ class DsBatchSampler(Sampler):
 
 class DsDistributedBatchSampler(DistributedSampler):
     def __init__(self, dataset, num_replicas=None,
-                 rank=None, shuffle=True,
-                 seed=0, drop_last=False, batch_sampler_cls=None) -> None:
-        super().__init__(dataset=dataset, num_replicas=num_replicas, rank=rank, shuffle=shuffle, seed=seed,
-                         drop_last=drop_last)
+                 rank=None, shuffle=True, seed=0,
+                 drop_last=False, batch_sampler_cls=None) -> None:
+        super().__init__(dataset=dataset, num_replicas=num_replicas, rank=rank,
+                         shuffle=shuffle, seed=seed, drop_last=drop_last)
+        self.total_size = len(self.dataset)
         self.batch_sampler_cls = batch_sampler_cls
         self.batch_sampler = None
 
     def __iter__(self):
-        indices = list(super().__iter__())
+        # Always shuffle to distribute to batch samplers, sorting is done in batch sampler
+        g = torch.Generator()
+        g.manual_seed(self.seed + self.epoch)
+        indices = torch.randperm(len(self.dataset), generator=g).tolist()
+        indices = indices[self.rank:self.total_size:self.num_replicas]
         self.batch_sampler = self.batch_sampler_cls(self.dataset, indices=indices, seed=self.seed, shuffle=self.shuffle)
         self.batch_sampler.set_epoch(self.epoch)
         return iter(self.batch_sampler)
