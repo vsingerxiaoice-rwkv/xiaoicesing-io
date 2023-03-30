@@ -11,13 +11,13 @@ import torch.utils.data
 from tqdm import tqdm
 
 import utils
+import utils.infer_utils
 from basics.base_dataset import BaseDataset
 from basics.base_task import BaseTask
 from basics.base_vocoder import BaseVocoder
 from modules.fastspeech.tts_modules import mel2ph_to_dur
 from modules.toplevel.acoustic_model import DiffSingerAcoustic
 from modules.vocoders.registry import get_vocoder_cls
-from utils import audio
 from utils.binarizer_utils import get_pitch_parselmouth
 from utils.hparams import hparams
 from utils.indexed_datasets import IndexedDataset
@@ -327,8 +327,8 @@ class AcousticTask(BaseTask):
             base_fn += text
         base_fn += ('-' + hparams['exp_name'])
         np.save(os.path.join(hparams['work_dir'], f'{prefix}_mels_npy', item_name), mel)
-        audio.save_wav(wav_out, f'{gen_dir}/wavs/{base_fn}.wav', hparams['audio_sample_rate'],
-                       norm=hparams['out_wav_norm'])
+        utils.infer_utils.save_wav(wav_out, f'{gen_dir}/wavs/{base_fn}.wav', hparams['audio_sample_rate'],
+                                   norm=hparams['out_wav_norm'])
         fig = plt.figure(figsize=(14, 10))
         spec_vmin = hparams['mel_vmin']
         spec_vmax = hparams['mel_vmax']

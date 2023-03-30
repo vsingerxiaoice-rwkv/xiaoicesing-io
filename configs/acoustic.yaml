@@ -22,7 +22,6 @@ fft_size: 2048           # FFT size.
 win_size: 2048           # FFT size.
 fmin: 40
 fmax: 16000
-min_level_db: -120
 
 binarization_args:
   shuffle: true
