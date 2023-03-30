@@ -208,7 +208,7 @@ class DsTQDMProgressBar(TQDMProgressBar):
         if 'batch_size' in items:
             items['batch_size'] = int(items['batch_size'])
         if self.show_steps:
-            items['steps'] = trainer.global_step
+            items['steps'] = str(trainer.global_step)
         for k, v in items.items():
             if isinstance(v, float):
                 if 0.00001 <= v < 10:
