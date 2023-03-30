@@ -109,7 +109,7 @@ class AcousticTask(BaseTask):
     def build_scheduler(self, optimizer):
         # return WarmupCosineSchedule(optimizer,
         #                             warmup_steps=hparams['warmup_updates'],
-        #                             t_total=hparams['max_updates'] // hparams['accumulate_grad_batches'],
+        #                             t_total=hparams['max_updates'],
         #                             eta_min=0)
         return torch.optim.lr_scheduler.StepLR(optimizer, hparams['decay_steps'], gamma=hparams.get('gamma', 0.5))
     
