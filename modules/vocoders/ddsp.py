@@ -115,7 +115,7 @@ class DDSP(BaseVocoder):
         assert os.path.exists(model_path), 'DDSP model file is not found!'
         self.model, self.args = load_model(model_path, device=self.device)
     
-    def to(self, device):
+    def to_device(self, device):
         pass
 
     def spec2wav_torch(self, mel, f0):  # mel: [B, T, bins] f0: [B, T]

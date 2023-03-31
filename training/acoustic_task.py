@@ -188,7 +188,7 @@ class AcousticTask(BaseTask):
 
     def _on_validation_start(self):
         if self.use_vocoder:
-            self.vocoder.to(next(self.model.parameters()).device)
+            self.vocoder.to_device(self.device)
     
     def _validation_step(self, sample, batch_idx):
         losses = self.run_model(sample, return_output=False, infer=False)

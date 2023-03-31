@@ -1,5 +1,5 @@
 class BaseVocoder:
-    def to(self, device):
+    def to_device(self, device):
         """
         
         :param device: torch.device or str

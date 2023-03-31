@@ -25,7 +25,7 @@ class NsfHifiGAN(BaseVocoder):
     def device(self):
         return next(self.model.parameters()).device
     
-    def to(self, device):
+    def to_device(self, device):
         self.model.to(device)
 
     def spec2wav_torch(self, mel, **kwargs):  # mel: [B, T, bins]

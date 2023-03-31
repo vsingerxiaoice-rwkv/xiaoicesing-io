@@ -74,9 +74,9 @@ class BaseTask(pl.LightningModule):
         self.training_sampler = None
         self.model = None
         
-        self.valid_metrics = nn.ModuleDict({
+        self.valid_metrics = {
             'total_loss': MeanMetric()
-        })
+        }
 
     ###########
     # Training, validation and testing
@@ -119,6 +119,7 @@ class BaseTask(pl.LightningModule):
     def on_validation_start(self):
         self._on_validation_start()
         for metric in self.valid_metrics.values():
+            metric.to(self.device)
             metric.reset()
 
     def _validation_step(self, sample, batch_idx):
