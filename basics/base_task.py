@@ -136,7 +136,8 @@ class BaseTask(pl.LightningModule):
         :param sample:
         :param batch_idx:
         """
-        outputs, weight = self._validation_step(sample, batch_idx)
+        with torch.autocast('cuda' if next(self.model.parameters()).is_cuda else 'cpu', dtype=torch.float32):
+            outputs, weight = self._validation_step(sample, batch_idx)
         for k, v in outputs.items():
             if isinstance(self.valid_metrics[k], MeanMetric):
                 self.valid_metrics[k].update(v, weight=weight)
