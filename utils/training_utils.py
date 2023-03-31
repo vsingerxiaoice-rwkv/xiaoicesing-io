@@ -115,9 +115,6 @@ class DsBatchSampler(Sampler):
         else:
             batches = [indices[i:i + self.max_sentences] for i in range(0, len(indices), self.max_sentences)]
         
-        if self.shuffle_batch:
-            rng.shuffle(batches)
-        
         floored_total_count = (len(batches) // self.num_replicas) * self.num_replicas
         if self.drop_last and len(batches) > floored_total_count:
             batches = batches[:floored_total_count]
@@ -133,6 +130,9 @@ class DsBatchSampler(Sampler):
             batch_assignment = batch_assignment[:((floored_batch_count // self.required_batch_count_multiple) * self.required_batch_count_multiple)]
         
         self.batches = [deepcopy(batches[i]) for i in batch_assignment]
+        
+        if self.shuffle_batch:
+            rng.shuffle(self.batches)
         
         del indices
         del batches

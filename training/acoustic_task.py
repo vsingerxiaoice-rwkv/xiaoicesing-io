@@ -122,7 +122,7 @@ class AcousticTask(BaseTask):
             rank=(self.trainer.distributed_sampler_kwargs or {}).get('rank', 0),
             sort_by_similar_size=hparams['sort_by_len'],
             shuffle_sample=True,
-            shuffle_batch=False,
+            shuffle_batch=True,
             seed=hparams['seed']
         )
         return torch.utils.data.DataLoader(self.train_dataset,
