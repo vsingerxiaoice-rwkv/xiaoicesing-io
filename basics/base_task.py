@@ -9,7 +9,9 @@ import sys
 import matplotlib
 matplotlib.use('Agg')
 
+from torch import nn
 import torch.utils.data
+from torchmetrics import MeanMetric
 import lightning.pytorch as pl
 from lightning.pytorch.callbacks import LearningRateMonitor
 from lightning.pytorch.loggers import TensorBoardLogger
@@ -19,7 +21,6 @@ from lightning.pytorch.utilities.rank_zero import rank_zero_debug, rank_zero_onl
 from basics.base_model import CategorizedModule
 from utils.hparams import hparams
 from utils.training_utils import (
-    DsBatchSampler, DsDistributedBatchSampler,
     DsModelCheckpoint, DsTQDMProgressBar,
     get_latest_checkpoint_path, get_stategy
 )
@@ -72,6 +73,10 @@ class BaseTask(pl.LightningModule):
 
         self.training_sampler = None
         self.model = None
+        
+        self.valid_metrics = nn.ModuleDict({
+            'total_loss': MeanMetric()
+        })
 
     ###########
     # Training, validation and testing
@@ -89,30 +94,39 @@ class BaseTask(pl.LightningModule):
 
         :param sample:
         :param batch_idx:
-        :return: total loss: torch.Tensor, loss_log: dict
+        :return: total loss: torch.Tensor, loss_log: dict, other_log: dict
         """
         raise NotImplementedError
 
     def training_step(self, sample, batch_idx, optimizer_idx=-1):
         total_loss, log_outputs = self._training_step(sample, batch_idx, optimizer_idx)
-        tb_log = {f'tr/{k}': v for k, v in log_outputs.items()}
+        
+        # logs to progress bar
         self.log_dict(log_outputs, prog_bar=True, logger=False, on_step=True, on_epoch=False)
         self.log('lr', self.lr_schedulers().get_lr()[0], prog_bar=True, logger=False, on_step=True, on_epoch=False)
+        # logs to tensorboard
+        tb_log = {f'tr/{k}': v for k, v in log_outputs.items()}
         self.log_dict(tb_log, logger=True, on_step=True, on_epoch=False)
+        
         return total_loss
     
     # def on_before_optimizer_step(self, *args, **kwargs):
     #     self.log_dict(grad_norm(self, norm_type=2))
     
+    def _on_validation_start(self):
+        pass
+    
     def on_validation_start(self):
-        self.validation_step_outputs = []
+        self._on_validation_start()
+        for metric in self.valid_metrics.values():
+            metric.reset()
 
     def _validation_step(self, sample, batch_idx):
         """
 
         :param sample:
         :param batch_idx:
-        :return: output: dict
+        :return: loss_log: dict, weight: int
         """
         raise NotImplementedError
 
@@ -121,24 +135,18 @@ class BaseTask(pl.LightningModule):
 
         :param sample:
         :param batch_idx:
-        :return: output: dict
         """
-        outputs = self._validation_step(sample, batch_idx)
-        self.validation_step_outputs.append(outputs)
-        return outputs
-
-    def _on_validation_end(self, outputs):
-        """
-
-        :param outputs:
-        :return: loss_output: dict
-        """
-        raise NotImplementedError
+        outputs, weight = self._validation_step(sample, batch_idx)
+        for k, v in outputs.items():
+            if isinstance(self.valid_metrics[k], MeanMetric):
+                self.valid_metrics[k].update(v, weight=weight)
 
     def on_validation_epoch_end(self):
-        loss_output = self._on_validation_end(self.validation_step_outputs)
-        self.log('val_loss', loss_output['total_loss'], on_epoch=True, prog_bar=True, logger=False, sync_dist=True)
-        self.log_dict({f'val/{k}': v for k, v in loss_output.items()}, on_epoch=True, logger=True, sync_dist=True)
+        metric_vals = {k: v.compute() for k, v in self.valid_metrics.items()}
+        self.log('val_loss', metric_vals['total_loss'], on_epoch=True, prog_bar=True, logger=False)
+        self.log_dict({f'val/{k}': v for k, v in metric_vals.items()}, on_epoch=True, logger=True)
+        for metric in self.valid_metrics.values():
+            metric.reset()
 
     def build_scheduler(self, optimizer):
         raise NotImplementedError
@@ -159,21 +167,6 @@ class BaseTask(pl.LightningModule):
                 "frequency": 1
             }
         }
-
-    def build_batch_sampler(self, dataset, max_tokens, max_sentences, required_batch_count_multiple=1, batch_by_size=True, shuffle=False):
-        batch_sampler_cls = partial(DsBatchSampler,
-                                    max_tokens=max_tokens, max_sentences=max_sentences,
-                                    required_batch_count_multiple=required_batch_count_multiple,
-                                    batch_by_size=batch_by_size, sort_by_similar_size=hparams['sort_by_len'])
-        if self.trainer.distributed_sampler_kwargs:
-            sampler = DsDistributedBatchSampler(dataset,
-                                                batch_sampler_cls=batch_sampler_cls,
-                                                seed=hparams['seed'],
-                                                shuffle=shuffle,
-                                                **self.trainer.distributed_sampler_kwargs)
-        else:
-            sampler = batch_sampler_cls(dataset, seed=hparams['seed'], shuffle=shuffle)
-        return sampler
 
     def on_test_start(self):
         self.on_validation_start()

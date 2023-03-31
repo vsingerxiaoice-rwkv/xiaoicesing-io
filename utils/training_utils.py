@@ -71,90 +71,111 @@ class WarmupCosineSchedule(LambdaLR):
 #==========Torch samplers==========
 
 class DsBatchSampler(Sampler):
-    def __init__(self,
-                 dataset, max_tokens, max_sentences, indices=None,
+    def __init__(self, dataset, max_tokens, max_sentences, sub_indices=None,
+                 num_replicas=None, rank=None,
                  required_batch_count_multiple=1, batch_by_size=True, sort_by_similar_size=True,
-                 seed=0, shuffle=True):
+                 shuffle_sample=False, shuffle_batch=False, seed=0, drop_last=False) -> None:
         self.dataset = dataset
-        self.sub_indices = indices
         self.max_tokens = max_tokens
         self.max_sentences = max_sentences
+        self.sub_indices = sub_indices
+        self.num_replicas = num_replicas
+        self.rank = rank
         self.required_batch_count_multiple = required_batch_count_multiple
         self.batch_by_size = batch_by_size
         self.sort_by_similar_size = sort_by_similar_size
-        self.shuffle = shuffle
+        self.shuffle_sample = shuffle_sample
+        self.shuffle_batch = shuffle_batch
         self.seed = seed
+        self.drop_last = drop_last
         self.epoch = 0
         self.batches = None
-        self.to_be_dropped = None
 
     def __iter__(self):
-        rng = np.random.RandomState(self.seed + self.epoch)
-        if self.shuffle:
+        rng = np.random.default_rng(self.seed + self.epoch)
+        if self.shuffle_sample:
             if self.sub_indices is not None:
                 rng.shuffle(self.sub_indices)
                 indices = np.array(self.sub_indices)
             else:
                 indices = rng.permutation(len(self.dataset))
+            
             if self.sort_by_similar_size:
                 grid = int(hparams.get('sampler_frame_count_grid', 200))
                 assert grid > 0
                 sizes = (np.round(np.array(self.dataset._sizes)[indices] / grid) * grid).clip(grid, None).astype(np.int64)
                 indices = indices[np.argsort(sizes, kind='mergesort')]
+            
             indices = indices.tolist()
         else:
             indices = self.sub_indices if self.sub_indices is not None else list(range(len(self.dataset)))
         
         if self.batch_by_size:
-            self.batches = utils.batch_by_size(indices, self.dataset.num_tokens, max_tokens=self.max_tokens, max_sentences=self.max_sentences)
+            batches = utils.batch_by_size(indices, self.dataset.num_tokens, max_tokens=self.max_tokens, max_sentences=self.max_sentences)
         else:
-            self.batches = [indices[i:i + self.max_sentences] for i in range(0, len(indices), self.max_sentences)]
+            batches = [indices[i:i + self.max_sentences] for i in range(0, len(indices), self.max_sentences)]
         
-        if self.shuffle:
-            rng.shuffle(self.batches)
+        if self.shuffle_batch:
+            rng.shuffle(batches)
         
-        self.to_be_dropped = set()
+        floored_total_count = (len(batches) // self.num_replicas) * self.num_replicas
+        if self.drop_last and len(batches) > floored_total_count:
+            batches = batches[:floored_total_count]
+            leftovers = []
+        else:
+            leftovers = (rng.permutation(len(batches) - floored_total_count) + floored_total_count).tolist()
+        
+        batch_assignment = rng.permuted(np.arange(floored_total_count).reshape(-1, self.num_replicas).transpose(), axis=0)[self.rank].tolist()
+        floored_batch_count = len(batch_assignment)
+        if self.rank < len(leftovers):
+            batch_assignment.append(leftovers[self.rank])
         if self.required_batch_count_multiple > 1:
-            num_batches_to_remove = len(self.batches) % self.required_batch_count_multiple
-            self.to_be_dropped = set(rng.choice(len(self.batches), num_batches_to_remove, replace=False))
+            batch_assignment = batch_assignment[:((floored_batch_count // self.required_batch_count_multiple) * self.required_batch_count_multiple)]
         
-        for i, batch in enumerate(self.batches):
-            if i in self.to_be_dropped:
-                continue
+        self.batches = [deepcopy(batches[i]) for i in batch_assignment]
+        
+        del indices
+        del batches
+        del batch_assignment
+        
+        for batch in self.batches:
             yield batch
-    
+
     def __len__(self):
-        if self.batches is None or self.to_be_dropped is None:
+        if self.batches is None:
             raise RuntimeError("Batches are not initialized. Call __iter__ first.")
-        return len(self.batches) - len(self.to_be_dropped)
+        return len(self.batches)
 
     def set_epoch(self, epoch):
         self.epoch = epoch
 
-class DsDistributedBatchSampler(DistributedSampler):
-    def __init__(self, dataset, num_replicas=None,
-                 rank=None, shuffle=True, seed=0,
-                 drop_last=False, batch_sampler_cls=None) -> None:
-        super().__init__(dataset=dataset, num_replicas=num_replicas, rank=rank,
-                         shuffle=shuffle, seed=seed, drop_last=drop_last)
-        self.total_size = len(self.dataset)
-        self.batch_sampler_cls = batch_sampler_cls
-        self.batch_sampler = None
+
+class DsEvalBatchSampler(Sampler):
+    def __init__(self, dataset, max_tokens, max_sentences, rank=None, batch_by_size=True) -> None:
+        self.dataset = dataset
+        self.max_tokens = max_tokens
+        self.max_sentences = max_sentences
+        self.rank = rank
+        self.batch_by_size = batch_by_size
+        self.batches = None
 
     def __iter__(self):
-        # Always shuffle to distribute to batch samplers, sorting is done in batch sampler
-        g = torch.Generator()
-        g.manual_seed(self.seed + self.epoch)
-        indices = torch.randperm(len(self.dataset), generator=g).tolist()
-        indices = indices[self.rank:self.total_size:self.num_replicas]
-        self.batch_sampler = self.batch_sampler_cls(self.dataset, indices=indices, seed=self.seed, shuffle=self.shuffle)
-        self.batch_sampler.set_epoch(self.epoch)
-        return iter(self.batch_sampler)
+        if self.rank == 0:
+            indices = list(range(len(self.dataset)))
+            if self.batch_by_size:
+                self.batches = utils.batch_by_size(indices, self.dataset.num_tokens, max_tokens=self.max_tokens, max_sentences=self.max_sentences)
+            else:
+                self.batches = [indices[i:i + self.max_sentences] for i in range(0, len(indices), self.max_sentences)]
+        else:
+            self.batches = [[0]]
+        
+        for batch in self.batches:
+            yield batch
 
-    def __len__(self) -> int:
-        if self.batch_sampler is None:
-            raise RuntimeError("BatchSampler is not initialized. Call __iter__ first.")
-        return len(self.batch_sampler)
+    def __len__(self):
+        if self.batches is None:
+            raise RuntimeError("Batches are not initialized. Call __iter__ first.")
+        return len(self.batches)
 
 #==========PL related==========
 

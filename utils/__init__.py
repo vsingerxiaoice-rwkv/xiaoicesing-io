@@ -24,22 +24,6 @@ def tensors_to_scalars(metrics):
     return new_metrics
 
 
-class AvgrageMeter(object):
-
-    def __init__(self):
-        self.reset()
-
-    def reset(self):
-        self.avg = 0
-        self.sum = 0
-        self.cnt = 0
-
-    def update(self, val, n=1):
-        self.sum += val * n
-        self.cnt += n
-        self.avg = self.sum / self.cnt
-
-
 def collate_nd(values, pad_value=0, max_len=None):
     """
     Pad a list of Nd tensors on their first dimension and stack them into a (N+1)d tensor.

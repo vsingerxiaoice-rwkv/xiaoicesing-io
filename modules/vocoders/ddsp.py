@@ -114,6 +114,9 @@ class DDSP(BaseVocoder):
         model_path = hparams['vocoder_ckpt']
         assert os.path.exists(model_path), 'DDSP model file is not found!'
         self.model, self.args = load_model(model_path, device=self.device)
+    
+    def to(self, device):
+        pass
 
     def spec2wav_torch(self, mel, f0):  # mel: [B, T, bins] f0: [B, T]
         if self.args.data.sampling_rate != hparams['audio_sample_rate']:

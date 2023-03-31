@@ -1,7 +1,10 @@
 import os
 
 import torch
-from lightning.pytorch.utilities.rank_zero import rank_zero_info
+try:
+    from lightning.pytorch.utilities.rank_zero import rank_zero_info
+except ModuleNotFoundError:
+    rank_zero_info = print
 
 from modules.nsf_hifigan.models import load_model
 from modules.nsf_hifigan.nvSTFT import load_wav_to_torch, STFT
@@ -21,6 +24,9 @@ class NsfHifiGAN(BaseVocoder):
     @property
     def device(self):
         return next(self.model.parameters()).device
+    
+    def to(self, device):
+        self.model.to(device)
 
     def spec2wav_torch(self, mel, **kwargs):  # mel: [B, T, bins]
         if self.h.sampling_rate != hparams['audio_sample_rate']:

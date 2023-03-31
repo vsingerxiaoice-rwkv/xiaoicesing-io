@@ -25,7 +25,7 @@ from utils.indexed_datasets import IndexedDataset
 from utils.phoneme_utils import build_phoneme_list
 from utils.plot import spec_to_figure
 from utils.text_encoder import TokenTextEncoder
-from utils.training_utils import WarmupCosineSchedule
+from utils.training_utils import DsBatchSampler, DsEvalBatchSampler, WarmupCosineSchedule
 
 matplotlib.use('Agg')
 
@@ -114,10 +114,17 @@ class AcousticTask(BaseTask):
         return torch.optim.lr_scheduler.StepLR(optimizer, hparams['decay_steps'], gamma=hparams.get('gamma', 0.5))
     
     def train_dataloader(self):
-        self.training_sampler = self.build_batch_sampler(self.train_dataset,
-                                                         max_tokens=self.max_tokens,
-                                                         max_sentences=self.max_sentences,
-                                                         shuffle=True)
+        self.training_sampler = DsBatchSampler(
+            self.train_dataset,
+            max_tokens=self.max_tokens,
+            max_sentences=self.max_sentences,
+            num_replicas=(self.trainer.distributed_sampler_kwargs or {}).get('num_replicas', 1),
+            rank=(self.trainer.distributed_sampler_kwargs or {}).get('rank', 0),
+            sort_by_similar_size=hparams['sort_by_len'],
+            shuffle_sample=True,
+            shuffle_batch=False,
+            seed=hparams['seed']
+        )
         return torch.utils.data.DataLoader(self.train_dataset,
                                            collate_fn=self.train_dataset.collater,
                                            batch_sampler=self.training_sampler,
@@ -127,9 +134,13 @@ class AcousticTask(BaseTask):
                                            persistent_workers=True)
 
     def val_dataloader(self):
-        sampler = self.build_batch_sampler(self.valid_dataset,
-                                           max_tokens=self.max_tokens,
-                                           max_sentences=self.max_eval_sentences)
+        sampler = DsEvalBatchSampler(
+            self.valid_dataset,
+            max_tokens=self.max_tokens,
+            max_sentences=self.max_eval_sentences,
+            rank=(self.trainer.distributed_sampler_kwargs or {}).get('rank', 0),
+            batch_by_size=False
+        )
         return torch.utils.data.DataLoader(self.valid_dataset,
                                            collate_fn=self.valid_dataset.collater,
                                            batch_sampler=sampler,
@@ -171,41 +182,28 @@ class AcousticTask(BaseTask):
             return losses, output
 
     def _training_step(self, sample, batch_idx, _):
-        log_outputs = self.run_model(sample)
-        total_loss = sum([v for v in log_outputs.values() if isinstance(v, torch.Tensor) and v.requires_grad])
-        log_outputs['batch_size'] = sample['tokens'].size()[0]
-        return total_loss, log_outputs
+        losses = self.run_model(sample)
+        total_loss = sum([v for v in losses.values() if isinstance(v, torch.Tensor) and v.requires_grad])
+        return total_loss, {**losses, 'batch_size': sample['tokens'].size()[0]}
 
+    def _on_validation_start(self):
+        if self.use_vocoder:
+            self.vocoder.to(next(self.model.parameters()).device)
+    
     def _validation_step(self, sample, batch_idx):
         losses = self.run_model(sample, return_output=False, infer=False)
         total_loss = sum(losses.values())
         outputs = {
-            'losses': losses,
-            'total_loss': total_loss,
-            'size': sample['size']
+            'total_loss': total_loss
         }
-        outputs = utils.tensors_to_scalars(outputs)
 
-        if batch_idx < hparams['num_valid_plots']:
+        if batch_idx < hparams['num_valid_plots'] and (self.trainer.distributed_sampler_kwargs or {}).get('rank', 0) == 0:
             _, mel_pred = self.run_model(sample, return_output=True, infer=True)
             if self.use_vocoder:
                 self.plot_wav(batch_idx, sample['mel'], mel_pred, f0=sample['f0'])
             self.plot_mel(batch_idx, sample['mel'], mel_pred, name=f'diffmel_{batch_idx}')
 
-        return outputs
-
-    def _on_validation_end(self, outputs):
-        all_losses_meter = {
-            'total_loss': utils.AvgrageMeter(),
-        }
-        for output in outputs:
-            n = output['size']
-            for k, v in output['losses'].items():
-                if k not in all_losses_meter:
-                    all_losses_meter[k] = utils.AvgrageMeter()
-                all_losses_meter[k].update(v, n)
-            all_losses_meter['total_loss'].update(output['total_loss'], n)
-        return {k: round(v.avg, 4) for k, v in all_losses_meter.items()}
+        return outputs, sample['size']
 
     ############
     # validation plots

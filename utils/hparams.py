@@ -136,7 +136,7 @@ def set_hparams(config='', exp_name='', hparams_str='', print_hparams=True, glob
         hparams_['exp_name'] = args.exp_name
     
     @rank_zero_only
-    def print_hparams():
+    def print_out_hparams():
         global global_print_hparams
         if mp_is_main_process and print_hparams and global_print_hparams and global_hparams:
             print('| Hparams chains: ', config_chains)
@@ -145,6 +145,6 @@ def set_hparams(config='', exp_name='', hparams_str='', print_hparams=True, glob
                 print(f"\033[;33;m{k}\033[0m: {v}, ", end="\n" if i % 5 == 4 else "")
             print("")
             global_print_hparams = False
-    print_hparams()
+    print_out_hparams()
     
     return hparams_
