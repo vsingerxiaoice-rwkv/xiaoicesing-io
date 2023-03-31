@@ -13,7 +13,7 @@ class IndexedDataset:
         self.path = pathlib.Path(path) / f'{prefix}.data'
         if not self.path.exists():
             raise FileNotFoundError(f'IndexedDataset not found: {self.path}')
-        self.dset = h5py.File(self.path, 'r')
+        self.dset = None
         self.cache = deque(maxlen=num_cache)
         self.num_cache = num_cache
 
@@ -23,9 +23,11 @@ class IndexedDataset:
 
     def __del__(self):
         if self.dset:
-            del self.dset
+            self.dset.close()
 
     def __getitem__(self, i):
+        if self.dset is None:
+            self.dset = h5py.File(self.path, 'r')
         self.check_index(i)
         if self.num_cache > 0:
             for c in self.cache:
@@ -41,9 +43,9 @@ class IndexedDataset:
 
 class IndexedDatasetBuilder:
     def __init__(self, path, prefix, allowed_attr=None):
-        self.path = pathlib.Path(path)
+        self.path = pathlib.Path(path) / f'{prefix}.data'
         self.prefix = prefix
-        self.dset = h5py.File(self.path / f'{prefix}.data', 'w')
+        self.dset = None
         self.counter = 0
         self.lock = multiprocessing.Lock()
         if allowed_attr is not None:
@@ -52,6 +54,8 @@ class IndexedDatasetBuilder:
             self.allowed_attr = None
 
     def add_item(self, item):
+        if self.dset is None:
+            self.dset = h5py.File(self.path, 'w')
         if self.allowed_attr is not None:
             item = {
                 k: item[k]
@@ -66,7 +70,8 @@ class IndexedDatasetBuilder:
             self.dset.create_dataset(f'{item_no}/{k}', data=v)
 
     def finalize(self):
-        del self.dset
+        if self.dset is not None:
+            self.dset.close()
 
 
 if __name__ == "__main__":
