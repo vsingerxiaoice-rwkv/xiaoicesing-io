@@ -167,7 +167,7 @@ class DDSP(BaseVocoder):
             f0 = torch.FloatTensor(f0).unsqueeze(0).unsqueeze(-1).to(self.device)
             signal, _, (s_h, s_n) = self.model(mel.to(self.device), f0.to(self.device))
             signal = signal.view(-1)
-        wav_out = signal.cpu().float().numpy()
+        wav_out = signal.cpu().numpy()
         return wav_out
 
     @staticmethod
