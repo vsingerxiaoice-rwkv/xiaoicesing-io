@@ -200,12 +200,29 @@ class DsModelCheckpoint(ModelCheckpoint):
     
     def state_dict(self):
         ret = super().state_dict()
+        ret['save_top_k'] = self.save_top_k
         ret['last_permanent_step'] = self.last_permanent_step
         ret['permanent_steps'] = list(self.permanent_steps)
         return ret
 
     def load_state_dict(self, state_dict) -> None:
-        super().load_state_dict(state_dict)
+        dirpath_from_ckpt = state_dict.get("dirpath", self.dirpath)
+
+        if self.dirpath == dirpath_from_ckpt:
+            self.best_model_score = state_dict["best_model_score"]
+            if self.save_top_k >= state_dict.get('save_top_k', self.save_top_k):
+                self.kth_best_model_path = state_dict.get("kth_best_model_path", self.kth_best_model_path)
+                self.kth_value = state_dict.get("kth_value", self.kth_value)
+                self.best_k_models = state_dict.get("best_k_models", self.best_k_models)
+            self.last_model_path = state_dict.get("last_model_path", self.last_model_path)
+        else:
+            warnings.warn(
+                f"The dirpath has changed from {dirpath_from_ckpt!r} to {self.dirpath!r},"
+                " therefore `best_model_score`, `kth_best_model_path`, `kth_value`, `last_model_path` and"
+                " `best_k_models` won't be reloaded. Only `best_model_path` will be reloaded."
+            )
+
+        self.best_model_path = state_dict["best_model_path"]
         self.last_permanent_step = state_dict.get("last_permanent_step", self.last_permanent_step)
         self.permanent_steps = set(state_dict.get("permanent_steps", self.permanent_steps))
     
