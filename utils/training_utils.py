@@ -12,7 +12,7 @@ from torch.optim.lr_scheduler import LambdaLR
 from torch.utils.data.distributed import Sampler, DistributedSampler
 
 import lightning.pytorch as pl
-from lightning.pytorch.callbacks import ModelCheckpoint, TQDMProgressBar
+from lightning.pytorch.callbacks import ModelCheckpoint, TQDMProgressBar, RichProgressBar
 from lightning.pytorch.strategies import DDPStrategy
 from lightning.pytorch.trainer.states import RunningStage
 from lightning.pytorch.utilities.rank_zero import rank_zero_info
@@ -193,18 +193,31 @@ class DsModelCheckpoint(ModelCheckpoint):
         self.permanent_ckpt_start = permanent_ckpt_start
         self.permanent_ckpt_interval = permanent_ckpt_interval
         self.last_permanent_step = None
+        self._verbose = self.verbose
+        self.verbose = False
+        
+    def _save_checkpoint(self, trainer: "pl.Trainer", filepath: str) -> None:
+        super()._save_checkpoint(trainer, filepath)
+        relative_path = Path(filepath).relative_to(Path('.').resolve())
+        if self._verbose:
+            rank_zero_info(f'Checkpoint {relative_path} saved.')
     
     def _remove_checkpoint(self, trainer: "pl.Trainer", filepath: str):
+        relative_path = Path(filepath).relative_to(Path('.').resolve())
         if (self.permanent_ckpt_start or 0) > 0 and (self.permanent_ckpt_interval or 0) > 0:
-            search = re.search(r'steps_\d+', Path(filepath).stem)
+            search = re.search(r'steps_\d+', relative_path.stem)
             if search:
                 step = int(search.group(0)[6:])
                 if step >= self.permanent_ckpt_start and \
                         (self.last_permanent_step is None or \
                          step >= self.last_permanent_step + self.permanent_ckpt_interval):
                     self.last_permanent_step = step
+                    if self._verbose:
+                        rank_zero_info(f'Checkpoint {relative_path} is permanent now.')
                     return
         super()._remove_checkpoint(trainer, filepath)
+        if self._verbose:
+            rank_zero_info(f'Removed checkpoint {relative_path}.')
 
 
 def get_latest_checkpoint_path(work_dir):

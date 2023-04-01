@@ -212,6 +212,7 @@ class BaseTask(pl.LightningModule):
                     save_top_k=hparams['num_ckpt_keep'],
                     permanent_ckpt_start=hparams['permanent_ckpt_start'],
                     permanent_ckpt_interval=hparams['permanent_ckpt_interval'],
+                    verbose=True
                 ),
                 LearningRateMonitor(logging_interval='step'),
                 DsTQDMProgressBar(),
