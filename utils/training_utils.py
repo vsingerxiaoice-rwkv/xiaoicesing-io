@@ -115,17 +115,19 @@ class DsBatchSampler(Sampler):
         else:
             batches = [indices[i:i + self.max_sentences] for i in range(0, len(indices), self.max_sentences)]
         
-        floored_total_count = (len(batches) // self.num_replicas) * self.num_replicas
-        if self.drop_last and len(batches) > floored_total_count:
-            batches = batches[:floored_total_count]
+        floored_total_batch_count = (len(batches) // self.num_replicas) * self.num_replicas
+        if self.drop_last and len(batches) > floored_total_batch_count:
+            batches = batches[:floored_total_batch_count]
             leftovers = []
         else:
-            leftovers = (rng.permutation(len(batches) - floored_total_count) + floored_total_count).tolist()
+            leftovers = (rng.permutation(len(batches) - floored_total_batch_count) + floored_total_batch_count).tolist()
         
-        batch_assignment = rng.permuted(np.arange(floored_total_count).reshape(-1, self.num_replicas).transpose(), axis=0)[self.rank].tolist()
+        batch_assignment = rng.permuted(np.arange(floored_total_batch_count).reshape(-1, self.num_replicas).transpose(), axis=0)[self.rank].tolist()
         floored_batch_count = len(batch_assignment)
         if self.rank < len(leftovers):
             batch_assignment.append(leftovers[self.rank])
+        elif len(leftovers) > 0:
+            batch_assignment.append(batch_assignment[self.epoch % floored_batch_count])
         if self.required_batch_count_multiple > 1:
             batch_assignment = batch_assignment[:((floored_batch_count // self.required_batch_count_multiple) * self.required_batch_count_multiple)]
         
