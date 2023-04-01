@@ -208,8 +208,6 @@ class DsModelCheckpoint(ModelCheckpoint):
         super().load_state_dict(state_dict)
         self.last_permanent_step = state_dict.get("last_permanent_step", self.last_permanent_step)
         self.permanent_steps = set(state_dict.get("permanent_steps", self.permanent_steps))
-        print(f'permanent_steps: {self.permanent_steps}')
-        print(f'last_permanent_step: {self.last_permanent_step}')
     
     def _save_checkpoint(self, trainer: "pl.Trainer", filepath: str) -> None:
         relative_path = Path(filepath).relative_to(Path('.').resolve())
