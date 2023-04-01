@@ -4,7 +4,7 @@ import math
 import os
 from pathlib import Path
 import re
-from typing import Optional
+from typing import Optional, Dict
 import warnings
 
 import numpy as np
@@ -200,31 +200,39 @@ class DsModelCheckpoint(ModelCheckpoint):
     
     def state_dict(self):
         ret = super().state_dict()
-        ret['save_top_k'] = self.save_top_k
         ret['last_permanent_step'] = self.last_permanent_step
         ret['permanent_steps'] = list(self.permanent_steps)
         return ret
 
     def load_state_dict(self, state_dict) -> None:
-        dirpath_from_ckpt = state_dict.get("dirpath", self.dirpath)
-
-        if self.dirpath == dirpath_from_ckpt:
-            self.best_model_score = state_dict["best_model_score"]
-            if self.save_top_k >= state_dict.get('save_top_k', self.save_top_k):
-                self.kth_best_model_path = state_dict.get("kth_best_model_path", self.kth_best_model_path)
-                self.kth_value = state_dict.get("kth_value", self.kth_value)
-                self.best_k_models = state_dict.get("best_k_models", self.best_k_models)
-            self.last_model_path = state_dict.get("last_model_path", self.last_model_path)
-        else:
-            warnings.warn(
-                f"The dirpath has changed from {dirpath_from_ckpt!r} to {self.dirpath!r},"
-                " therefore `best_model_score`, `kth_best_model_path`, `kth_value`, `last_model_path` and"
-                " `best_k_models` won't be reloaded. Only `best_model_path` will be reloaded."
-            )
-
-        self.best_model_path = state_dict["best_model_path"]
+        super().load_state_dict(state_dict)
         self.last_permanent_step = state_dict.get("last_permanent_step", self.last_permanent_step)
+        if self.last_permanent_step is not None:
+            self.last_permanent_step = self.permanent_ckpt_start + self.permanent_ckpt_interval * ((self.last_permanent_step - self.permanent_ckpt_start) // self.permanent_ckpt_interval)
         self.permanent_steps = set(state_dict.get("permanent_steps", self.permanent_steps))
+    
+    def _update_best_and_save(
+        self, current: torch.Tensor, trainer: "pl.Trainer", monitor_candidates: Dict[str, torch.Tensor]
+    ) -> None:
+        k = len(self.best_k_models) + 1 if self.save_top_k == -1 else self.save_top_k
+        
+        _op = max if self.mode == "min" else min
+        while len(self.best_k_models) > k and k > 0:
+            self.kth_best_model_path = _op(self.best_k_models, key=self.best_k_models.get)  # type: ignore[arg-type]
+            self.kth_value = self.best_k_models[self.kth_best_model_path]
+            
+            del_filepath = self.kth_best_model_path
+            self.best_k_models.pop(del_filepath)
+            filepath = self._get_metric_interpolated_filepath_name(monitor_candidates, trainer, del_filepath)
+            if del_filepath is not None and filepath != del_filepath:
+                rank_zero_info(f"Deleting {Path(del_filepath).relative_to(Path('.').resolve())} as it is not in top {k} checkpoints.")
+                self._remove_checkpoint(trainer, del_filepath)
+        
+        if len(self.best_k_models) == k:
+            self.kth_best_model_path = _op(self.best_k_models, key=self.best_k_models.get)  # type: ignore[arg-type]
+            self.kth_value = self.best_k_models[self.kth_best_model_path]
+
+        super()._update_best_and_save(current, trainer, monitor_candidates)
     
     def _save_checkpoint(self, trainer: "pl.Trainer", filepath: str) -> None:
         relative_path = Path(filepath).relative_to(Path('.').resolve())
@@ -241,7 +249,7 @@ class DsModelCheckpoint(ModelCheckpoint):
                     is_permament = True
         super()._save_checkpoint(trainer, filepath)
         if self._verbose:
-            rank_zero_info(f'{"Permanent checkpoint" if is_permament else "Checkpoint"} {relative_path} saved.')
+            rank_zero_info(f'Checkpoint {relative_path} saved.{" (Permanent)" if is_permament else ""}')
     
     def _remove_checkpoint(self, trainer: "pl.Trainer", filepath: str):
         relative_path = Path(filepath).relative_to(Path('.').resolve())
