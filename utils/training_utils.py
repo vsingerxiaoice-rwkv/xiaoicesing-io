@@ -4,6 +4,7 @@ import math
 import os
 from pathlib import Path
 import re
+from typing import Optional
 import warnings
 
 import numpy as np
@@ -193,17 +194,26 @@ class DsModelCheckpoint(ModelCheckpoint):
         self.permanent_ckpt_start = permanent_ckpt_start
         self.permanent_ckpt_interval = permanent_ckpt_interval
         self.last_permanent_step = None
+        self.permanent_steps = set()
         self._verbose = self.verbose
         self.verbose = False
-        
-    def _save_checkpoint(self, trainer: "pl.Trainer", filepath: str) -> None:
-        super()._save_checkpoint(trainer, filepath)
-        relative_path = Path(filepath).relative_to(Path('.').resolve())
-        if self._verbose:
-            rank_zero_info(f'Checkpoint {relative_path} saved.')
     
-    def _remove_checkpoint(self, trainer: "pl.Trainer", filepath: str):
+    def state_dict(self):
+        ret = super().state_dict()
+        ret['last_permanent_step'] = self.last_permanent_step
+        ret['permanent_steps'] = list(self.permanent_steps)
+        return ret
+
+    def load_state_dict(self, state_dict) -> None:
+        super().load_state_dict(state_dict)
+        self.last_permanent_step = state_dict.get("last_permanent_step", self.last_permanent_step)
+        self.permanent_steps = set(state_dict.get("permanent_steps", self.permanent_steps))
+        print(f'permanent_steps: {self.permanent_steps}')
+        print(f'last_permanent_step: {self.last_permanent_step}')
+    
+    def _save_checkpoint(self, trainer: "pl.Trainer", filepath: str) -> None:
         relative_path = Path(filepath).relative_to(Path('.').resolve())
+        is_permament = False
         if (self.permanent_ckpt_start or 0) > 0 and (self.permanent_ckpt_interval or 0) > 0:
             search = re.search(r'steps_\d+', relative_path.stem)
             if search:
@@ -212,8 +222,19 @@ class DsModelCheckpoint(ModelCheckpoint):
                         (self.last_permanent_step is None or \
                          step >= self.last_permanent_step + self.permanent_ckpt_interval):
                     self.last_permanent_step = step
-                    if self._verbose:
-                        rank_zero_info(f'Checkpoint {relative_path} is permanent now.')
+                    self.permanent_steps.add(step)
+                    is_permament = True
+        super()._save_checkpoint(trainer, filepath)
+        if self._verbose:
+            rank_zero_info(f'{"Permanent checkpoint" if is_permament else "Checkpoint"} {relative_path} saved.')
+    
+    def _remove_checkpoint(self, trainer: "pl.Trainer", filepath: str):
+        relative_path = Path(filepath).relative_to(Path('.').resolve())
+        if (self.permanent_ckpt_start or 0) > 0 and (self.permanent_ckpt_interval or 0) > 0:
+            search = re.search(r'steps_\d+', relative_path.stem)
+            if search:
+                step = int(search.group(0)[6:])
+                if step in self.permanent_steps:
                     return
         super()._remove_checkpoint(trainer, filepath)
         if self._verbose:
