@@ -1,32 +1,18 @@
 import math
+from math import sqrt
 
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
-
-from math import sqrt
+from torch.nn import Mish
 
 from utils.hparams import hparams
-from modules.commons.common_layers import Mish
 
 
-class AttrDict(dict):
+class Conv1d(torch.nn.Conv1d):
     def __init__(self, *args, **kwargs):
-        super(AttrDict, self).__init__(*args, **kwargs)
-        self.__dict__ = self
-
-    def __getattr__(self, item):
-        return self[item]
-
-    def override(self, attrs):
-        if isinstance(attrs, dict):
-            self.__dict__.update(**attrs)
-        elif isinstance(attrs, (list, tuple, set)):
-            for attr in attrs:
-                self.override(attr)
-        elif attrs is not None:
-            raise NotImplementedError
-        return self
+        super().__init__(*args, **kwargs)
+        nn.init.kaiming_normal_(self.weight)
 
 
 class SinusoidalPosEmb(nn.Module):
@@ -44,24 +30,20 @@ class SinusoidalPosEmb(nn.Module):
         return emb
 
 
-def Conv1d(*args, **kwargs):
-    layer = nn.Conv1d(*args, **kwargs)
-    nn.init.kaiming_normal_(layer.weight)
-    return layer
-
-
-@torch.jit.script
-def silu(x):
-    return x * torch.sigmoid(x)
-
-
 class ResidualBlock(nn.Module):
     def __init__(self, encoder_hidden, residual_channels, dilation):
         super().__init__()
-        self.dilated_conv = Conv1d(residual_channels, 2 * residual_channels, 3, padding=dilation, dilation=dilation)
+        self.residual_channels = residual_channels
+        self.dilated_conv = nn.Conv1d(
+            residual_channels,
+            2 * residual_channels,
+            kernel_size=3,
+            padding=dilation,
+            dilation=dilation
+        )
         self.diffusion_projection = nn.Linear(residual_channels, residual_channels)
-        self.conditioner_projection = Conv1d(encoder_hidden, 2 * residual_channels, 1)
-        self.output_projection = Conv1d(residual_channels, 2 * residual_channels, 1)
+        self.conditioner_projection = nn.Conv1d(encoder_hidden, 2 * residual_channels, 1)
+        self.output_projection = nn.Conv1d(residual_channels, 2 * residual_channels, 1)
 
     def forward(self, x, conditioner, diffusion_step):
         diffusion_step = self.diffusion_projection(diffusion_step).unsqueeze(-1)
@@ -70,67 +52,60 @@ class ResidualBlock(nn.Module):
 
         y = self.dilated_conv(y) + conditioner
 
-        gate, filter = torch.chunk(y, 2, dim=1)
         # Using torch.split instead of torch.chunk to avoid using onnx::Slice
-        # gate, filter = torch.split(y, torch.div(y.shape[1], 2), dim=1)
-
+        gate, filter = torch.split(y, [self.residual_channels, self.residual_channels], dim=1)
         y = torch.sigmoid(gate) * torch.tanh(filter)
 
         y = self.output_projection(y)
-        residual, skip = torch.chunk(y, 2, dim=1)
+
         # Using torch.split instead of torch.chunk to avoid using onnx::Slice
-        # residual, skip = torch.split(y, torch.div(y.shape[1], 2), dim=1)
-        
-        return (x + residual) / sqrt(2.0), skip
+        residual, skip = torch.split(y, [self.residual_channels, self.residual_channels], dim=1)
+        return (x + residual) / math.sqrt(2.0), skip
 
 
 class WaveNet(nn.Module):
-    def __init__(self, in_dims=80):
+    def __init__(self, in_dims):
         super().__init__()
-        self.params = params = AttrDict(
-            # Model params
-            encoder_hidden=hparams['hidden_size'],
-            residual_layers=hparams['residual_layers'],
-            residual_channels=hparams['residual_channels'],
-            dilation_cycle_length=hparams['dilation_cycle_length'],
-        )
-        self.input_projection = Conv1d(in_dims, params.residual_channels, 1)
-        self.diffusion_embedding = SinusoidalPosEmb(params.residual_channels)
-        dim = params.residual_channels
+        dim = hparams['residual_channels']
+        self.input_projection = Conv1d(in_dims, dim, 1)
+        self.diffusion_embedding = SinusoidalPosEmb(dim)
         self.mlp = nn.Sequential(
             nn.Linear(dim, dim * 4),
             Mish(),
             nn.Linear(dim * 4, dim)
         )
         self.residual_layers = nn.ModuleList([
-            ResidualBlock(params.encoder_hidden, params.residual_channels, 2 ** (i % params.dilation_cycle_length))
-            for i in range(params.residual_layers)
+            ResidualBlock(
+                encoder_hidden=hparams['hidden_size'],
+                residual_channels=dim,
+                dilation=2 ** (i % hparams['dilation_cycle_length'])
+            )
+            for i in range(hparams['residual_layers'])
         ])
-        self.skip_projection = Conv1d(params.residual_channels, params.residual_channels, 1)
-        self.output_projection = Conv1d(params.residual_channels, in_dims, 1)
+        self.skip_projection = Conv1d(dim, dim, 1)
+        self.output_projection = Conv1d(dim, in_dims, 1)
         nn.init.zeros_(self.output_projection.weight)
 
     def forward(self, spec, diffusion_step, cond):
         """
-
         :param spec: [B, 1, M, T]
         :param diffusion_step: [B, 1]
         :param cond: [B, M, T]
         :return:
         """
-        x = spec[:, 0]
-        x = self.input_projection(x)  # x [B, residual_channel, T]
+        x = spec.squeeze(1)
+        x = self.input_projection(x)  # [B, residual_channel, T]
 
         x = F.relu(x)
         diffusion_step = self.diffusion_embedding(diffusion_step)
         diffusion_step = self.mlp(diffusion_step)
         skip = []
-        for layer_id, layer in enumerate(self.residual_layers):
+        for layer in self.residual_layers:
             x, skip_connection = layer(x, cond, diffusion_step)
             skip.append(skip_connection)
 
         x = torch.sum(torch.stack(skip), dim=0) / sqrt(len(self.residual_layers))
         x = self.skip_projection(x)
         x = F.relu(x)
-        x = self.output_projection(x)  # [B, 80, T]
+        x = self.output_projection(x)  # [B, mel_bins, T]
         return x[:, None, :, :]

@@ -15,16 +15,14 @@ DEFAULT_MAX_TARGET_POSITIONS = 2000
 class TransformerEncoderLayer(nn.Module):
     def __init__(self, hidden_size, dropout, kernel_size=None, num_heads=2, norm='ln'):
         super().__init__()
-        self.hidden_size = hidden_size
-        self.dropout = dropout
-        self.num_heads = num_heads
         self.op = EncSALayer(
             hidden_size, num_heads, dropout=dropout,
             attention_dropout=0.0, relu_dropout=dropout,
             kernel_size=kernel_size
             if kernel_size is not None else hparams['enc_ffn_kernel_size'],
             padding=hparams['ffn_padding'],
-            norm=norm, act=hparams['ffn_act'])
+            norm=norm, act=hparams['ffn_act']
+        )
 
     def forward(self, x, **kwargs):
         return self.op(x, **kwargs)

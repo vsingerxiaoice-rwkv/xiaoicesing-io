@@ -2,7 +2,10 @@ import torch
 import torch.nn as nn
 from torch.nn import functional as F
 
-from modules.commons.common_layers import Embedding, Linear
+from modules.commons.common_layers import (
+    NormalInitEmbedding as Embedding,
+    XavierUniformInitLinear as Linear,
+)
 from modules.fastspeech.tts_modules import FastSpeech2Encoder, mel2ph_to_dur
 from utils.hparams import hparams
 from utils.pitch_utils import f0_to_coarse
