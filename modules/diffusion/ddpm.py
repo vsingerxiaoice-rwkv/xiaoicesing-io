@@ -140,12 +140,11 @@ class GaussianDiffusion(nn.Module):
         posterior_log_variance_clipped = extract(self.posterior_log_variance_clipped, t, x_t.shape)
         return posterior_mean, posterior_variance, posterior_log_variance_clipped
 
-    def p_mean_variance(self, x, t, cond, clip_denoised: bool):
+    def p_mean_variance(self, x, t, cond):
         noise_pred = self.denoise_fn(x, t, cond=cond)
         x_recon = self.predict_start_from_noise(x, t=t, noise=noise_pred)
 
-        if clip_denoised:
-            x_recon.clamp_(-1., 1.)
+        x_recon.clamp_(-1., 1.)
 
         model_mean, posterior_variance, posterior_log_variance = self.q_posterior(x_start=x_recon, x_t=x, t=t)
         return model_mean, posterior_variance, posterior_log_variance
@@ -153,7 +152,7 @@ class GaussianDiffusion(nn.Module):
     @torch.no_grad()
     def p_sample(self, x, t, cond, clip_denoised=True, repeat_noise=False):
         b, *_, device = *x.shape, x.device
-        model_mean, _, model_log_variance = self.p_mean_variance(x=x, t=t, cond=cond, clip_denoised=clip_denoised)
+        model_mean, _, model_log_variance = self.p_mean_variance(x=x, t=t, cond=cond)
         noise = noise_like(x.shape, device, repeat_noise)
         # no noise when t == 0
         nonzero_mask = (1 - (t == 0).float()).reshape(b, *((1,) * (len(x.shape) - 1)))
