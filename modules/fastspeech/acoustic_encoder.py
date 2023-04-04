@@ -18,7 +18,7 @@ class FastSpeech2AcousticEncoder(FastSpeech2Encoder):
         x = self.embed_scale * self.embed_tokens(txt_tokens)
         x = x + dur_embed
         if hparams['use_pos_embed']:
-            if hparams.get('rel_pos', False):
+            if hparams['rel_pos']:
                 x = self.embed_positions(x)
             else:
                 positions = self.embed_positions(txt_tokens)

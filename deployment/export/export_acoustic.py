@@ -22,7 +22,7 @@ import torch.nn as nn
 import torch.nn.functional as F
 from torch.nn import Linear, Embedding
 
-from basics.base_model import CategorizedModule
+from basics.base_module import CategorizedModule
 from modules.diffusion.ddpm import beta_schedule, DIFF_DENOISERS
 from modules.fastspeech.acoustic_encoder import FastSpeech2AcousticEncoder
 from utils import load_ckpt
@@ -47,7 +47,7 @@ def f0_to_coarse(f0):
     a = (f0_bin - 2) / (f0_mel_max - f0_mel_min)
     b = f0_mel_min * a - 1.
     f0_mel = torch.where(f0_mel > 0, f0_mel * a - b, f0_mel)
-    torch.clip_(f0_mel, min=1., max=float(f0_bin - 1))
+    torch.clamp_(f0_mel, min=1., max=float(f0_bin - 1))
     f0_coarse = torch.round(f0_mel).long()
     return f0_coarse
 
@@ -97,9 +97,9 @@ class FastSpeech2Acoustic(CategorizedModule):
         return 'acoustic'
 
     def forward(self, tokens, durations, f0, gender=None, velocity=None, spk_embed=None):
-        durations *= tokens > 0
+        durations = durations * (tokens > 0)
         mel2ph = self.lr.forward(durations)
-        f0 *= mel2ph > 0
+        f0 = f0 * (mel2ph > 0)
         mel2ph = mel2ph[..., None].repeat((1, 1, hparams['hidden_size']))
         dur_embed = self.dur_embed(durations.float()[:, :, None])
         encoded = self.encoder(tokens, dur_embed)
@@ -233,7 +233,7 @@ class MelExtractor(nn.Module):
 
 class GaussianDiffusion(CategorizedModule):
     def __init__(self, out_dims, timesteps=1000, k_step=1000,
-                 denoiser_type=None,spec_min=None, spec_max=None):
+                 denoiser_type=None, spec_min=None, spec_max=None):
         super().__init__()
         self.mel_bins = out_dims
         self.k_step = k_step
@@ -303,7 +303,7 @@ class GaussianDiffusion(CategorizedModule):
 
         device = condition.device
         n_frames = condition.shape[2]
-        step_range = torch.arange(0, self.k_step, speedup, dtype=torch.long, device=device).flip(0)
+        step_range = torch.arange(0, self.k_step, speedup, dtype=torch.long, device=device).flip(0)[:, None]
         x = torch.randn((1, 1, self.mel_bins, n_frames), device=device)
 
         if speedup > 1:
@@ -970,7 +970,7 @@ def export(fs2_path, diff_path, ckpt_steps=None,
             'condition'
         ],
         dynamic_axes=dynamix_axes,
-        opset_version=11
+        opset_version=15
     )
     model = onnx.load(fs2_path)
     model, check = onnxsim.simplify(model, include_subgraph=True)
@@ -981,7 +981,7 @@ def export(fs2_path, diff_path, ckpt_steps=None,
     noise_t = torch.randn(shape, device=device)
     noise_list = torch.randn((3, *shape), device=device)
     condition = torch.rand((1, hparams['hidden_size'], n_frames), device=device)
-    step = (torch.rand((), device=device) * hparams['K_step']).long()
+    step = (torch.rand((1,), device=device) * hparams['K_step']).long()
     speedup = (torch.rand((), device=device) * step / 10.).long()
     step_prev = torch.maximum(step - speedup, torch.tensor(0, dtype=torch.long, device=device))
 
@@ -1040,7 +1040,6 @@ def export(fs2_path, diff_path, ckpt_steps=None,
     diffusion = torch.jit.script(diffusion)
     condition = torch.rand((1, n_frames, hparams['hidden_size']), device=device)
     speedup = torch.tensor(10, dtype=torch.long, device=device)
-    dummy = diffusion.forward(condition, speedup, )
 
     torch.onnx.export(
         diffusion,
@@ -1061,10 +1060,7 @@ def export(fs2_path, diff_path, ckpt_steps=None,
                 1: 'n_frames'
             }
         },
-        opset_version=11,
-        example_outputs=(
-            dummy
-        )
+        opset_version=15
     )
     print('PyTorch ONNX export finished.')
 

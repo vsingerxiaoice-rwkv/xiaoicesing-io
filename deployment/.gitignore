@@ -3,3 +3,4 @@
 *.npy
 *.wav
 temp/
+cache/

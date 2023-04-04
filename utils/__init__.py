@@ -10,7 +10,7 @@ import numpy as np
 import torch
 import torch.nn.functional as F
 
-from basics.base_model import CategorizedModule
+from basics.base_module import CategorizedModule
 
 
 def tensors_to_scalars(metrics):
@@ -147,7 +147,7 @@ def load_ckpt(cur_model, ckpt_base_dir, prefix_in_ckpt='model', required_categor
                     os.path.basename(ckpt)
                     for ckpt in glob.glob(f'{base_dir}/model_ckpt_steps_*.ckpt')
                 ],
-                key=lambda x: int(re.findall(f'model_ckpt_steps_(\d+).ckpt', x.replace('\\', '/'))[0])
+                key=lambda x: int(re.findall(fr'model_ckpt_steps_(\d+).ckpt', x.replace('\\', '/'))[0])
             )
         ]
     assert len(checkpoint_path) > 0, f'| ckpt not found in {ckpt_base_dir}.'

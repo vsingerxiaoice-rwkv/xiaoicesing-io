@@ -18,7 +18,7 @@ from lightning.pytorch.loggers import TensorBoardLogger
 from lightning.pytorch.utilities import grad_norm
 from lightning.pytorch.utilities.rank_zero import rank_zero_debug, rank_zero_only
 
-from basics.base_model import CategorizedModule
+from basics.base_module import CategorizedModule
 from utils.hparams import hparams
 from utils.training_utils import (
     DsModelCheckpoint, DsTQDMProgressBar,

@@ -6,7 +6,7 @@ import torch
 
 from basics.base_svs_infer import BaseSVSInfer
 from modules.fastspeech.tts_modules import LengthRegulator
-from modules.toplevel.acoustic_model import DiffSingerAcoustic
+from modules.toplevel import DiffSingerAcoustic
 from modules.vocoders.registry import VOCODERS
 from utils import load_ckpt
 from utils.hparams import hparams

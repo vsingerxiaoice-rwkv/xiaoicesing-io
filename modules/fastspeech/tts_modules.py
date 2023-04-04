@@ -242,8 +242,7 @@ class FastSpeech2Encoder(nn.Module):
                 embed_dim, self.padding_idx, init_size=DEFAULT_MAX_TARGET_POSITIONS,
             )
 
-        self.layers = nn.ModuleList([])
-        self.layers.extend([
+        self.layers = nn.ModuleList([
             TransformerEncoderLayer(self.hidden_size, self.dropout,
                                     kernel_size=kernel_size, num_heads=num_heads)
             for _ in range(self.num_layers)
@@ -259,7 +258,7 @@ class FastSpeech2Encoder(nn.Module):
         self.embed_tokens = embed_tokens
         self.embed_scale = math.sqrt(hidden_size)
         self.padding_idx = 0
-        if hparams.get('rel_pos') is not None and hparams['rel_pos']:
+        if hparams['rel_pos']:
             self.embed_positions = RelPositionalEncoding(hidden_size, dropout_rate=0.0)
         else:
             self.embed_positions = SinusoidalPositionalEmbedding(
