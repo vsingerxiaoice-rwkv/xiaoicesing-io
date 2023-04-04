@@ -39,6 +39,8 @@ class IndexedDataset:
         return item
 
     def __len__(self):
+        if self.dset is None:
+            self.dset = h5py.File(self.path, 'r')
         return len(self.dset)
 
 class IndexedDatasetBuilder:

@@ -91,8 +91,11 @@ class DsBatchSampler(Sampler):
         self.drop_last = drop_last
         self.epoch = 0
         self.batches = None
-
-    def __iter__(self):
+        self.formed = None
+    
+    def __form_batches(self):
+        if self.formed == self.epoch + self.seed:
+            return
         rng = np.random.default_rng(self.seed + self.epoch)
         if self.shuffle_sample:
             if self.sub_indices is not None:
@@ -125,12 +128,16 @@ class DsBatchSampler(Sampler):
         
         batch_assignment = rng.permuted(np.arange(floored_total_batch_count).reshape(-1, self.num_replicas).transpose(), axis=0)[self.rank].tolist()
         floored_batch_count = len(batch_assignment)
+        ceiled_batch_count = floored_batch_count + (1 if len(leftovers) > 0 else 0)
         if self.rank < len(leftovers):
             batch_assignment.append(leftovers[self.rank])
         elif len(leftovers) > 0:
             batch_assignment.append(batch_assignment[self.epoch % floored_batch_count])
-        if self.required_batch_count_multiple > 1:
-            batch_assignment = batch_assignment[:((floored_batch_count // self.required_batch_count_multiple) * self.required_batch_count_multiple)]
+        if self.required_batch_count_multiple > 1 and ceiled_batch_count % self.required_batch_count_multiple != 0:
+            # batch_assignment = batch_assignment[:((floored_batch_count // self.required_batch_count_multiple) * self.required_batch_count_multiple)]
+            ceiled_batch_count = math.ceil(ceiled_batch_count / self.required_batch_count_multiple) * self.required_batch_count_multiple
+            for i in range(ceiled_batch_count - len(batch_assignment)):
+                batch_assignment.append(batch_assignment[(i + self.epoch * self.required_batch_count_multiple) % floored_batch_count])
         
         self.batches = [deepcopy(batches[i]) for i in batch_assignment]
         
@@ -140,13 +147,15 @@ class DsBatchSampler(Sampler):
         del indices
         del batches
         del batch_assignment
-        
-        for batch in self.batches:
-            yield batch
+
+    def __iter__(self):
+        self.__form_batches()
+        return iter(self.batches)
 
     def __len__(self):
+        self.__form_batches()
         if self.batches is None:
-            raise RuntimeError("Batches are not initialized. Call __iter__ first.")
+            raise RuntimeError("Batches are not initialized. Call __form_batches first.")
         return len(self.batches)
 
     def set_epoch(self, epoch):
@@ -161,8 +170,9 @@ class DsEvalBatchSampler(Sampler):
         self.rank = rank
         self.batch_by_size = batch_by_size
         self.batches = None
-
-    def __iter__(self):
+        self.batch_size = max_sentences
+        self.drop_last = False
+        
         if self.rank == 0:
             indices = list(range(len(self.dataset)))
             if self.batch_by_size:
@@ -171,13 +181,11 @@ class DsEvalBatchSampler(Sampler):
                 self.batches = [indices[i:i + self.max_sentences] for i in range(0, len(indices), self.max_sentences)]
         else:
             self.batches = [[0]]
-        
-        for batch in self.batches:
-            yield batch
+
+    def __iter__(self):
+        return iter(self.batches)
 
     def __len__(self):
-        if self.batches is None:
-            raise RuntimeError("Batches are not initialized. Call __iter__ first.")
         return len(self.batches)
 
 #==========PL related==========
@@ -206,6 +214,13 @@ class DsModelCheckpoint(ModelCheckpoint):
     def load_state_dict(self, state_dict) -> None:
         super().load_state_dict(state_dict)
 
+    def on_validation_end(self, trainer: "pl.Trainer", pl_module: "pl.LightningModule") -> None:
+        if trainer.lightning_module.skip_immediate_ckpt_save:
+            trainer.lightning_module.skip_immediate_ckpt_save = False
+            return
+        self.last_val_step = trainer.global_step
+        super().on_validation_end(trainer, pl_module)
+    
     def _update_best_and_save(
         self, current: torch.Tensor, trainer: "pl.Trainer", monitor_candidates: Dict[str, torch.Tensor]
     ) -> None:
@@ -288,7 +303,7 @@ class DsTQDMProgressBar(TQDMProgressBar):
         return items
 
 
-def get_stategy(accelerator, devices, num_nodes, strategy, backend):
+def get_strategy(accelerator, devices, num_nodes, strategy, backend):
     if accelerator != 'auto' and accelerator != 'gpu':
         return strategy
     
@@ -345,9 +360,9 @@ def get_stategy(accelerator, devices, num_nodes, strategy, backend):
     
     def get_ddp_strategy(_backend):
         if _backend == 'gloo':
-            return DDPStrategy(process_group_backend='gloo')
+            return DDPStrategy(process_group_backend='gloo', find_unused_parameters=False)
         elif _backend == 'nccl' or _backend == 'nccl_no_p2p':
-            return DDPStrategy(process_group_backend='nccl')
+            return DDPStrategy(process_group_backend='nccl', find_unused_parameters=False)
         else:
             raise ValueError(f'backend {_backend} is not valid.')
     

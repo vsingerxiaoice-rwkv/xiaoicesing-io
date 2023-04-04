@@ -121,6 +121,7 @@ class AcousticTask(BaseTask):
             num_replicas=(self.trainer.distributed_sampler_kwargs or {}).get('num_replicas', 1),
             rank=(self.trainer.distributed_sampler_kwargs or {}).get('rank', 0),
             sort_by_similar_size=hparams['sort_by_len'],
+            required_batch_count_multiple=hparams['accumulate_grad_batches'],
             shuffle_sample=True,
             shuffle_batch=False,
             seed=hparams['seed']
@@ -291,7 +292,7 @@ class AcousticTask(BaseTask):
             if self.phone_encoder is not None and 'tokens' in prediction:
                 str_phs = self.phone_encoder.decode(prediction['tokens'], strip_padding=True)
             gen_dir = os.path.join(hparams['work_dir'],
-                                   f'generated_{self.trainer.global_step}_{hparams["gen_dir_name"]}')
+                                   f'generated_{self.global_step}_{hparams["gen_dir_name"]}')
             wav_pred = self.vocoder.spec2wav(mel_pred, f0=f0_pred)
             os.makedirs(gen_dir, exist_ok=True)
             os.makedirs(f'{gen_dir}/wavs', exist_ok=True)
