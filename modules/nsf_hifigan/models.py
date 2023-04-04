@@ -7,6 +7,7 @@ import torch.nn as nn
 import torch.nn.functional as F
 from torch.nn import Conv1d, ConvTranspose1d
 from torch.nn.utils import weight_norm, remove_weight_norm
+from lightning.pytorch.utilities.rank_zero import rank_zero_info
 
 from .env import AttrDict
 from .utils import init_weights, get_padding
@@ -22,9 +23,9 @@ def load_model(model_path, device='cuda'):
     json_config = json.loads(data)
     h = AttrDict(json_config)
 
-    generator = Generator(h).to(device)
+    generator = Generator(h)
 
-    cp_dict = torch.load(model_path, map_location=device)
+    cp_dict = torch.load(model_path, map_location='cpu')
     generator.load_state_dict(cp_dict['generator'])
     generator.eval()
     generator.remove_weight_norm()
@@ -274,7 +275,7 @@ class Generator(torch.nn.Module):
         return x
 
     def remove_weight_norm(self):
-        print('Removing weight norm...')
+        rank_zero_info('Removing weight norm...')
         for l in self.ups:
             remove_weight_norm(l)
         for l in self.resblocks:

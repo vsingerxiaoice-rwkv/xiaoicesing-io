@@ -31,7 +31,9 @@ fft_size: 1024  # Extra window size is filled with 0 paddings to match this para
 num_spk: 1
 mel_vmin: -6
 mel_vmax: 1.5
+sampler_frame_count_grid: 6
 ds_workers: 4
+dataloader_prefetch_factor: 2
 
 #########
 # model
@@ -60,8 +62,6 @@ dur_loss: mse # huber|mol
 ###########
 # train and eval
 ###########
-save_ckpt: true
-save_best: false
 num_ckpt_keep: 3
 accumulate_grad_batches: 1
 log_interval: 100
@@ -81,3 +81,14 @@ save_gt: false
 save_f0: false
 gen_dir_name: ''
 num_valid_plots: 5
+
+###########
+# pytorch lightning
+# Read https://lightning.ai/docs/pytorch/stable/common/trainer.html#trainer-class-api for possible values
+###########
+pl_trainer_accelerator: 'auto'
+pl_trainer_devices: 'auto'
+pl_trainer_precision: '32-true'
+pl_trainer_num_nodes: 1
+pl_trainer_strategy: 'auto'
+ddp_backend: 'nccl' # choose from 'gloo', 'nccl', 'nccl_no_p2p'

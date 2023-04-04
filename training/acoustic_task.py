@@ -8,6 +8,7 @@ import torch
 import torch.distributions
 import torch.optim
 import torch.utils.data
+from lightning.pytorch.utilities.rank_zero import rank_zero_only
 from tqdm import tqdm
 
 import utils
@@ -22,26 +23,23 @@ from utils.binarizer_utils import get_pitch_parselmouth
 from utils.hparams import hparams
 from utils.indexed_datasets import IndexedDataset
 from utils.phoneme_utils import build_phoneme_list
-from utils.pl_utils import data_loader
 from utils.plot import spec_to_figure
 from utils.text_encoder import TokenTextEncoder
+from utils.training_utils import DsBatchSampler, DsEvalBatchSampler, WarmupCosineSchedule
 
 matplotlib.use('Agg')
 
 
 class AcousticDataset(BaseDataset):
-    def __init__(self, prefix, shuffle=False):
-        super().__init__(shuffle)
+    def __init__(self, prefix):
+        super().__init__()
         self.data_dir = hparams['binary_data_dir']
         self.prefix = prefix
         self.sizes = np.load(os.path.join(self.data_dir, f'{self.prefix}.lengths'))
-        self.indexed_ds = None
+        self.indexed_ds = IndexedDataset(self.data_dir, self.prefix)
 
     def __getitem__(self, index):
-        if self.indexed_ds is None:
-            self.indexed_ds = IndexedDataset(self.data_dir, self.prefix)
-        sample = self.indexed_ds[index]
-        return sample
+        return self.indexed_ds[index]
 
     def collater(self, samples):
         if len(samples) == 0:
@@ -66,12 +64,10 @@ class AcousticDataset(BaseDataset):
             batch['spk_ids'] = spk_ids
         return batch
 
-
 class AcousticTask(BaseTask):
     def __init__(self):
         super().__init__()
         self.dataset_cls = AcousticDataset
-        self.phone_encoder = self.build_phone_encoder()
         self.use_vocoder = hparams['infer'] or hparams.get('val_with_vocoder', True)
         if self.use_vocoder:
             self.vocoder: BaseVocoder = get_vocoder_cls(hparams)()
@@ -79,6 +75,12 @@ class AcousticTask(BaseTask):
         self.saving_results_futures = None
         self.stats = {}
         self.logged_gt_wav = set()
+        
+    def setup(self, stage):
+        self.phone_encoder = self.build_phone_encoder()
+        self.model = self.build_model()
+        self.train_dataset = self.dataset_cls(hparams['train_set_name'])
+        self.valid_dataset = self.dataset_cls(hparams['valid_set_name'])
 
     @staticmethod
     def build_phone_encoder():
@@ -86,15 +88,18 @@ class AcousticTask(BaseTask):
         return TokenTextEncoder(vocab_list=phone_list)
 
     def build_model(self):
-        self.model = DiffSingerAcoustic(
+        model = DiffSingerAcoustic(
             vocab_size=len(self.phone_encoder),
             out_dims=hparams['audio_num_mel_bins']
         )
-        utils.print_arch(self.model)
-        return self.model
+        @rank_zero_only
+        def print_arch():
+            utils.print_arch(model)
+        print_arch()
+        return model
 
     def build_optimizer(self, model):
-        self.optimizer = optimizer = torch.optim.AdamW(
+        optimizer = torch.optim.AdamW(
             filter(lambda p: p.requires_grad, model.parameters()),
             lr=hparams['lr'],
             betas=(hparams['optimizer_adam_beta1'], hparams['optimizer_adam_beta2']),
@@ -102,34 +107,51 @@ class AcousticTask(BaseTask):
         return optimizer
 
     def build_scheduler(self, optimizer):
+        # return WarmupCosineSchedule(optimizer,
+        #                             warmup_steps=hparams['warmup_updates'],
+        #                             t_total=hparams['max_updates'],
+        #                             eta_min=0)
         return torch.optim.lr_scheduler.StepLR(optimizer, hparams['decay_steps'], gamma=hparams.get('gamma', 0.5))
-
-    @data_loader
+    
     def train_dataloader(self):
-        if self.persistent_dataloader is None:
-            train_dataset = self.dataset_cls(hparams['train_set_name'], shuffle=True)
-            self.persistent_dataloader = self.build_dataloader(
-                train_dataset, True, self.max_tokens, self.max_sentences, persistent=True
-            )
-        return self.persistent_dataloader
+        self.training_sampler = DsBatchSampler(
+            self.train_dataset,
+            max_tokens=self.max_tokens,
+            max_sentences=self.max_sentences,
+            num_replicas=(self.trainer.distributed_sampler_kwargs or {}).get('num_replicas', 1),
+            rank=(self.trainer.distributed_sampler_kwargs or {}).get('rank', 0),
+            sort_by_similar_size=hparams['sort_by_len'],
+            required_batch_count_multiple=hparams['accumulate_grad_batches'],
+            shuffle_sample=True,
+            shuffle_batch=False,
+            seed=hparams['seed']
+        )
+        return torch.utils.data.DataLoader(self.train_dataset,
+                                           collate_fn=self.train_dataset.collater,
+                                           batch_sampler=self.training_sampler,
+                                           num_workers=int(hparams.get('ds_workers', os.getenv('NUM_WORKERS', 1))),
+                                           prefetch_factor=hparams.get('dataloader_prefetch_factor', 2),
+                                           pin_memory=True,
+                                           persistent_workers=True)
 
-    @data_loader
     def val_dataloader(self):
-        valid_dataset = self.dataset_cls(hparams['valid_set_name'], shuffle=False)
-        return self.build_dataloader(valid_dataset, False, self.max_eval_tokens, self.max_eval_sentences)
+        sampler = DsEvalBatchSampler(
+            self.valid_dataset,
+            max_tokens=self.max_tokens,
+            max_sentences=self.max_eval_sentences,
+            rank=(self.trainer.distributed_sampler_kwargs or {}).get('rank', 0),
+            batch_by_size=False
+        )
+        return torch.utils.data.DataLoader(self.valid_dataset,
+                                           collate_fn=self.valid_dataset.collater,
+                                           batch_sampler=sampler,
+                                           num_workers=int(hparams.get('ds_workers', os.getenv('NUM_WORKERS', 1))),
+                                           prefetch_factor=hparams.get('dataloader_prefetch_factor', 2),
+                                           shuffle=False)
 
-    @data_loader
     def test_dataloader(self):
         return self.val_dataloader()
-
-    def optimizer_step(self, epoch, batch_idx, optimizer, optimizer_idx):
-        if optimizer is None:
-            return
-        optimizer.step()
-        optimizer.zero_grad()
-        if self.scheduler is not None:
-            self.scheduler.step(self.global_step // hparams['accumulate_grad_batches'])
-
+    
     def run_model(self, sample, return_output=False, infer=False):
         """
             steps:
@@ -161,41 +183,28 @@ class AcousticTask(BaseTask):
             return losses, output
 
     def _training_step(self, sample, batch_idx, _):
-        log_outputs = self.run_model(sample)
-        total_loss = sum([v for v in log_outputs.values() if isinstance(v, torch.Tensor) and v.requires_grad])
-        log_outputs['batch_size'] = sample['tokens'].size()[0]
-        log_outputs['lr'] = self.scheduler.get_lr()[0]
-        return total_loss, log_outputs
+        losses = self.run_model(sample)
+        total_loss = sum([v for v in losses.values() if isinstance(v, torch.Tensor) and v.requires_grad])
+        return total_loss, {**losses, 'batch_size': sample['tokens'].size()[0]}
 
-    def validation_step(self, sample, batch_idx):
+    def _on_validation_start(self):
+        if self.use_vocoder:
+            self.vocoder.to_device(self.device)
+    
+    def _validation_step(self, sample, batch_idx):
         losses = self.run_model(sample, return_output=False, infer=False)
         total_loss = sum(losses.values())
         outputs = {
-            'losses': losses,
-            'total_loss': total_loss, 'size': sample['size']
+            'total_loss': total_loss
         }
-        outputs = utils.tensors_to_scalars(outputs)
 
-        if batch_idx < hparams['num_valid_plots']:
+        if batch_idx < hparams['num_valid_plots'] and (self.trainer.distributed_sampler_kwargs or {}).get('rank', 0) == 0:
             _, mel_pred = self.run_model(sample, return_output=True, infer=True)
             if self.use_vocoder:
                 self.plot_wav(batch_idx, sample['mel'], mel_pred, f0=sample['f0'])
             self.plot_mel(batch_idx, sample['mel'], mel_pred, name=f'diffmel_{batch_idx}')
 
-        return outputs
-
-    def _validation_end(self, outputs):
-        all_losses_meter = {
-            'total_loss': utils.AvgrageMeter(),
-        }
-        for output in outputs:
-            n = output['size']
-            for k, v in output['losses'].items():
-                if k not in all_losses_meter:
-                    all_losses_meter[k] = utils.AvgrageMeter()
-                all_losses_meter[k].update(v, n)
-            all_losses_meter['total_loss'].update(output['total_loss'], n)
-        return {k: round(v.avg, 4) for k, v in all_losses_meter.items()}
+        return outputs, sample['size']
 
     ############
     # validation plots
@@ -223,7 +232,7 @@ class AcousticTask(BaseTask):
     ############
     # infer
     ############
-    def test_start(self):
+    def on_test_start(self):
         self.saving_result_pool = Pool(8)
         self.saving_results_futures = []
         self.vocoder: BaseVocoder = get_vocoder_cls(hparams)()
@@ -233,7 +242,7 @@ class AcousticTask(BaseTask):
         sample['outputs'] = mel_pred
         return self.after_infer(sample)
 
-    def test_end(self, outputs):
+    def on_test_end(self):
         self.saving_result_pool.close()
         [f.get() for f in tqdm(self.saving_results_futures)]
         self.saving_result_pool.join()
@@ -283,7 +292,7 @@ class AcousticTask(BaseTask):
             if self.phone_encoder is not None and 'tokens' in prediction:
                 str_phs = self.phone_encoder.decode(prediction['tokens'], strip_padding=True)
             gen_dir = os.path.join(hparams['work_dir'],
-                                   f'generated_{self.trainer.global_step}_{hparams["gen_dir_name"]}')
+                                   f'generated_{self.global_step}_{hparams["gen_dir_name"]}')
             wav_pred = self.vocoder.spec2wav(mel_pred, f0=f0_pred)
             os.makedirs(gen_dir, exist_ok=True)
             os.makedirs(f'{gen_dir}/wavs', exist_ok=True)

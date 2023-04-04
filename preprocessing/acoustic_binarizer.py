@@ -213,9 +213,9 @@ class AcousticBinarizer(BaseBinarizer):
             'spk_id': meta_data['spk_id'],
             'seconds': seconds,
             'length': length,
-            'mel': torch.from_numpy(mel),
-            'tokens': torch.LongTensor(self.phone_encoder.encode(meta_data['ph_seq'])),
-            'ph_dur': torch.FloatTensor(meta_data['ph_dur']),
+            'mel': mel,
+            'tokens': np.array(self.phone_encoder.encode(meta_data['ph_seq']), dtype=np.int64),
+            'ph_dur': np.array(meta_data['ph_dur']),
         }
 
         # get ground truth f0
@@ -225,10 +225,10 @@ class AcousticBinarizer(BaseBinarizer):
         if uv.all():  # All unvoiced
             print(f'Skipped \'{item_name}\': empty gt f0')
             return None
-        processed_input['f0'] = torch.from_numpy(gt_f0).float()
+        processed_input['f0'] = gt_f0.astype(np.float32)
 
         # get ground truth dur
-        processed_input['mel2ph'] = get_mel2ph_torch(self.lr, processed_input['ph_dur'], length, hparams)
+        processed_input['mel2ph'] = get_mel2ph_torch(self.lr, torch.from_numpy(processed_input['ph_dur']), length, hparams).cpu().numpy()
 
         if hparams.get('use_key_shift_embed', False):
             processed_input['key_shift'] = 0.
@@ -347,7 +347,7 @@ class AcousticBinarizer(BaseBinarizer):
                     aug_list.append(aug_task)
                 elif aug_type == 1:
                     aug_task = deepcopy(aug_item)
-                    aug_item['kwargs']['speed'] = speed
+                    aug_task['kwargs']['speed'] = speed
                     if aug_item['name'] in aug_map:
                         aug_map[aug_item['name']].append(aug_task)
                     else:

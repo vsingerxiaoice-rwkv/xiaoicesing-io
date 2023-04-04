@@ -1,4 +1,11 @@
 class BaseVocoder:
+    def to_device(self, device):
+        """
+        
+        :param device: torch.device or str
+        """
+        raise NotImplementedError()
+    
     def spec2wav(self, mel, **kwargs):
         """
 
