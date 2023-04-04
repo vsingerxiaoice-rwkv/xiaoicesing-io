@@ -23,7 +23,7 @@ import torch.nn.functional as F
 from torch.nn import Linear, Embedding
 
 from basics.base_model import CategorizedModule
-from modules.diff.diffusion import beta_schedule, DIFF_DENOISERS
+from modules.diffusion.ddpm import beta_schedule, DIFF_DENOISERS
 from modules.fastspeech.acoustic_encoder import FastSpeech2AcousticEncoder
 from utils import load_ckpt
 from utils.hparams import hparams, set_hparams

@@ -8,7 +8,7 @@ import torch.nn.functional as F
 from torch import nn
 from tqdm import tqdm
 
-from modules.diff.wavenet import WaveNet
+from modules.diffusion.wavenet import WaveNet
 from utils.hparams import hparams
 
 DIFF_DENOISERS = {

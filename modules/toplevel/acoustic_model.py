@@ -1,5 +1,5 @@
 from basics.base_model import CategorizedModule
-from modules.diff.diffusion import GaussianDiffusion
+from modules.diffusion.ddpm import GaussianDiffusion
 from modules.fastspeech.acoustic_encoder import FastSpeech2Acoustic
 from utils.hparams import hparams
 
