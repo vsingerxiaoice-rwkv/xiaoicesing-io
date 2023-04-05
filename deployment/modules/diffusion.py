@@ -40,22 +40,28 @@ class GaussianDiffusionOnnx(GaussianDiffusion):
 
         return x_pred
 
-    def p_sample_plms(self, x_prev, t, interval, cond, noise_list: List[torch.Tensor], stage):
+    def p_sample_plms(self, x_prev, t, interval, cond, noise_list: List[torch.Tensor], stage: int):
         noise_pred = self.denoise_fn(x_prev, t, cond)
         t_prev = t - interval
         t_prev = t_prev * (t_prev > 0)
         if stage == 0:
             x_pred = self.plms_get_x_pred(x_prev, noise_pred, t, t_prev)
             noise_pred_prev = self.denoise_fn(x_pred, t_prev, cond)
-            noise_pred_prime = (noise_pred + noise_pred_prev) / 2
+            noise_pred_prime = (noise_pred + noise_pred_prev) / 2.
         elif stage == 1:
-            noise_pred_prime = (3 * noise_pred - noise_list[-1]) / 2
+            noise_pred_prime = (3. * noise_pred - noise_list[-1]) / 2.
         elif stage == 2:
-            noise_pred_prime = (23 * noise_pred - 16 * noise_list[-1] + 5 * noise_list[-2]) / 12
+            noise_pred_prime = (23. * noise_pred - 16. * noise_list[-1] + 5. * noise_list[-2]) / 12.
         else:
-            noise_pred_prime = (55 * noise_pred - 59 * noise_list[-1] + 37 * noise_list[-2] - 9 * noise_list[-3]) / 24
+            noise_pred_prime = (55. * noise_pred - 59. * noise_list[-1] + 37.
+                                * noise_list[-2] - 9. * noise_list[-3]) / 24.
         x_prev = self.plms_get_x_pred(x_prev, noise_pred_prime, t, t_prev)
         return noise_pred, x_prev
+
+    def denorm_spec(self, x):
+        d = (self.spec_max - self.spec_min) / 2.
+        m = (self.spec_max + self.spec_min) / 2.
+        return x * d + m
 
     def forward(self, condition, speedup):
         condition = condition.transpose(1, 2)  # [1, T, H] => [1, H, T]
@@ -66,7 +72,7 @@ class GaussianDiffusionOnnx(GaussianDiffusion):
         x = torch.randn((1, 1, self.out_dims, n_frames), device=device)
 
         if speedup > 1:
-            plms_noise_stage = torch.tensor(0, dtype=torch.long, device=device)
+            plms_noise_stage: int = 0
             noise_list: List[torch.Tensor] = []
             for t in step_range:
                 noise_pred, x = self.p_sample_plms(

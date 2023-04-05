@@ -1,3 +1,5 @@
+from torch import Tensor
+
 from basics.base_module import CategorizedModule
 from deployment.modules.diffusion import GaussianDiffusionOnnx
 from deployment.modules.fastspeech2 import FastSpeech2AcousticOnnx
@@ -26,8 +28,8 @@ class DiffSingerAcousticOnnx(CategorizedModule):
             spec_max=hparams['spec_max']
         )
 
-    def forward(self, tokens, durations, f0, gender=None, velocity=None, spk_embed=None, speedup=None):
-        condition = self.fs2(tokens, durations, f0, gender=gender, velocity=velocity, spk_embed=spk_embed)
+    def forward(self, tokens: Tensor, durations: Tensor, f0: Tensor, speedup: Tensor) -> Tensor:
+        condition = self.fs2(tokens, durations, f0)
         mel = self.diffusion(condition, speedup=speedup)
         return mel
 
