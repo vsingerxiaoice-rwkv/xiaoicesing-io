@@ -142,7 +142,7 @@ def set_hparams(config='', exp_name='', hparams_str='', print_hparams=True, glob
             print('| Hparams chains: ', config_chains)
             print('| Hparams: ')
             for i, (k, v) in enumerate(sorted(hparams_.items())):
-                print(f"\033[;33;m{k}\033[0m: {v}, ", end="\n" if i % 5 == 4 else "")
+                print(f"\033[0;33m{k}\033[0m: {v}, ", end="\n" if i % 5 == 4 else "")
             print("")
             global_print_hparams = False
     print_out_hparams()
