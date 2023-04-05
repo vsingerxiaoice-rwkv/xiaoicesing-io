@@ -76,10 +76,7 @@ class GaussianDiffusion(nn.Module):
         if exists(betas):
             betas = betas.detach().cpu().numpy() if isinstance(betas, torch.Tensor) else betas
         else:
-            if 'schedule_type' in hparams.keys():
-                betas = beta_schedule[hparams['schedule_type']](timesteps)
-            else:
-                betas = cosine_beta_schedule(timesteps)
+            betas = beta_schedule[hparams['schedule_type']](timesteps)
 
         alphas = 1. - betas
         alphas_cumprod = np.cumprod(alphas, axis=0)
