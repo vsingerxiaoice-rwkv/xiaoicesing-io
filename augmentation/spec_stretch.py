@@ -47,10 +47,10 @@ class SpectrogramStretchAugmentation(BaseAugmentation):
             aug_item['f0'] = f0.astype(np.float32)
 
         if key_shift != 0. or hparams.get('use_key_shift_embed', False):
-            aug_item['key_shift'] = key_shift
+            if replace_spk_id is None:
+                aug_item['key_shift'] = key_shift
+            else:
+                aug_item['spk_id'] = replace_spk_id
             aug_item['f0'] *= 2 ** (key_shift / 12)
-
-        if replace_spk_id is not None:
-            aug_item['spk_id'] = replace_spk_id
 
         return aug_item

@@ -9,7 +9,7 @@ import tqdm
 
 from utils.binarizer_utils import get_pitch_parselmouth
 from modules.vocoders.nsf_hifigan import NsfHifiGAN
-from utils.audio import save_wav
+from utils.infer_utils import save_wav
 from utils.hparams import set_hparams, hparams
 
 sys.argv = [

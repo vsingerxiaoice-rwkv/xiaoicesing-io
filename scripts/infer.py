@@ -13,11 +13,8 @@ import numpy as np
 import torch
 
 from inference.ds_acoustic import DiffSingerAcousticInfer
-from utils.audio import save_wav
 from utils.hparams import set_hparams, hparams
-from utils.infer_utils import cross_fade, trans_key
-from utils.slur_utils import merge_slurs
-from utils.spk_utils import parse_commandline_spk_mix
+from utils.infer_utils import merge_slurs, cross_fade, trans_key, parse_commandline_spk_mix, save_wav
 
 parser = argparse.ArgumentParser(description='Run DiffSinger inference')
 parser.add_argument('proj', type=str, help='Path to the input file')
@@ -69,7 +66,7 @@ if args.key != 0:
     key_suffix = '%+dkey' % args.key
     if not args.title:
         name += key_suffix
-    print(f'音调基于原音频{key_suffix}')
+    print(f'| key transition: {args.key:+d}')
 
 if args.gender is not None:
     assert -1 <= args.gender <= 1, 'Gender must be in [-1, 1].'

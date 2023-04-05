@@ -22,7 +22,7 @@ from basics.base_module import CategorizedModule
 from utils.hparams import hparams
 from utils.training_utils import (
     DsModelCheckpoint, DsTQDMProgressBar,
-    get_latest_checkpoint_path, get_stategy
+    get_latest_checkpoint_path, get_strategy
 )
 from utils.phoneme_utils import locate_dictionary
 
@@ -73,6 +73,8 @@ class BaseTask(pl.LightningModule):
 
         self.training_sampler = None
         self.model = None
+        self.skip_immediate_validation = False
+        self.skip_immediate_ckpt_save = False
         
         self.valid_metrics = {
             'total_loss': MeanMetric()
@@ -106,7 +108,8 @@ class BaseTask(pl.LightningModule):
         self.log('lr', self.lr_schedulers().get_lr()[0], prog_bar=True, logger=False, on_step=True, on_epoch=False)
         # logs to tensorboard
         tb_log = {f'tr/{k}': v for k, v in log_outputs.items()}
-        self.log_dict(tb_log, logger=True, on_step=True, on_epoch=False)
+        if self.global_step % self.trainer.log_every_n_steps == 0:
+            self.logger.log_metrics(tb_log, step=self.global_step)
         
         return total_loss
     
@@ -137,16 +140,24 @@ class BaseTask(pl.LightningModule):
         :param sample:
         :param batch_idx:
         """
-        with torch.autocast('cuda' if next(self.model.parameters()).is_cuda else 'cpu', dtype=torch.float32):
+        if self.skip_immediate_validation:
+            rank_zero_debug(f"Skip validation {batch_idx}")
+            return {}
+        with torch.autocast(self.device.type, enabled=False):
             outputs, weight = self._validation_step(sample, batch_idx)
         for k, v in outputs.items():
             if isinstance(self.valid_metrics[k], MeanMetric):
                 self.valid_metrics[k].update(v, weight=weight)
+        return outputs
 
     def on_validation_epoch_end(self):
+        if self.skip_immediate_validation:
+            self.skip_immediate_validation = False
+            self.skip_immediate_ckpt_save = True
+            return
         metric_vals = {k: v.compute() for k, v in self.valid_metrics.items()}
         self.log('val_loss', metric_vals['total_loss'], on_epoch=True, prog_bar=True, logger=False)
-        self.log_dict({f'val/{k}': v for k, v in metric_vals.items()}, on_epoch=True, logger=True)
+        self.logger.log_metrics({f'val/{k}': v for k, v in metric_vals.items()}, step=self.global_step)
         for metric in self.valid_metrics.values():
             metric.reset()
 
@@ -192,7 +203,7 @@ class BaseTask(pl.LightningModule):
             accelerator=hparams['pl_trainer_accelerator'],
             devices=hparams['pl_trainer_devices'],
             num_nodes=hparams['pl_trainer_num_nodes'],
-            strategy=get_stategy(
+            strategy=get_strategy(
                 accelerator=hparams['pl_trainer_accelerator'],
                 devices=hparams['pl_trainer_devices'],
                 num_nodes=hparams['pl_trainer_num_nodes'],
@@ -208,7 +219,7 @@ class BaseTask(pl.LightningModule):
                     monitor='step',
                     mode='max',
                     save_last=False,
-                    every_n_train_steps=hparams['val_check_interval'],
+                    # every_n_train_steps=hparams['val_check_interval'],
                     save_top_k=hparams['num_ckpt_keep'],
                     permanent_ckpt_start=hparams['permanent_ckpt_start'],
                     permanent_ckpt_interval=hparams['permanent_ckpt_interval'],

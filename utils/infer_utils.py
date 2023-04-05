@@ -1,8 +1,34 @@
-import json
+import re
 
+import librosa
 import numpy as np
+from scipy.io import wavfile
 
 head_list = ["C", "C#", "D", "D#", "E", "F", "F#", "G", "G#", "A", "A#", "B"]
+
+
+def merge_slurs(param):
+    ph_seq = param['ph_seq'].split()
+    note_seq = param['note_seq'].split()
+    note_dur_seq = param['note_dur_seq'].split()
+    is_slur_seq = [int(s) for s in param['is_slur_seq'].split()]
+    ph_dur = [float(d) for d in param['ph_dur'].split()]
+    i = 0
+    while i < len(ph_seq):
+        if is_slur_seq[i]:
+            ph_dur[i - 1] += ph_dur[i]
+            ph_seq.pop(i)
+            note_seq.pop(i)
+            note_dur_seq.pop(i)
+            is_slur_seq.pop(i)
+            ph_dur.pop(i)
+        else:
+            i += 1
+    param['ph_seq'] = ' '.join(ph_seq)
+    param['note_seq'] = ' '.join(note_seq)
+    param['note_dur_seq'] = ' '.join(note_dur_seq)
+    param['is_slur_seq'] = ' '.join([str(s) for s in is_slur_seq])
+    param['ph_dur'] = ' '.join([str(d) for d in ph_dur])
 
 
 def cross_fade(a: np.ndarray, b: np.ndarray, idx: int):
@@ -41,7 +67,8 @@ def trans_key(raw_data, key):
         new_note_seq_list = []
         for note_seq in note_seq_list:
             if note_seq != "rest":
-                new_note_seq = move_key(note_seq, key)
+                new_note_seq = librosa.midi_to_note(librosa.note_to_midi(note_seq) + key)
+                # new_note_seq = move_key(note_seq, key)
                 new_note_seq_list.append(new_note_seq)
             else:
                 new_note_seq_list.append(note_seq)
@@ -74,3 +101,44 @@ def resample_align_curve(points: np.ndarray, original_timestep: float, target_ti
     elif delta_l > 0:
         curve_interp = np.concatenate((curve_interp, np.full(delta_l, fill_value=curve_interp[-1])), axis=0)
     return curve_interp
+
+
+def parse_commandline_spk_mix(mix: str) -> dict:
+    """
+    Parse speaker mix info from commandline
+    :param mix: Input like "opencpop" or "opencpop|qixuan" or "opencpop:0.5|qixuan:0.5"
+    :return: A dict whose keys are speaker names and values are proportions
+    """
+    name_pattern = r'[0-9A-Za-z_-]+'
+    proportion_pattern = r'\d+(\.\d+)?'
+    single_pattern = rf'{name_pattern}(:{proportion_pattern})?'
+    assert re.fullmatch(rf'{single_pattern}(\|{single_pattern})*', mix) is not None, f'Invalid mix pattern: {mix}'
+    without_proportion = set()
+    proportion_map = {}
+    for component in mix.split('|'):
+        # If already exists
+        name_and_proportion = component.split(':')
+        assert name_and_proportion[0] not in without_proportion and name_and_proportion[0] not in proportion_map, \
+            f'Duplicate speaker name: {name_and_proportion[0]}'
+        if ':' in component:
+            proportion_map[name_and_proportion[0]] = float(name_and_proportion[1])
+        else:
+            without_proportion.add(name_and_proportion[0])
+    sum_given_proportions = sum(proportion_map.values())
+    assert sum_given_proportions < 1 or len(without_proportion) == 0, \
+        'Proportion of all speakers should be specified if the sum of all given proportions are larger than 1.'
+    for name in without_proportion:
+        proportion_map[name] = (1 - sum_given_proportions) / len(without_proportion)
+    sum_all_proportions = sum(proportion_map.values())
+    assert sum_all_proportions > 0, 'Sum of all proportions should be positive.'
+    for name in proportion_map:
+        proportion_map[name] /= sum_all_proportions
+    return proportion_map
+
+
+def save_wav(wav, path, sr, norm=False):
+    if norm:
+        wav = wav / np.abs(wav).max()
+    wav *= 32767
+    # proposed by @dsmiller
+    wavfile.write(path, sr, wav.astype(np.int16))

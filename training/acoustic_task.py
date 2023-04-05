@@ -12,13 +12,13 @@ from lightning.pytorch.utilities.rank_zero import rank_zero_only
 from tqdm import tqdm
 
 import utils
+import utils.infer_utils
 from basics.base_dataset import BaseDataset
 from basics.base_task import BaseTask
 from basics.base_vocoder import BaseVocoder
 from modules.fastspeech.tts_modules import mel2ph_to_dur
 from modules.toplevel import DiffSingerAcoustic
 from modules.vocoders.registry import get_vocoder_cls
-from utils import audio
 from utils.binarizer_utils import get_pitch_parselmouth
 from utils.hparams import hparams
 from utils.indexed_datasets import IndexedDataset
@@ -121,6 +121,7 @@ class AcousticTask(BaseTask):
             num_replicas=(self.trainer.distributed_sampler_kwargs or {}).get('num_replicas', 1),
             rank=(self.trainer.distributed_sampler_kwargs or {}).get('rank', 0),
             sort_by_similar_size=hparams['sort_by_len'],
+            required_batch_count_multiple=hparams['accumulate_grad_batches'],
             shuffle_sample=True,
             shuffle_batch=False,
             seed=hparams['seed']
@@ -291,7 +292,7 @@ class AcousticTask(BaseTask):
             if self.phone_encoder is not None and 'tokens' in prediction:
                 str_phs = self.phone_encoder.decode(prediction['tokens'], strip_padding=True)
             gen_dir = os.path.join(hparams['work_dir'],
-                                   f'generated_{self.trainer.global_step}_{hparams["gen_dir_name"]}')
+                                   f'generated_{self.global_step}_{hparams["gen_dir_name"]}')
             wav_pred = self.vocoder.spec2wav(mel_pred, f0=f0_pred)
             os.makedirs(gen_dir, exist_ok=True)
             os.makedirs(f'{gen_dir}/wavs', exist_ok=True)
@@ -335,8 +336,8 @@ class AcousticTask(BaseTask):
             base_fn += text
         base_fn += ('-' + hparams['exp_name'])
         np.save(os.path.join(hparams['work_dir'], f'{prefix}_mels_npy', item_name), mel)
-        audio.save_wav(wav_out, f'{gen_dir}/wavs/{base_fn}.wav', hparams['audio_sample_rate'],
-                       norm=hparams['out_wav_norm'])
+        utils.infer_utils.save_wav(wav_out, f'{gen_dir}/wavs/{base_fn}.wav', hparams['audio_sample_rate'],
+                                   norm=hparams['out_wav_norm'])
         fig = plt.figure(figsize=(14, 10))
         spec_vmin = hparams['mel_vmin']
         spec_vmax = hparams['mel_vmax']
