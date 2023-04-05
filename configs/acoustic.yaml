@@ -22,12 +22,10 @@ fft_size: 2048           # FFT size.
 win_size: 2048           # FFT size.
 fmin: 40
 fmax: 16000
-min_level_db: -120
 
 binarization_args:
   shuffle: true
   num_workers: 0
-  interp_uv: true
 #augmentation_args:
 #  random_pitch_shifting:
 #    range: [-5., 5.]
@@ -49,9 +47,9 @@ spec_max: [0]
 keep_bins: 128
 mel_vmin: -6. #-6.
 mel_vmax: 1.5
+interp_uv: true
 save_f0: true
 
-use_spk_embed: false
 use_spk_id: false
 f0_embed_type: continuous
 use_key_shift_embed: false

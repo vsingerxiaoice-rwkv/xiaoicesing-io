@@ -120,8 +120,8 @@ class AcousticBinarizer(BaseBinarizer):
 
         # Draw graph.
         plt.figure(figsize=(int(len(ph_required) * 0.8), 10))
-        x = list(phoneme_map.keys())
-        values = list(phoneme_map.values())
+        x = sorted(phoneme_map.keys())
+        values = [phoneme_map[k] for k in x]
         plt.bar(x=x, height=values)
         plt.tick_params(labelsize=15)
         plt.xlim(-1, len(ph_required))
@@ -141,8 +141,8 @@ class AcousticBinarizer(BaseBinarizer):
             unrecognizable_phones = ph_occurred.difference(ph_required)
             missing_phones = ph_required.difference(ph_occurred)
             raise BinarizationError('transcriptions and dictionary mismatch.\n'
-                                 f' (+) {sorted(unrecognizable_phones)}\n'
-                                 f' (-) {sorted(missing_phones)}')
+                                    f' (+) {sorted(unrecognizable_phones)}\n'
+                                    f' (-) {sorted(missing_phones)}')
 
         # Copy dictionary to binary data dir
         shutil.copy(locate_dictionary(), os.path.join(hparams['binary_data_dir'], 'dictionary.txt'))
@@ -155,10 +155,6 @@ class AcousticBinarizer(BaseBinarizer):
         total_sec = 0
         total_raw_sec = 0
 
-        # if self.binarization_args['with_spk_embed']:
-        #     from resemblyzer import VoiceEncoder
-        #     voice_encoder = VoiceEncoder().cuda()
-
         for item_name, meta_data in self.meta_data_iterator(prefix):
             args.append([item_name, meta_data, self.binarization_args])
 
@@ -168,8 +164,6 @@ class AcousticBinarizer(BaseBinarizer):
             nonlocal total_sec, total_raw_sec
             if _item is None:
                 return
-            # item_['spk_embed'] = voice_encoder.embed_utterance(item_['wav']) \
-            #     if self.binarization_args['with_spk_embed'] else None
             builder.add_item(_item)
             lengths.append(_item['length'])
             total_sec += _item['seconds']
@@ -219,22 +213,22 @@ class AcousticBinarizer(BaseBinarizer):
             'spk_id': meta_data['spk_id'],
             'seconds': seconds,
             'length': length,
-            'mel': torch.from_numpy(mel),
-            'tokens': torch.LongTensor(self.phone_encoder.encode(meta_data['ph_seq'])),
-            'ph_dur': torch.FloatTensor(meta_data['ph_dur']),
-            'interp_uv': self.binarization_args['interp_uv'],
+            'mel': mel,
+            'tokens': np.array(self.phone_encoder.encode(meta_data['ph_seq']), dtype=np.int64),
+            'ph_dur': np.array(meta_data['ph_dur']),
         }
 
         # get ground truth f0
         gt_f0, _, uv = get_pitch_parselmouth(
-            wav, length, hparams, interp_uv=self.binarization_args['interp_uv']
+            wav, length, hparams, interp_uv=hparams['interp_uv']
         )
         if uv.all():  # All unvoiced
-            raise BinarizationError(f'Empty gt f0 in \'{item_name}\'.')
-        processed_input['f0'] = torch.from_numpy(gt_f0).float()
+            print(f'Skipped \'{item_name}\': empty gt f0')
+            return None
+        processed_input['f0'] = gt_f0.astype(np.float32)
 
         # get ground truth dur
-        processed_input['mel2ph'] = get_mel2ph_torch(self.lr, processed_input['ph_dur'], length, hparams)
+        processed_input['mel2ph'] = get_mel2ph_torch(self.lr, torch.from_numpy(processed_input['ph_dur']), length, hparams).cpu().numpy()
 
         if hparams.get('use_key_shift_embed', False):
             processed_input['key_shift'] = 0.
@@ -353,7 +347,7 @@ class AcousticBinarizer(BaseBinarizer):
                     aug_list.append(aug_task)
                 elif aug_type == 1:
                     aug_task = deepcopy(aug_item)
-                    aug_item['kwargs']['speed'] = speed
+                    aug_task['kwargs']['speed'] = speed
                     if aug_item['name'] in aug_map:
                         aug_map[aug_item['name']].append(aug_task)
                     else:

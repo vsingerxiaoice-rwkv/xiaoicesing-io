@@ -1,4 +1,11 @@
 class BaseVocoder:
+    def to_device(self, device):
+        """
+        
+        :param device: torch.device or str
+        """
+        raise NotImplementedError()
+    
     def spec2wav(self, mel, **kwargs):
         """
 
@@ -6,7 +13,7 @@ class BaseVocoder:
         :return: wav: [T']
         """
 
-        raise NotImplementedError
+        raise NotImplementedError()
 
     @staticmethod
     def wav2spec(wav_fn):
@@ -15,4 +22,4 @@ class BaseVocoder:
         :param wav_fn: str
         :return: wav, mel: [T, 80]
         """
-        raise NotImplementedError
+        raise NotImplementedError()

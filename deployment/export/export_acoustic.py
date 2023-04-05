@@ -31,7 +31,7 @@ from modules.diff.wavenet import AttrDict
 from utils import load_ckpt
 from utils.hparams import hparams, set_hparams
 from utils.phoneme_utils import build_phoneme_list
-from utils.spk_utils import parse_commandline_spk_mix
+from utils.infer_utils import parse_commandline_spk_mix
 from utils.text_encoder import TokenTextEncoder, PAD_INDEX
 
 

@@ -24,22 +24,6 @@ def tensors_to_scalars(metrics):
     return new_metrics
 
 
-class AvgrageMeter(object):
-
-    def __init__(self):
-        self.reset()
-
-    def reset(self):
-        self.avg = 0
-        self.sum = 0
-        self.cnt = 0
-
-    def update(self, val, n=1):
-        self.sum += val * n
-        self.cnt += n
-        self.avg = self.sum / self.cnt
-
-
 def collate_nd(values, pad_value=0, max_len=None):
     """
     Pad a list of Nd tensors on their first dimension and stack them into a (N+1)d tensor.
@@ -63,8 +47,8 @@ def _is_batch_full(batch, num_tokens, max_tokens, max_sentences):
 
 
 def batch_by_size(
-        indices, num_tokens_fn, max_tokens=None, max_sentences=None,
-        required_batch_size_multiple=1, distributed=False
+        indices, num_tokens_fn, max_tokens=80000, max_sentences=48,
+        required_batch_size_multiple=1
 ):
     """
     Yield mini-batches of indices bucketed by size. Batches may contain
@@ -75,14 +59,10 @@ def batch_by_size(
         num_tokens_fn (callable): function that returns the number of tokens at
             a given index
         max_tokens (int, optional): max number of tokens in each batch
-            (default: None).
+            (default: 80000).
         max_sentences (int, optional): max number of sentences in each
-            batch (default: None).
-        required_batch_size_multiple (int, optional): require batch size to
-            be a multiple of N (default: 1).
+            batch (default: 48).
     """
-    max_tokens = max_tokens if max_tokens is not None else sys.maxsize
-    max_sentences = max_sentences if max_sentences is not None else sys.maxsize
     bsz_mult = required_batch_size_multiple
 
     if isinstance(indices, types.GeneratorType):
@@ -228,7 +208,7 @@ class Timer:
 
 def print_arch(model, model_name='model'):
     print(f"| {model_name} Arch: ", model)
-    num_params(model, model_name=model_name)
+    # num_params(model, model_name=model_name)
 
 
 def num_params(model, print_out=True, model_name="model"):
