@@ -5,7 +5,7 @@
 h5py
 librosa<0.10.0
 lightning>=2.0.0
-local_attention==1.8.4
+local_attention==1.8.5
 matplotlib
 numpy==1.23.5
 onnx==1.13.1
