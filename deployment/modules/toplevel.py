@@ -1,4 +1,6 @@
-from torch import Tensor
+import copy
+
+from torch import Tensor, nn
 
 from basics.base_module import CategorizedModule
 from deployment.modules.diffusion import GaussianDiffusionOnnx
@@ -27,10 +29,28 @@ class DiffSingerAcousticOnnx(CategorizedModule):
             spec_max=hparams['spec_max']
         )
 
-    def forward(self, tokens: Tensor, durations: Tensor, f0: Tensor, speedup: Tensor) -> Tensor:
-        condition = self.fs2(tokens, durations, f0)
-        mel = self.diffusion(condition, speedup=speedup)
+    def forward(self, tokens: Tensor, durations: Tensor, f0: Tensor, speedup: int) -> Tensor:
+        condition = self.forward_fs2(tokens, durations, f0)
+        mel = self.forward_diffusion(condition, speedup=speedup)
         return mel
+
+    def forward_fs2(self, tokens: Tensor, durations: Tensor, f0: Tensor) -> Tensor:
+        return self.fs2(tokens, durations, f0)
+
+    def forward_diffusion(self, condition: Tensor, speedup: int) -> Tensor:
+        return self.diffusion(condition, speedup)
+
+    def view_as_fs2(self) -> nn.Module:
+        model = copy.deepcopy(self)
+        model.diffusion = None
+        model.forward = model.forward_fs2
+        return model
+
+    def view_as_diffusion(self) -> nn.Module:
+        model = copy.deepcopy(self)
+        model.fs2 = None
+        model.forward = model.forward_diffusion
+        return model
 
 
 class DiffSingerVarianceOnnx(CategorizedModule):

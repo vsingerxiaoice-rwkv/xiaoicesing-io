@@ -77,19 +77,21 @@ class GaussianDiffusionOnnx(GaussianDiffusion):
             noise_list: List[Tensor] = []
             for t in step_range:
                 noise_pred, x = self.p_sample_plms(
-                    x, torch.full((1,), int(t), device=device, dtype=torch.long),
-                    speedup, condition, noise_list, plms_noise_stage
+                    x, t, interval=speedup, cond=condition,
+                    noise_list=noise_list, stage=plms_noise_stage
                 )
                 if plms_noise_stage == 0:
                     noise_list = [noise_pred]
+                    plms_noise_stage = plms_noise_stage + 1
                 else:
                     if plms_noise_stage >= 3:
                         noise_list.pop(0)
+                    else:
+                        plms_noise_stage = plms_noise_stage + 1
                     noise_list.append(noise_pred)
-                plms_noise_stage = plms_noise_stage + 1
         else:
             for t in step_range:
-                x = self.p_sample(x, torch.full((1,), int(t), device=device, dtype=torch.long), condition)
+                x = self.p_sample(x, t, cond=condition)
 
         x = x.squeeze(1).permute(0, 2, 1)  # [B, T, M]
         x = self.denorm_spec(x)
