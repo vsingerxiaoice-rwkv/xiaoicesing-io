@@ -1,4 +1,7 @@
+from typing import List
+
 import torch
+from torch import Tensor
 
 from modules.diffusion.ddpm import GaussianDiffusion
 
@@ -38,7 +41,7 @@ class GaussianDiffusionOnnx(GaussianDiffusion):
 
         return x_pred
 
-    def p_sample_plms(self, x_prev, t, interval, cond, noise_list, stage: int):
+    def p_sample_plms(self, x_prev, t, interval, cond, noise_list: List[Tensor], stage: int):
         noise_pred = self.denoise_fn(x_prev, t, cond)
         t_prev = t - interval
         t_prev = t_prev * (t_prev > 0)
@@ -71,21 +74,19 @@ class GaussianDiffusionOnnx(GaussianDiffusion):
 
         if speedup > 1:
             plms_noise_stage: int = 0
-            noise_list = torch.zeros((0, 1, 1, self.out_dims, n_frames), device=device)
-            # noise_list : List[torch.Tensor] = []
+            noise_list: List[Tensor] = []
             for t in step_range:
                 noise_pred, x = self.p_sample_plms(
                     x, torch.full((1,), int(t), device=device, dtype=torch.long),
                     speedup, condition, noise_list, plms_noise_stage
                 )
-                noise_pred = noise_pred.unsqueeze(0)
-                if plms_noise_stage < 3:
-                    noise_list = torch.cat((noise_list, noise_pred), dim=0)
-                    # noise_list.append(noise_pred)
-                    plms_noise_stage = plms_noise_stage + 1
+                if plms_noise_stage == 0:
+                    noise_list = [noise_pred]
                 else:
-                    noise_list = torch.cat((noise_list[-2:], noise_pred), dim=0)
-                    # [noise_list[-2], noise_list[-1], noise_pred]
+                    if plms_noise_stage >= 3:
+                        noise_list.pop(0)
+                    noise_list.append(noise_pred)
+                plms_noise_stage = plms_noise_stage + 1
         else:
             for t in step_range:
                 x = self.p_sample(x, torch.full((1,), int(t), device=device, dtype=torch.long), condition)
