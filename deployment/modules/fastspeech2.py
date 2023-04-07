@@ -31,7 +31,7 @@ class LengthRegulator(nn.Module):
         return mel2ph
 
 
-class FastSpeech2AcousticOnnx(FastSpeech2Acoustic):
+class FastSpeech2AcousticONNX(FastSpeech2Acoustic):
     def __init__(self, vocab_size):
         super().__init__(vocab_size=vocab_size)
         self.lr = LengthRegulator()

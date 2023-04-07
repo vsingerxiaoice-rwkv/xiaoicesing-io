@@ -13,7 +13,7 @@ os.environ['PYTHONPATH'] = root_dir
 sys.path.insert(0, root_dir)
 
 from basics.base_onnx_export import BaseExporter
-from deployment.modules.toplevel import DiffSingerAcousticOnnx
+from deployment.modules.toplevel import DiffSingerAcousticONNX
 from utils import load_ckpt, onnx_helper
 from utils.hparams import hparams
 from utils.phoneme_utils import locate_dictionary, build_phoneme_list
@@ -43,9 +43,9 @@ class DiffSingerAcousticExporter(BaseExporter):
         self.diffusion_cache_path = self.cache_dir / 'diffusion.onnx'
 
         # Attributes for logging
-        self.fs2_class_name = self.model.fs2.__class__.__name__.removesuffix('Onnx')
-        self.denoiser_class_name = self.model.diffusion.denoise_fn.__class__.__name__.removesuffix('Onnx')
-        self.diffusion_class_name = self.model.diffusion.__class__.__name__.removesuffix('Onnx')
+        self.fs2_class_name = self.model.fs2.__class__.__name__.removesuffix('ONNX')
+        self.denoiser_class_name = self.model.diffusion.denoise_fn.__class__.__name__.removesuffix('ONNX')
+        self.diffusion_class_name = self.model.diffusion.__class__.__name__.removesuffix('ONNX')
 
         # Attributes for exporting
         self.expose_gender = expose_gender
@@ -60,8 +60,8 @@ class DiffSingerAcousticExporter(BaseExporter):
         if hparams['use_spk_id'] and not self.export_spk and freeze_spk is not None:
             self.model.fs2.register_buffer('spk_mix_embed', self._perform_spk_mix(freeze_spk[1]))
 
-    def build_model(self) -> DiffSingerAcousticOnnx:
-        model = DiffSingerAcousticOnnx(
+    def build_model(self) -> DiffSingerAcousticONNX:
+        model = DiffSingerAcousticONNX(
             vocab_size=len(self.vocab),
             out_dims=hparams['audio_num_mel_bins']
         ).eval().to(self.device)

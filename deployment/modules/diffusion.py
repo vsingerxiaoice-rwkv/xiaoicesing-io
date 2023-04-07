@@ -11,7 +11,7 @@ def extract(a, t):
 
 
 # noinspection PyMethodOverriding
-class GaussianDiffusionOnnx(GaussianDiffusion):
+class GaussianDiffusionONNX(GaussianDiffusion):
     def p_sample(self, x, t, cond):
         x_pred = self.denoise_fn(x, t, cond)
         x_recon = (

@@ -3,22 +3,22 @@ import copy
 from torch import Tensor, nn
 
 from basics.base_module import CategorizedModule
-from deployment.modules.diffusion import GaussianDiffusionOnnx
-from deployment.modules.fastspeech2 import FastSpeech2AcousticOnnx
+from deployment.modules.diffusion import GaussianDiffusionONNX
+from deployment.modules.fastspeech2 import FastSpeech2AcousticONNX
 from utils.hparams import hparams
 
 
-class DiffSingerAcousticOnnx(CategorizedModule):
+class DiffSingerAcousticONNX(CategorizedModule):
     @property
     def category(self):
         return 'acoustic'
 
     def __init__(self, vocab_size, out_dims):
         super().__init__()
-        self.fs2 = FastSpeech2AcousticOnnx(
+        self.fs2 = FastSpeech2AcousticONNX(
             vocab_size=vocab_size
         )
-        self.diffusion = GaussianDiffusionOnnx(
+        self.diffusion = GaussianDiffusionONNX(
             out_dims=out_dims,
             timesteps=hparams['timesteps'],
             k_step=hparams['K_step'],
