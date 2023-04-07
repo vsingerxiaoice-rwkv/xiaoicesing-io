@@ -32,15 +32,13 @@ class LengthRegulator(nn.Module):
 
 
 class FastSpeech2AcousticOnnx(FastSpeech2Acoustic):
-    def __init__(self, vocab_size, frozen_gender=None, frozen_spk_embed=None):
+    def __init__(self, vocab_size):
         super().__init__(vocab_size=vocab_size)
         self.lr = LengthRegulator()
         if hparams.get('use_key_shift_embed', False):
             self.shift_min, self.shift_max = hparams['augmentation_args']['random_pitch_shifting']['range']
         if hparams.get('use_speed_embed', False):
             self.speed_min, self.speed_max = hparams['augmentation_args']['random_time_stretching']['range']
-        self.frozen_gender = frozen_gender
-        self.frozen_spk_embed = frozen_spk_embed
 
     # noinspection PyMethodOverriding
     def forward(self, tokens, durations, f0, gender=None, velocity=None, spk_embed=None):
@@ -62,11 +60,8 @@ class FastSpeech2AcousticOnnx(FastSpeech2Acoustic):
         condition += pitch_embed
 
         if hparams.get('use_key_shift_embed', False):
-            if self.frozen_gender is not None:
-                # noinspection PyUnresolvedReferences, PyTypeChecker
-                key_shift = frozen_gender * self.shift_max \
-                    if frozen_gender >= 0. else frozen_gender * abs(self.shift_min)
-                key_shift_embed = self.key_shift_embed(key_shift[:, None, None])
+            if hasattr(self, 'frozen_key_shift'):
+                key_shift_embed = self.key_shift_embed(self.key_shift[:, None, None])
             else:
                 gender = torch.clip(gender, min=-1., max=1.)
                 gender_mask = (gender < 0.).float()
@@ -83,7 +78,7 @@ class FastSpeech2AcousticOnnx(FastSpeech2Acoustic):
             condition += speed_embed
 
         if hparams['use_spk_id']:
-            if self.frozen_spk_embed is not None:
+            if hasattr(self, 'frozen_spk_embed'):
                 condition += self.frozen_spk_embed
             else:
                 condition += spk_embed

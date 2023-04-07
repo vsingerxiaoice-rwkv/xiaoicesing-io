@@ -70,7 +70,7 @@ class GaussianDiffusion(nn.Module):
                  denoiser_type=None, loss_type=None, betas=None,
                  spec_min=None, spec_max=None):
         super().__init__()
-        self.denoise_fn = DIFF_DENOISERS[denoiser_type](hparams)
+        self.denoise_fn: nn.Module = DIFF_DENOISERS[denoiser_type](hparams)
         self.out_dims = out_dims
 
         if exists(betas):

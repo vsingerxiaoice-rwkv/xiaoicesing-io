@@ -13,12 +13,10 @@ class DiffSingerAcousticOnnx(CategorizedModule):
     def category(self):
         return 'acoustic'
 
-    def __init__(self, vocab_size, out_dims, frozen_gender=None, frozen_spk_embed=None):
+    def __init__(self, vocab_size, out_dims):
         super().__init__()
         self.fs2 = FastSpeech2AcousticOnnx(
-            vocab_size=vocab_size,
-            frozen_gender=frozen_gender,
-            frozen_spk_embed=frozen_spk_embed
+            vocab_size=vocab_size
         )
         self.diffusion = GaussianDiffusionOnnx(
             out_dims=out_dims,
@@ -29,13 +27,19 @@ class DiffSingerAcousticOnnx(CategorizedModule):
             spec_max=hparams['spec_max']
         )
 
-    def forward(self, tokens: Tensor, durations: Tensor, f0: Tensor, speedup: int) -> Tensor:
-        condition = self.forward_fs2(tokens, durations, f0)
-        mel = self.forward_diffusion(condition, speedup=speedup)
-        return mel
-
-    def forward_fs2(self, tokens: Tensor, durations: Tensor, f0: Tensor) -> Tensor:
-        return self.fs2(tokens, durations, f0)
+    def forward_fs2(
+            self,
+            tokens: Tensor,
+            durations: Tensor,
+            f0: Tensor,
+            gender: Tensor = None,
+            velocity: Tensor = None,
+            spk_embed: Tensor = None
+    ) -> Tensor:
+        return self.fs2(
+            tokens, durations, f0,
+            gender=gender, velocity=velocity, spk_embed=spk_embed
+        )
 
     def forward_diffusion(self, condition: Tensor, speedup: int) -> Tensor:
         return self.diffusion(condition, speedup)

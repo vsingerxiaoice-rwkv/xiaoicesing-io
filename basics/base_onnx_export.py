@@ -1,6 +1,7 @@
 import json
 import os
-import pathlib
+from typing import Union
+from pathlib import Path
 
 import torch
 import torch.nn as nn
@@ -8,11 +9,16 @@ import torch.nn as nn
 from utils.hparams import hparams
 
 
-class BaseOnnxExport:
-    def __init__(self, device=None, cache_dir=None, **kwargs):
+class BaseExporter:
+    def __init__(
+            self,
+            device: Union[str, torch.device] = None,
+            cache_dir: Path = None,
+            **kwargs
+    ):
         self.device = device if device is not None else torch.device('cuda' if torch.cuda.is_available() else 'cpu')
-        self.cache_dir: pathlib.Path = cache_dir if cache_dir is not None \
-            else pathlib.Path(__file__).parent.parent / 'deployment' / 'cache'
+        self.cache_dir: Path = cache_dir.resolve() if cache_dir is not None \
+            else Path(__file__).parent.parent / 'deployment' / 'cache'
         if not self.cache_dir.exists():
             self.cache_dir.mkdir(parents=True, exist_ok=True)
 
@@ -28,7 +34,28 @@ class BaseOnnxExport:
             return {}
 
     def build_model(self) -> nn.Module:
+        """
+        Creates an instance of nn.Module and load its state dict on the target device.
+        """
         raise NotImplementedError()
 
-    def export_model(self, path: pathlib.Path):
+    def export_model(self, path: Path):
+        """
+        Exports the model to ONNX format.
+        :param path: the target model path
+        """
+        raise NotImplementedError()
+
+    def export_attachments(self, path: Path):
+        """
+        Exports related files and configs (e.g. the dictionary) to the target directory.
+        :param path: the target directory
+        """
+        raise NotImplementedError()
+
+    def export(self, path: Path):
+        """
+        Export all the artifacts to the target directory.
+        :param path: the target directory
+        """
         raise NotImplementedError()
