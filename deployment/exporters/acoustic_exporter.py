@@ -1,6 +1,4 @@
-import os
 import shutil
-import sys
 from pathlib import Path
 from typing import List, Union, Tuple, Dict
 
@@ -8,11 +6,7 @@ import onnx
 import onnxsim
 import torch
 
-root_dir = str(Path(__file__).parent.parent.parent.resolve())
-os.environ['PYTHONPATH'] = root_dir
-sys.path.insert(0, root_dir)
-
-from basics.base_onnx_export import BaseExporter
+from basics.base_exporter import BaseExporter
 from deployment.modules.toplevel import DiffSingerAcousticONNX
 from utils import load_ckpt, onnx_helper
 from utils.hparams import hparams

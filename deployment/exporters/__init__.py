@@ -1,0 +1,1 @@
+from .acoustic_exporter import DiffSingerAcousticExporter

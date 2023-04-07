@@ -19,8 +19,7 @@ class BaseExporter:
         self.device = device if device is not None else torch.device('cuda' if torch.cuda.is_available() else 'cpu')
         self.cache_dir: Path = cache_dir.resolve() if cache_dir is not None \
             else Path(__file__).parent.parent / 'deployment' / 'cache'
-        if not self.cache_dir.exists():
-            self.cache_dir.mkdir(parents=True, exist_ok=True)
+        self.cache_dir.mkdir(parents=True, exist_ok=True)
 
     # noinspection PyMethodMayBeStatic
     def build_spk_map(self) -> dict:
