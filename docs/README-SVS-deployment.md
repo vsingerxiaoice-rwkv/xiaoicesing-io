@@ -11,13 +11,7 @@ Currently, we only support exporting MIDI-less acoustic model to ONNX format.
 
 ### 0. Environment Preparation
 
-**<font color='red'> Important:</font>** Due to the complexity of the model and inference procedure, these scripts are only compatible with **PyTorch 1.8**. We apologize for any inconvenience caused; we will try to address this issue in the future.
-
-Run with the command to install extra requirements for exporting the model to ONNX format.
-
-```bash
-pip install onnx==1.12.0 onnxsim==0.4.10 protobuf==3.13.0  # Used for graph repairing and optimization
-```
+**<font color='red'> Important:</font>** The exporting script is only tested under **PyTorch 1.13**. For the most stability, we recommend you to export your model with the same version of PyTorch as we used to test this functionality.
 
 The `onnxruntime` package is required to run inference with ONNX model and ONNXRuntime. See the [official guidance](https://onnxruntime.ai/) for instructions to install packages matching your hardware. CUDA, DirectML and default CPU are recommended since the model has been tested on these execution providers.
 
@@ -25,15 +19,24 @@ The `onnxruntime` package is required to run inference with ONNX model and ONNXR
 
 Run with the command
 
-```bash
-python deployment/export/export_acoustic.py --exp EXP [--out OUT]
+```commandline
+python scripts/export.py acoustic --exp EXP [--out OUT]
 ```
 
-where `EXP` is the name of experiment, `OUT` is the output directory.
+where `EXP` is the name of experiment, `OUT` is the output directory for all artifacts exported. For more functionalities of this script, run
+
+```commandline
+python scripts/export.py acoustic --help
+```
 
 This script will export the acoustic model to the ONNX format and do a lot of optimization (25% ~ 50% faster with ONNXRuntime than PyTorch).
 
 Note: DPM-Solver acceleration is not currently included, but PNDM is wrapped into the model. Use any `speedup` larger than 1 to enable it.
+
+These attachments will be exported along the model:
+- the dictionary which the model uses
+- a text file carrying all phonemes representing the tokens in the model
+- all speaker mix embeddings, if a multi-speaker model is exported with `--export_spk` options specified
 
 ### 2. Inference with ONNXRuntime
 
