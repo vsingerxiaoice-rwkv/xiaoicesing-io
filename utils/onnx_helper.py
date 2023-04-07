@@ -3,8 +3,7 @@ from typing import Dict, Tuple, Union
 
 import onnx
 from google.protobuf.internal.containers import RepeatedCompositeFieldContainer
-from onnx import ModelProto, ValueInfoProto, GraphProto
-
+from onnx import GraphProto, ModelProto, NodeProto, ValueInfoProto
 
 __verbose__: bool = True
 """
@@ -24,9 +23,9 @@ def model_override_io_shapes(
 ):
     """
     Override the shapes of inputs/outputs of the model graph (in-place operation).
-    @param model: model to perform the operation on
-    @param input_shapes: a dict with keys as input/output names and values as shape tuples
-    @param output_shapes: the same as input_shapes
+    :param model: model to perform the operation on
+    :param input_shapes: a dict with keys as input/output names and values as shape tuples
+    :param output_shapes: the same as input_shapes
     """
     def _override_shapes(
             shape_list_old: RepeatedCompositeFieldContainer[ValueInfoProto],
@@ -44,7 +43,7 @@ def model_override_io_shapes(
                     else:
                         dims[i].dim_value = 0
                         dims[i].dim_param = dim
-                _verbose(f'| override shape of \'{name}\' with {list(shape_dict_new[name])}')
+                _verbose(f'| override shape of \'{name}\' with {shape_dict_new[name]}')
 
     if input_shapes is not None:
         _override_shapes(model.graph.input, input_shapes)
@@ -227,6 +226,78 @@ def graph_fold_back_to_squeeze(graph: GraphProto):
             i_shape += 1
 
     _graph_fold_back_to_squeeze_recursive(graph)
+
+
+def graph_extract_conditioner_projections(
+        graph: GraphProto,
+        op_type: str,
+        weight_pattern: str,
+        alias_prefix: str
+):
+    """
+    Extract conditioner projection nodes out of the denoiser wrapped by diffusion.
+    These nodes only need to be calculated once before entering the main denoising loop,
+    and can be reused inside the loop. This optimizes the performance of ONNX inference.
+
+    :param graph: graph to perform the operation on
+    :param op_type: the ONNX operator type of the conditioner projections (usually 'Conv' or 'Gemm')
+    :param weight_pattern: a regular expression as pattern of the conditioner projection weight keys
+    :param alias_prefix: add prefixes to the outputs of extracted projection nodes
+    """
+    node_dict: Dict[str, Tuple[str, NodeProto]] = {}  # key: pattern match, value: (alias, node)
+
+    def _extract_conv_nodes_recursive(subgraph: GraphProto):
+        to_be_removed = []
+        for sub_node in subgraph.node:
+            if sub_node.op_type == 'If':
+                for attr in sub_node.attribute:
+                    branch = onnx.helper.get_attribute_value(attr)
+                    _extract_conv_nodes_recursive(branch)
+            elif sub_node.op_type == 'Loop':
+                for attr in sub_node.attribute:
+                    if attr.name == 'body':
+                        body = onnx.helper.get_attribute_value(attr)
+                        _extract_conv_nodes_recursive(body)
+            elif sub_node.op_type == op_type and re.match(weight_pattern, sub_node.input[1]):
+                # Found node to extract
+                cached = node_dict.get(sub_node.input[1])
+                if cached is None:
+                    out_alias = f'{alias_prefix}.{len(node_dict)}'
+                    node_dict[sub_node.input[1]] = (out_alias, sub_node)
+                else:
+                    out_alias = cached[0]
+                out = sub_node.output[0]
+                # Search for nodes downstream the extracted node and match them to the renamed output.
+                for dep_node in subgraph.node:
+                    for dep_idx, dep_input in enumerate(dep_node.input):
+                        if dep_input == out:
+                            dep_node.input.remove(out)
+                            dep_node.input.insert(dep_idx, out_alias)
+                # Add the node to the remove list.
+                to_be_removed.append(sub_node)
+        [subgraph.node.remove(_n) for _n in to_be_removed]
+
+    for i, n in enumerate(graph.node):
+        if n.op_type == 'If':
+            for a in n.attribute:
+                b = onnx.helper.get_attribute_value(a)
+                _extract_conv_nodes_recursive(b)
+            # Insert the extracted nodes before the first 'If' node which carries the main denoising loop.
+            for key in reversed(node_dict):
+                alias, node = node_dict[key]
+                # Rename output of the node.
+                out_name = node.output[0]
+                node.output.remove(node.output[0])
+                node.output.insert(0, alias)
+                # Insert node into the main graph.
+                graph.node.insert(i, node)
+                # Rename value info of the output.
+                for v in graph.value_info:
+                    if v.name == out_name:
+                        v.name = alias
+                        break
+                _verbose(f'| extract conditioner projection: \'{node.name}\'')
+            break
 
 
 def graph_remove_unused_values(graph: GraphProto):
