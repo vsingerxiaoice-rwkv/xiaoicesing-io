@@ -92,7 +92,7 @@ class DsBatchSampler(Sampler):
         self.epoch = 0
         self.batches = None
         self.formed = None
-    
+
     def __form_batches(self):
         if self.formed == self.epoch + self.seed:
             return
@@ -103,29 +103,29 @@ class DsBatchSampler(Sampler):
                 indices = np.array(self.sub_indices)
             else:
                 indices = rng.permutation(len(self.dataset))
-            
+
             if self.sort_by_similar_size:
                 grid = int(hparams.get('sampler_frame_count_grid', 200))
                 assert grid > 0
                 sizes = (np.round(np.array(self.dataset._sizes)[indices] / grid) * grid).clip(grid, None).astype(np.int64)
                 indices = indices[np.argsort(sizes, kind='mergesort')]
-            
+
             indices = indices.tolist()
         else:
             indices = self.sub_indices if self.sub_indices is not None else list(range(len(self.dataset)))
-        
+
         if self.batch_by_size:
             batches = utils.batch_by_size(indices, self.dataset.num_tokens, max_tokens=self.max_tokens, max_sentences=self.max_sentences)
         else:
             batches = [indices[i:i + self.max_sentences] for i in range(0, len(indices), self.max_sentences)]
-        
+
         floored_total_batch_count = (len(batches) // self.num_replicas) * self.num_replicas
         if self.drop_last and len(batches) > floored_total_batch_count:
             batches = batches[:floored_total_batch_count]
             leftovers = []
         else:
             leftovers = (rng.permutation(len(batches) - floored_total_batch_count) + floored_total_batch_count).tolist()
-        
+
         batch_assignment = rng.permuted(np.arange(floored_total_batch_count).reshape(-1, self.num_replicas).transpose(), axis=0)[self.rank].tolist()
         floored_batch_count = len(batch_assignment)
         ceiled_batch_count = floored_batch_count + (1 if len(leftovers) > 0 else 0)
@@ -138,12 +138,12 @@ class DsBatchSampler(Sampler):
             ceiled_batch_count = math.ceil(ceiled_batch_count / self.required_batch_count_multiple) * self.required_batch_count_multiple
             for i in range(ceiled_batch_count - len(batch_assignment)):
                 batch_assignment.append(batch_assignment[(i + self.epoch * self.required_batch_count_multiple) % floored_batch_count])
-        
+
         self.batches = [deepcopy(batches[i]) for i in batch_assignment]
-        
+
         if self.shuffle_batch:
             rng.shuffle(self.batches)
-        
+
         del indices
         del batches
         del batch_assignment
@@ -172,7 +172,7 @@ class DsEvalBatchSampler(Sampler):
         self.batches = None
         self.batch_size = max_sentences
         self.drop_last = False
-        
+
         if self.rank == 0:
             indices = list(range(len(self.dataset)))
             if self.batch_by_size:
@@ -192,7 +192,7 @@ class DsEvalBatchSampler(Sampler):
 
 class DsModelCheckpoint(ModelCheckpoint):
     def __init__(
-        self,          
+        self,
         *args,
         permanent_ckpt_start,
         permanent_ckpt_interval,
@@ -202,10 +202,10 @@ class DsModelCheckpoint(ModelCheckpoint):
         self.permanent_ckpt_start = permanent_ckpt_start or 0
         self.permanent_ckpt_interval = permanent_ckpt_interval or 0
         self.enable_permanent_ckpt = self.permanent_ckpt_start > 0 and self.permanent_ckpt_interval > 9
-        
+
         self._verbose = self.verbose
         self.verbose = False
-    
+
     def state_dict(self):
         ret = super().state_dict()
         ret.pop('dirpath')
@@ -220,38 +220,40 @@ class DsModelCheckpoint(ModelCheckpoint):
             return
         self.last_val_step = trainer.global_step
         super().on_validation_end(trainer, pl_module)
-    
+
     def _update_best_and_save(
         self, current: torch.Tensor, trainer: "pl.Trainer", monitor_candidates: Dict[str, torch.Tensor]
     ) -> None:
         k = len(self.best_k_models) + 1 if self.save_top_k == -1 else self.save_top_k
-        
+
         del_filepath = None
         _op = max if self.mode == "min" else min
         while len(self.best_k_models) > k and k > 0:
             self.kth_best_model_path = _op(self.best_k_models, key=self.best_k_models.get)  # type: ignore[arg-type]
             self.kth_value = self.best_k_models[self.kth_best_model_path]
-            
+
             del_filepath = self.kth_best_model_path
             self.best_k_models.pop(del_filepath)
             filepath = self._get_metric_interpolated_filepath_name(monitor_candidates, trainer, del_filepath)
             if del_filepath is not None and filepath != del_filepath:
                 self._remove_checkpoint(trainer, del_filepath)
-        
+
         if len(self.best_k_models) == k and k > 0:
             self.kth_best_model_path = _op(self.best_k_models, key=self.best_k_models.get)  # type: ignore[arg-type]
             self.kth_value = self.best_k_models[self.kth_best_model_path]
 
         super()._update_best_and_save(current, trainer, monitor_candidates)
-    
+
     def _save_checkpoint(self, trainer: "pl.Trainer", filepath: str) -> None:
-        super()._save_checkpoint(trainer, filepath)
+        filepath = (Path(self.dirpath) / Path(filepath).name).resolve()
+        super()._save_checkpoint(trainer, str(filepath))
         if self._verbose:
-            relative_path = Path(filepath).relative_to(Path('.').resolve())
+            relative_path = filepath.relative_to(Path('.').resolve())
             rank_zero_info(f'Checkpoint {relative_path} saved.')
-    
+
     def _remove_checkpoint(self, trainer: "pl.Trainer", filepath: str):
-        relative_path = Path(filepath).relative_to(Path('.').resolve())
+        filepath = (Path(self.dirpath) / Path(filepath).name).resolve()
+        relative_path = filepath.relative_to(Path('.').resolve())
         search = re.search(r'steps_\d+', relative_path.stem)
         if search:
             step = int(search.group(0)[6:])
@@ -268,7 +270,7 @@ class DsModelCheckpoint(ModelCheckpoint):
 def get_latest_checkpoint_path(work_dir):
     if not os.path.exists(work_dir):
         return None
-    
+
     last_step = -1
     last_ckpt_name = None
 
@@ -280,7 +282,7 @@ def get_latest_checkpoint_path(work_dir):
             if step > last_step:
                 last_step = step
                 last_ckpt_name = name
-                    
+
     return last_ckpt_name if last_ckpt_name is not None else None
 
 
@@ -306,7 +308,7 @@ class DsTQDMProgressBar(TQDMProgressBar):
 def get_strategy(accelerator, devices, num_nodes, strategy, backend):
     if accelerator != 'auto' and accelerator != 'gpu':
         return strategy
-    
+
     from lightning_fabric.utilities.imports import _IS_INTERACTIVE
     from lightning.pytorch.accelerators import AcceleratorRegistry
     from lightning.pytorch.accelerators.cuda import CUDAAccelerator
@@ -328,36 +330,36 @@ def get_strategy(accelerator, devices, num_nodes, strategy, backend):
         if CUDAAccelerator.is_available():
             return "cuda"
         return "cpu"
-    
+
     def _choose_gpu_accelerator_backend():
         if MPSAccelerator.is_available():
             return "mps"
         if CUDAAccelerator.is_available():
             return "cuda"
         raise MisconfigurationException("No supported gpu backend found!")
-    
+
     if accelerator == "auto":
         _accelerator_flag = _choose_auto_accelerator()
     elif accelerator == "gpu":
         _accelerator_flag = _choose_gpu_accelerator_backend()
     else:
         return strategy
-    
+
     if _accelerator_flag != "mps" and _accelerator_flag != "cuda":
         return strategy
-    
+
     _num_nodes_flag = int(num_nodes) if num_nodes is not None else 1
     _devices_flag = devices
-    
+
     accelerator = AcceleratorRegistry.get(_accelerator_flag)
     accelerator_cls = accelerator.__class__
 
     if _devices_flag == "auto":
         _devices_flag = accelerator.auto_device_count()
-    
+
     _devices_flag = accelerator_cls.parse_devices(_devices_flag)
     _parallel_devices = accelerator_cls.get_parallel_devices(_devices_flag)
-    
+
     def get_ddp_strategy(_backend):
         if _backend == 'gloo':
             return DDPStrategy(process_group_backend='gloo', find_unused_parameters=False)
@@ -365,7 +367,7 @@ def get_strategy(accelerator, devices, num_nodes, strategy, backend):
             return DDPStrategy(process_group_backend='nccl', find_unused_parameters=False)
         else:
             raise ValueError(f'backend {_backend} is not valid.')
-    
+
     if _num_nodes_flag > 1:
         return get_ddp_strategy(backend)
     if len(_parallel_devices) <= 1:
