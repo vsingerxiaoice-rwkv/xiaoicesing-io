@@ -25,7 +25,7 @@ parser.add_argument('--out', type=str, required=False, help='Path of the output 
 parser.add_argument('--title', type=str, required=False, help='Title of output file')
 parser.add_argument('--num', type=int, required=False, default=1, help='Number of runs')
 parser.add_argument('--key', type=int, required=False, default=0, help='Key transition of pitch')
-parser.add_argument('--gender', type=float, required=False, help='Formant shifting (gender control)')
+parser.add_argument('--gender', type=float, required=False, default=0, help='Formant shifting (gender control)')
 parser.add_argument('--seed', type=int, required=False, help='Random seed of the inference')
 parser.add_argument('--speedup', type=int, required=False, default=0, help='PNDM speed-up ratio')
 parser.add_argument('--mel', action='store_true', required=False, default=False,
