@@ -17,7 +17,7 @@ from utils.text_encoder import TokenTextEncoder
 class DiffSingerAcousticExporter(BaseExporter):
     def __init__(
             self,
-            device: Union[str, torch.device] = None,
+            device: Union[str, torch.device] = 'cpu',
             cache_dir: Path = None,
             ckpt_steps: int = None,
             expose_gender: bool = False,
@@ -228,10 +228,7 @@ class DiffSingerAcousticExporter(BaseExporter):
 
     def _optimize_fs2_graph(self, fs2: onnx.ModelProto) -> onnx.ModelProto:
         print(f'Running ONNX simplifier for {self.fs2_class_name}...')
-        fs2, check = onnxsim.simplify(
-            fs2,
-            include_subgraph=True
-        )
+        fs2, check = onnxsim.simplify(fs2, include_subgraph=True)
         assert check, 'Simplified ONNX model could not be validated'
         print(f'| optimize graph: {self.fs2_class_name}')
         return fs2
@@ -241,10 +238,7 @@ class DiffSingerAcousticExporter(BaseExporter):
             'mel': (1, 'n_frames', hparams['audio_num_mel_bins'])
         })
         print(f'Running ONNX simplifier #1 for {self.diffusion_class_name}...')
-        diffusion, check = onnxsim.simplify(
-            diffusion,
-            include_subgraph=True
-        )
+        diffusion, check = onnxsim.simplify(diffusion, include_subgraph=True)
         assert check, 'Simplified ONNX model could not be validated'
         onnx_helper.graph_fold_back_to_squeeze(diffusion.graph)
         onnx_helper.graph_extract_conditioner_projections(

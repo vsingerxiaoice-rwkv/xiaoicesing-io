@@ -11,7 +11,7 @@ root_dir = Path(__file__).parent.parent.resolve()
 os.environ['PYTHONPATH'] = str(root_dir)
 sys.path.insert(0, str(root_dir))
 
-from utils.hparams import set_hparams
+from utils.hparams import set_hparams, hparams
 
 
 @click.group()
@@ -34,7 +34,7 @@ def main():
 @click.option('--freeze_spk', type=str, required=False)
 def acoustic(
         exp: str,
-        ckpt: int,
+        ckpt: int = None,
         out: str = None,
         expose_gender: bool = False,
         freeze_gender: float = 0.,
@@ -116,6 +116,40 @@ def acoustic(
         expose_velocity=expose_velocity,
         export_spk=export_spk_mix,
         freeze_spk=freeze_spk_mix
+    )
+    print(f'| Exporter: {exporter.__class__}')
+    exporter.export(out)
+
+
+@main.command(help='Export NSF-HiFiGAN vocoder model to ONNX format.')
+@click.option('--config', type=str, required=True, metavar='<path>', help='Specify a config path of the vocoder')
+@click.option('--out', type=str, required=False, metavar='<dir>', help='Output directory for the artifacts.')
+@click.option('--name', type=str, required=False, metavar='<name>', default='nsf_hifigan', show_default=False,
+              help='Specify filename (without suffix) of the target model file.')
+def nsf_hifigan(
+        config: str,
+        out: str = None,
+        name: str = None
+):
+    # Check arguments
+    if not Path(config).resolve().exists():
+        raise FileNotFoundError(f'{config} is not a valid config path.')
+    if out is None:
+        out = root_dir / 'artifacts' / 'nsf_hifigan'
+    else:
+        out = Path(out)
+    out = out.resolve()
+
+    # Load configurations
+    set_hparams(config)
+
+    # Export artifacts
+    from deployment.exporters import NSFHiFiGANExporter
+    exporter = NSFHiFiGANExporter(
+        device=torch.device('cuda' if torch.cuda.is_available() else 'cpu'),
+        cache_dir=root_dir / 'deployment' / 'cache',
+        model_path=Path(hparams['vocoder_ckpt']).resolve(),
+        model_name=name
     )
     print(f'| Exporter: {exporter.__class__}')
     exporter.export(out)
