@@ -9,6 +9,7 @@ from torch import nn
 
 from basics.base_exporter import BaseExporter
 from deployment.modules.nsf_hifigan import NSFHiFiGANONNX
+from utils import load_ckpt
 from utils.hparams import hparams
 
 
@@ -31,12 +32,11 @@ class NSFHiFiGANExporter(BaseExporter):
         config_path = self.model_path.with_name('config.json')
         with open(config_path, 'r', encoding='utf8') as f:
             config = json.load(f)
-        model = NSFHiFiGANONNX(config)
-        cp_dict = torch.load(self.model_path, map_location=self.device)
-        model.generator.load_state_dict(cp_dict['generator'])
-        del cp_dict
+        model = NSFHiFiGANONNX(config).eval().to(self.device)
+        load_ckpt(model.generator, str(self.model_path),
+                  prefix_in_ckpt=None, key_in_ckpt='generator',
+                  strict=True, device=self.device)
         model.generator.remove_weight_norm()
-        model.eval()
         return model
 
     def export(self, path: Path):

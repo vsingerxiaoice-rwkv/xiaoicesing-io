@@ -59,8 +59,8 @@ class DiffSingerAcousticExporter(BaseExporter):
             vocab_size=len(self.vocab),
             out_dims=hparams['audio_num_mel_bins']
         ).eval().to(self.device)
-        load_ckpt(model, hparams['work_dir'], 'model', ckpt_steps=self.ckpt_steps,
-                  required_category='acoustic', strict=True, device=self.device)
+        load_ckpt(model, hparams['work_dir'], ckpt_steps=self.ckpt_steps, required_category='acoustic',
+                  prefix_in_ckpt='model', strict=True, device=self.device)
         return model
 
     def export(self, path: Path):

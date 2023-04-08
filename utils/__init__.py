@@ -1,8 +1,7 @@
 import glob
+import os
 import re
 import time
-import os
-import sys
 import types
 from collections import OrderedDict
 
@@ -108,9 +107,7 @@ def make_positions(tensor, padding_idx):
     # prefers ints, cumsum defaults to output longs, and ONNX doesn't know
     # how to handle the dtype kwarg in cumsum.
     mask = tensor.ne(padding_idx).int()
-    return (
-                   torch.cumsum(mask, dim=1).type_as(mask) * mask
-           ).long() + padding_idx
+    return (torch.cumsum(mask, dim=1).type_as(mask) * mask).long() + padding_idx
 
 
 def softmax(x, dim):
@@ -131,10 +128,12 @@ def unpack_dict_to_list(samples):
     return samples_
 
 
-def load_ckpt(cur_model, ckpt_base_dir, prefix_in_ckpt='model', required_category=None,
-              ckpt_steps=None, strict=True, device='cpu'):
+def load_ckpt(
+        cur_model, ckpt_base_dir, ckpt_steps=None,
+        required_category=None, prefix_in_ckpt='model', key_in_ckpt='state_dict',
+        strict=True, device='cpu'
+):
     if os.path.isfile(ckpt_base_dir):
-        ckpt_base_dir = os.path.dirname(ckpt_base_dir)
         checkpoint_path = [ckpt_base_dir]
     elif ckpt_steps is not None:
         checkpoint_path = [os.path.join(ckpt_base_dir, f'model_ckpt_steps_{int(ckpt_steps)}.ckpt')]
@@ -158,11 +157,15 @@ def load_ckpt(cur_model, ckpt_base_dir, prefix_in_ckpt='model', required_categor
             raise TypeError(f'The \'{required_category}\' argument can only be used '
                             f'on a \'basics.base_model.CategorizedModule\'.')
         cur_model.check_category(ckpt_loaded.get('category'))
-    state_dict = ckpt_loaded['state_dict']
-    state_dict = OrderedDict({
-        k[len(prefix_in_ckpt) + 1:]: v
-        for k, v in state_dict.items() if k.startswith(f'{prefix_in_ckpt}.')
-    })
+    if key_in_ckpt is None:
+        state_dict = ckpt_loaded
+    else:
+        state_dict = ckpt_loaded[key_in_ckpt]
+    if prefix_in_ckpt is not None:
+        state_dict = OrderedDict({
+            k[len(prefix_in_ckpt) + 1:]: v
+            for k, v in state_dict.items() if k.startswith(f'{prefix_in_ckpt}.')
+        })
     if not strict:
         cur_model_state_dict = cur_model.state_dict()
         unmatched_keys = []
@@ -175,7 +178,12 @@ def load_ckpt(cur_model, ckpt_base_dir, prefix_in_ckpt='model', required_categor
         for key in unmatched_keys:
             del state_dict[key]
     cur_model.load_state_dict(state_dict, strict=strict)
-    print(f'| load \'{prefix_in_ckpt}\' from \'{checkpoint_path}\'.')
+    shown_model_name = 'state dict'
+    if prefix_in_ckpt is not None:
+        shown_model_name = f'\'{prefix_in_ckpt}\''
+    elif key_in_ckpt is not None:
+        shown_model_name = f'\'{key_in_ckpt}\''
+    print(f'| load {shown_model_name} from \'{checkpoint_path}\'.')
 
 
 def remove_padding(x, padding_idx=0):

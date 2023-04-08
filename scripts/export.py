@@ -122,7 +122,7 @@ def acoustic(
 
 
 @main.command(help='Export NSF-HiFiGAN vocoder model to ONNX format.')
-@click.option('--config', type=str, required=True, metavar='<path>', help='Specify a config path of the vocoder')
+@click.option('--config', type=str, required=True, metavar='<path>', help='Specify a config path of the vocoder.')
 @click.option('--out', type=str, required=False, metavar='<dir>', help='Output directory for the artifacts.')
 @click.option('--name', type=str, required=False, metavar='<name>', default='nsf_hifigan', show_default=False,
               help='Specify filename (without suffix) of the target model file.')
