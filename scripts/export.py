@@ -47,7 +47,8 @@ def acoustic(
         print('--expose_gender is exclusive to --freeze_gender.')
         exit(-1)
     if export_spk and freeze_spk:
-        print('--export_spk is exclusive to --freeze_spk')
+        print('--export_spk is exclusive to --freeze_spk.')
+        exit(-1)
     if freeze_gender is not None:
         assert -1. <= freeze_gender <= 1., 'Frozen gender must be in [-1, 1].'
     if not (root_dir / 'checkpoints' / exp).exists():

@@ -51,8 +51,18 @@ class DiffSingerAcousticExporter(BaseExporter):
             key_shift = freeze_gender * shift_max if freeze_gender >= 0. else freeze_gender * abs(shift_min)
             key_shift = max(min(key_shift, shift_max), shift_min)  # clip key shift
             self.model.fs2.register_buffer('frozen_key_shift', torch.FloatTensor([key_shift]).to(self.device))
-        if hparams['use_spk_id'] and not self.export_spk and freeze_spk is not None:
-            self.model.fs2.register_buffer('frozen_spk_embed', self._perform_spk_mix(freeze_spk[1]))
+        if hparams['use_spk_id']:
+            if not self.export_spk and freeze_spk is None:
+                # In case the user did not specify any speaker settings:
+                if len(self.spk_map) == 1:
+                    # If there is only one speaker, freeze him/her.
+                    first_spk = next(self.spk_map.keys())
+                    freeze_spk = (first_spk, {first_spk: 1.0})
+                else:
+                    # If there are multiple speakers, export them all.
+                    self.export_spk = [(name, {name: 1.0}) for name in self.spk_map.keys()]
+            if freeze_spk is not None:
+                self.model.fs2.register_buffer('frozen_spk_embed', self._perform_spk_mix(freeze_spk[1]))
 
     def build_model(self) -> DiffSingerAcousticONNX:
         model = DiffSingerAcousticONNX(
