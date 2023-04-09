@@ -52,7 +52,7 @@ class DiffSingerAcousticExporter(BaseExporter):
             key_shift = max(min(key_shift, shift_max), shift_min)  # clip key shift
             self.model.fs2.register_buffer('frozen_key_shift', torch.FloatTensor([key_shift]).to(self.device))
         if hparams['use_spk_id'] and not self.export_spk and freeze_spk is not None:
-            self.model.fs2.register_buffer('spk_mix_embed', self._perform_spk_mix(freeze_spk[1]))
+            self.model.fs2.register_buffer('frozen_spk_embed', self._perform_spk_mix(freeze_spk[1]))
 
     def build_model(self) -> DiffSingerAcousticONNX:
         model = DiffSingerAcousticONNX(
@@ -123,7 +123,7 @@ class DiffSingerAcousticExporter(BaseExporter):
                 dynamix_axes['velocity'] = {
                     1: 'n_frames'
                 }
-        if hparams['use_spk_id']:
+        if hparams['use_spk_id'] and not self.freeze_spk:
             kwargs['spk_embed'] = torch.rand(
                 (1, n_frames, hparams['hidden_size']),
                 dtype=torch.float32, device=self.device
@@ -206,6 +206,7 @@ class DiffSingerAcousticExporter(BaseExporter):
             opset_version=15
         )
 
+    @torch.no_grad()
     def _perform_spk_mix(self, spk_mix: Dict[str, float]):
         spk_mix_ids = []
         spk_mix_values = []
