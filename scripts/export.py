@@ -107,6 +107,7 @@ def acoustic(
 
     # Export artifacts
     from deployment.exporters import DiffSingerAcousticExporter
+    print(f'| Exporter: {DiffSingerAcousticExporter}')
     exporter = DiffSingerAcousticExporter(
         device=torch.device('cuda' if torch.cuda.is_available() else 'cpu'),
         cache_dir=root_dir / 'deployment' / 'cache',
@@ -117,7 +118,6 @@ def acoustic(
         export_spk=export_spk_mix,
         freeze_spk=freeze_spk_mix
     )
-    print(f'| Exporter: {exporter.__class__}')
     exporter.export(out)
 
 
@@ -145,13 +145,13 @@ def nsf_hifigan(
 
     # Export artifacts
     from deployment.exporters import NSFHiFiGANExporter
+    print(f'| Exporter: {NSFHiFiGANExporter}')
     exporter = NSFHiFiGANExporter(
         device=torch.device('cuda' if torch.cuda.is_available() else 'cpu'),
         cache_dir=root_dir / 'deployment' / 'cache',
         model_path=Path(hparams['vocoder_ckpt']).resolve(),
         model_name=name
     )
-    print(f'| Exporter: {exporter.__class__}')
     exporter.export(out)
 
 
