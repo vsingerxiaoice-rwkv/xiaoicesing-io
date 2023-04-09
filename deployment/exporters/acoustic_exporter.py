@@ -84,7 +84,7 @@ class DiffSingerAcousticExporter(BaseExporter):
     def export_attachments(self, path: Path):
         path_model_name = path / self.model_name
         for spk in self.export_spk:
-            self._export_spk_embed(path.with_suffix(f'.{spk[0]}.emb'), self._perform_spk_mix(spk[1]))
+            self._export_spk_embed(path_model_name.with_suffix(f'.{spk[0]}.emb'), self._perform_spk_mix(spk[1]))
         self._export_dictionary(path / 'dictionary.txt')
         self._export_phonemes(path_model_name.with_suffix('.phonemes.txt'))
 

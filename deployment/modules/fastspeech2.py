@@ -61,7 +61,7 @@ class FastSpeech2AcousticONNX(FastSpeech2Acoustic):
 
         if hparams.get('use_key_shift_embed', False):
             if hasattr(self, 'frozen_key_shift'):
-                key_shift_embed = self.key_shift_embed(self.key_shift[:, None, None])
+                key_shift_embed = self.key_shift_embed(self.frozen_key_shift[:, None, None])
             else:
                 gender = torch.clip(gender, min=-1., max=1.)
                 gender_mask = (gender < 0.).float()
