@@ -28,7 +28,6 @@ class PositionalEncoding(torch.nn.Module):
                 if self.pe.dtype != x.dtype or self.pe.device != x.device:
                     self.pe = self.pe.to(dtype=x.dtype, device=x.device)
                 return
-        pe = torch.zeros(x.size(1), self.d_model)
         if self.reverse:
             position = torch.arange(
                 x.size(1) - 1, -1, -1.0, dtype=torch.float32
@@ -39,9 +38,10 @@ class PositionalEncoding(torch.nn.Module):
             torch.arange(0, self.d_model, 2, dtype=torch.float32)
             * -(math.log(10000.0) / self.d_model)
         )
-        pe[:, 0::2] = torch.sin(position * div_term)
-        pe[:, 1::2] = torch.cos(position * div_term)
-        pe = pe.unsqueeze(0)
+        pe = torch.stack([
+            torch.sin(position * div_term),
+            torch.cos(position * div_term)
+        ], dim=2).view(-1, self.d_model).unsqueeze(0)
         self.pe = pe.to(device=x.device, dtype=x.dtype)
 
     def forward(self, x: torch.Tensor):

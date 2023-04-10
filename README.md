@@ -1,5 +1,5 @@
 # Usage of Refactor Branch
-This is a cleaner version of Diffsinger, which provides:
+This is a cleaner version of DiffSinger, which provides:
 - fewer code: scripts unused or obsolete in the DiffSinger are removed;
 - better readability: many important functions are annotated (however, **we assume the reader already knows how the neural networks work**);
 - abstract classes: the bass classes are filtered out into the "basics/" folder and are annotated. Other classes directly inherent from the base classes.
@@ -68,10 +68,10 @@ See more supported arguments with `python scripts/infer.py -h`. See examples of 
 Please see this [documentation](docs/README-SVS-deployment.md) before you run the following command:
 
 ```sh
-python deployment/export/export_acoustic.py --exp $MY_DS_EXP_NAME
+python scripts/export.py acoustic --exp $MY_DS_EXP_NAME
 ```
 
-See more supported arguments with `python deployment/export/export_acoustic.py -h`.
+See more supported arguments with `scripts/export.py acoustic --help`.
 
 #### Use DiffSinger via OpenUTAU editor
 

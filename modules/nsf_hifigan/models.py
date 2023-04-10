@@ -15,7 +15,7 @@ from .utils import init_weights, get_padding
 LRELU_SLOPE = 0.1
 
 
-def load_model(model_path, device='cuda'):
+def load_model(model_path):
     config_file = os.path.join(os.path.split(model_path)[0], 'config.json')
     with open(config_file) as f:
         data = f.read()
@@ -105,9 +105,9 @@ class SineGen(torch.nn.Module):
             flag_for_pulse=False)
     samp_rate: sampling rate in Hz
     harmonic_num: number of harmonic overtones (default 0)
-    sine_amp: amplitude of sine-wavefrom (default 0.1)
+    sine_amp: amplitude of sine-waveform (default 0.1)
     noise_std: std of Gaussian noise (default 0.003)
-    voiced_thoreshold: F0 threshold for U/V classification (default 0)
+    voiced_threshold: F0 threshold for U/V classification (default 0)
     flag_for_pulse: this SinGen is used inside PulseGen (default False)
     Note: when flag_for_pulse is True, the first time step of a voiced
         segment is always sin(np.pi) or cos(0)
@@ -130,20 +130,14 @@ class SineGen(torch.nn.Module):
         uv = uv * (f0 > self.voiced_threshold)
         return uv
 
-    @torch.no_grad()
-    def forward(self, f0, upp):
-        """ sine_tensor, uv = forward(f0)
-        input F0: tensor(batchsize=1, length, dim=1)
-                  f0 for unvoiced steps should be 0
-        output sine_tensor: tensor(batchsize=1, length, dim)
-        output uv: tensor(batchsize=1, length, 1)
+    def _f02sine(self, f0_values, upp):
+        """ f0_values: (batchsize, length, dim)
+            where dim indicates fundamental tone and overtones
         """
-        f0 = f0.unsqueeze(-1)
-        fn = torch.multiply(f0, torch.arange(1, self.dim + 1, device=f0.device).reshape((1, 1, -1)))
-        rad_values = (fn / self.sampling_rate) % 1  ###%1意味着n_har的乘积无法后处理优化
-        rand_ini = torch.rand(fn.shape[0], fn.shape[2], device=fn.device)
+        rad_values = (f0_values / self.sampling_rate).fmod(1.)  # %1意味着n_har的乘积无法后处理优化
+        rand_ini = torch.rand(1, self.dim, device=f0_values.device)
         rand_ini[:, 0] = 0
-        rad_values[:, 0, :] = rad_values[:, 0, :] + rand_ini
+        rad_values[:, 0, :] += rand_ini
         is_half = rad_values.dtype is not torch.float32
         tmp_over_one = torch.cumsum(rad_values.double(), 1)  # % 1  #####%1意味着后面的cumsum无法再优化
         if is_half:
@@ -156,24 +150,40 @@ class SineGen(torch.nn.Module):
             mode='linear', align_corners=True
         ).transpose(2, 1)
         rad_values = F.interpolate(rad_values.transpose(2, 1), scale_factor=upp, mode='nearest').transpose(2, 1)
-        tmp_over_one %= 1
-        tmp_over_one_idx = (tmp_over_one[:, 1:, :] - tmp_over_one[:, :-1, :]) < 0
-        cumsum_shift = torch.zeros_like(rad_values)
-        cumsum_shift[:, 1:, :] = tmp_over_one_idx * -1.0
-        rad_values = rad_values.double()
-        cumsum_shift = cumsum_shift.double()
-        sine_waves = torch.sin(torch.cumsum(rad_values + cumsum_shift, dim=1) * 2 * np.pi)
+        tmp_over_one = tmp_over_one.fmod(1.)
+        diff = F.conv2d(
+            tmp_over_one.unsqueeze(1), torch.FloatTensor([[[[-1.], [1.]]]]).to(tmp_over_one.device),
+            stride=(1, 1), padding=0, dilation=(1, 1)
+        ).squeeze(1)  # Equivalent to torch.diff, but able to export ONNX
+        cumsum_shift = (diff < 0).double()
+        cumsum_shift = torch.cat((
+            torch.zeros((1, 1, self.dim), dtype=torch.double).to(f0_values.device),
+            cumsum_shift
+        ), dim=1)
+        sines = torch.sin(torch.cumsum(rad_values.double() + cumsum_shift, dim=1) * 2 * np.pi)
         if is_half:
-            sine_waves = sine_waves.half()
+            sines = sines.half()
         else:
-            sine_waves = sine_waves.float()
-        sine_waves = sine_waves * self.sine_amp
-        uv = self._f02uv(f0)
+            sines = sines.float()
+        return sines
+
+    @torch.no_grad()
+    def forward(self, f0, upp):
+        """ sine_tensor, uv = forward(f0)
+        input F0: tensor(batchsize=1, length, dim=1)
+                  f0 for unvoiced steps should be 0
+        output sine_tensor: tensor(batchsize=1, length, dim)
+        output uv: tensor(batchsize=1, length, 1)
+        """
+        f0 = f0.unsqueeze(-1)
+        fn = torch.multiply(f0, torch.arange(1, self.dim + 1, device=f0.device).reshape((1, 1, -1)))
+        sine_waves = self._f02sine(fn, upp) * self.sine_amp
+        uv = (f0 > self.voiced_threshold).float()
         uv = F.interpolate(uv.transpose(2, 1), scale_factor=upp, mode='nearest').transpose(2, 1)
         noise_amp = uv * self.noise_std + (1 - uv) * self.sine_amp / 3
         noise = noise_amp * torch.randn_like(sine_waves)
         sine_waves = sine_waves * uv + noise
-        return sine_waves, uv, noise
+        return sine_waves
 
 
 class SourceModuleHnNSF(torch.nn.Module):
@@ -195,7 +205,7 @@ class SourceModuleHnNSF(torch.nn.Module):
     """
 
     def __init__(self, sampling_rate, harmonic_num=0, sine_amp=0.1,
-                 add_noise_std=0.003, voiced_threshod=0):
+                 add_noise_std=0.003, voiced_threshold=0):
         super(SourceModuleHnNSF, self).__init__()
 
         self.sine_amp = sine_amp
@@ -203,14 +213,14 @@ class SourceModuleHnNSF(torch.nn.Module):
 
         # to produce sine waveforms
         self.l_sin_gen = SineGen(sampling_rate, harmonic_num,
-                                 sine_amp, add_noise_std, voiced_threshod)
+                                 sine_amp, add_noise_std, voiced_threshold)
 
         # to merge source harmonics into a single excitation
         self.l_linear = torch.nn.Linear(harmonic_num + 1, 1)
         self.l_tanh = torch.nn.Tanh()
 
     def forward(self, x, upp):
-        sine_wavs, uv, _ = self.l_sin_gen(x, upp)
+        sine_wavs = self.l_sin_gen(x, upp)
         sine_merge = self.l_tanh(self.l_linear(sine_wavs))
         return sine_merge
 

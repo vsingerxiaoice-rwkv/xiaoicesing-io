@@ -17,7 +17,7 @@ from basics.base_dataset import BaseDataset
 from basics.base_task import BaseTask
 from basics.base_vocoder import BaseVocoder
 from modules.fastspeech.tts_modules import mel2ph_to_dur
-from modules.toplevel.acoustic_model import DiffSingerAcoustic
+from modules.toplevel import DiffSingerAcoustic
 from modules.vocoders.registry import get_vocoder_cls
 from utils.binarizer_utils import get_pitch_parselmouth
 from utils.hparams import hparams
@@ -25,7 +25,7 @@ from utils.indexed_datasets import IndexedDataset
 from utils.phoneme_utils import build_phoneme_list
 from utils.plot import spec_to_figure
 from utils.text_encoder import TokenTextEncoder
-from utils.training_utils import DsBatchSampler, DsEvalBatchSampler, WarmupCosineSchedule
+from utils.training_utils import DsBatchSampler, DsEvalBatchSampler
 
 matplotlib.use('Agg')
 

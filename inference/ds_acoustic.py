@@ -6,7 +6,7 @@ import torch
 
 from basics.base_svs_infer import BaseSVSInfer
 from modules.fastspeech.tts_modules import LengthRegulator
-from modules.toplevel.acoustic_model import DiffSingerAcoustic
+from modules.toplevel import DiffSingerAcoustic
 from modules.vocoders.registry import VOCODERS
 from utils import load_ckpt
 from utils.hparams import hparams
@@ -37,8 +37,8 @@ class DiffSingerAcousticInfer(BaseSVSInfer):
             vocab_size=len(self.ph_encoder),
             out_dims=hparams['audio_num_mel_bins']
         ).eval().to(self.device)
-        load_ckpt(model, hparams['work_dir'], 'model', ckpt_steps=ckpt_steps,
-                  required_category='acoustic', strict=True, device=self.device)
+        load_ckpt(model, hparams['work_dir'], ckpt_steps=ckpt_steps, required_category='acoustic',
+                  prefix_in_ckpt='model', strict=True, device=self.device)
         return model
 
     def build_vocoder(self):

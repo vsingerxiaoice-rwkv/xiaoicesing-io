@@ -15,7 +15,7 @@ from utils.hparams import hparams
 
 @register_vocoder
 class NsfHifiGAN(BaseVocoder):
-    def __init__(self, device=None):
+    def __init__(self):
         model_path = hparams['vocoder_ckpt']
         assert os.path.exists(model_path), 'HifiGAN model file is not found!'
         rank_zero_info('| Load HifiGAN: ' + model_path)

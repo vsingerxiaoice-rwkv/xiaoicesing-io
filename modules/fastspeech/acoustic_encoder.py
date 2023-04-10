@@ -2,7 +2,10 @@ import torch
 import torch.nn as nn
 from torch.nn import functional as F
 
-from modules.commons.common_layers import Embedding, Linear
+from modules.commons.common_layers import (
+    NormalInitEmbedding as Embedding,
+    XavierUniformInitLinear as Linear,
+)
 from modules.fastspeech.tts_modules import FastSpeech2Encoder, mel2ph_to_dur
 from utils.hparams import hparams
 from utils.pitch_utils import f0_to_coarse
@@ -15,7 +18,7 @@ class FastSpeech2AcousticEncoder(FastSpeech2Encoder):
         x = self.embed_scale * self.embed_tokens(txt_tokens)
         x = x + dur_embed
         if hparams['use_pos_embed']:
-            if hparams.get('rel_pos', False):
+            if hparams['rel_pos']:
                 x = self.embed_positions(x)
             else:
                 positions = self.embed_positions(txt_tokens)
@@ -35,6 +38,7 @@ class FastSpeech2AcousticEncoder(FastSpeech2Encoder):
         x = self.forward_embedding(txt_tokens, dur_embed)  # [B, T, H]
         x = super()._forward(x, encoder_padding_mask)
         return x
+
 
 class FastSpeech2Acoustic(nn.Module):
     def __init__(self, vocab_size):
@@ -62,17 +66,20 @@ class FastSpeech2Acoustic(nn.Module):
 
         if hparams['use_spk_id']:
             self.spk_embed = Embedding(hparams['num_spk'], hparams['hidden_size'])
-    
+
     def forward(self, txt_tokens, mel2ph, f0, key_shift=None, speed=None, spk_embed_id=None, **kwargs):
-        B, T = txt_tokens.shape
-        dur = mel2ph_to_dur(mel2ph, T).float()
+        dur = mel2ph_to_dur(mel2ph, txt_tokens.shape[1]).float()
         dur_embed = self.dur_embed(dur[:, :, None])
         encoder_out = self.encoder(txt_tokens, dur_embed)
-        
+
         encoder_out = F.pad(encoder_out, [0, 0, 1, 0])
         mel2ph_ = mel2ph[..., None].repeat([1, 1, encoder_out.shape[-1]])
         condition = torch.gather(encoder_out, 1, mel2ph_)
+        return self.forward_variance_embedding(
+            condition, f0=f0, key_shift=key_shift, speed=speed, spk_embed_id=spk_embed_id, **kwargs
+        )
 
+    def forward_variance_embedding(self, condition, f0, key_shift=None, speed=None, spk_embed_id=None, **kwargs):
         if self.f0_embed_type == 'discrete':
             pitch = f0_to_coarse(f0)
             pitch_embed = self.pitch_embed(pitch)
