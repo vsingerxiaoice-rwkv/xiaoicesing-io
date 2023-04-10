@@ -54,7 +54,7 @@ class BaseExporter:
 
     def export(self, path: Path):
         """
-        Export all the artifacts to the target directory.
+        Exports all the artifacts to the target directory.
         :param path: the target directory
         """
         raise NotImplementedError()
