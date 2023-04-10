@@ -13,7 +13,6 @@ durations = np.array([[n_frames // n_tokens] * n_tokens], dtype=np.int64)
 f0 = np.array([[440.] * n_frames], dtype=np.float32)
 speedup = np.array(speedup, dtype=np.int64)
 
-
 session = ort.InferenceSession('model1.onnx', providers=[provider])
 for _ in tqdm.tqdm(range(n_runs)):
     session.run(['mel'], {

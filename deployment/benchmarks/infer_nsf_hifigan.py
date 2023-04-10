@@ -1,26 +1,16 @@
-import time
-
 import numpy as np
 import onnxruntime as ort
-from scipy.io import wavfile
+import tqdm
 
-mel = np.load('deployment/assets/mel.npy')
-f0 = np.load('deployment/assets/f0.npy')
+n_frames = 1000
+n_runs = 20
+mel = np.random.randn(1, n_frames, 128).astype(np.float32)
+f0 = np.random.randn(1, n_frames).astype(np.float32) + 440.
+provider = 'DmlExecutionProvider'
 
-print('mel', mel.shape)
-print('f0', f0.shape)
-
-session = ort.InferenceSession(
-    'deployment/assets/nsf_hifigan.onnx',
-    providers=['CPUExecutionProvider']
-)
-
-start = time.time()
-wav = session.run(['waveform'], {'mel': mel, 'f0': f0})[0]
-end = time.time()
-
-print('waveform', wav.shape)
-print('cost', end - start)
-
-
-wavfile.write('deployment/assets/waveform.wav', 44100, wav[0])
+session = ort.InferenceSession('nsf_hifigan.onnx', providers=[provider])
+for _ in tqdm.tqdm(range(n_runs)):
+    session.run(['waveform'], {
+        'mel': mel,
+        'f0': f0
+    })
