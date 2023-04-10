@@ -68,14 +68,14 @@ class AcousticTask(BaseTask):
     def __init__(self):
         super().__init__()
         self.dataset_cls = AcousticDataset
-        self.use_vocoder = hparams['infer'] or hparams.get('val_with_vocoder', True)
+        self.use_vocoder = hparams['infer'] or hparams['val_with_vocoder']
         if self.use_vocoder:
             self.vocoder: BaseVocoder = get_vocoder_cls(hparams)()
         self.saving_result_pool = None
         self.saving_results_futures = None
         self.stats = {}
         self.logged_gt_wav = set()
-        
+
     def setup(self, stage):
         self.phone_encoder = self.build_phone_encoder()
         self.model = self.build_model()
@@ -111,13 +111,15 @@ class AcousticTask(BaseTask):
         #                             warmup_steps=hparams['warmup_updates'],
         #                             t_total=hparams['max_updates'],
         #                             eta_min=0)
-        return torch.optim.lr_scheduler.StepLR(optimizer, hparams['decay_steps'], gamma=hparams.get('gamma', 0.5))
-    
+        return torch.optim.lr_scheduler.StepLR(
+            optimizer, step_size=hparams['lr_decay_steps'], gamma=hparams['lr_decay_gamma']
+        )
+
     def train_dataloader(self):
         self.training_sampler = DsBatchSampler(
             self.train_dataset,
-            max_tokens=self.max_tokens,
-            max_sentences=self.max_sentences,
+            max_batch_frames=self.max_batch_frames,
+            max_batch_size=self.max_batch_size,
             num_replicas=(self.trainer.distributed_sampler_kwargs or {}).get('num_replicas', 1),
             rank=(self.trainer.distributed_sampler_kwargs or {}).get('rank', 0),
             sort_by_similar_size=hparams['sort_by_len'],
@@ -129,29 +131,29 @@ class AcousticTask(BaseTask):
         return torch.utils.data.DataLoader(self.train_dataset,
                                            collate_fn=self.train_dataset.collater,
                                            batch_sampler=self.training_sampler,
-                                           num_workers=int(hparams.get('ds_workers', os.getenv('NUM_WORKERS', 1))),
-                                           prefetch_factor=hparams.get('dataloader_prefetch_factor', 2),
+                                           num_workers=hparams['ds_workers'],
+                                           prefetch_factor=hparams['dataloader_prefetch_factor'],
                                            pin_memory=True,
                                            persistent_workers=True)
 
     def val_dataloader(self):
         sampler = DsEvalBatchSampler(
             self.valid_dataset,
-            max_tokens=self.max_tokens,
-            max_sentences=self.max_eval_sentences,
+            max_batch_frames=self.max_val_batch_frames,
+            max_batch_size=self.max_val_batch_size,
             rank=(self.trainer.distributed_sampler_kwargs or {}).get('rank', 0),
             batch_by_size=False
         )
         return torch.utils.data.DataLoader(self.valid_dataset,
                                            collate_fn=self.valid_dataset.collater,
                                            batch_sampler=sampler,
-                                           num_workers=int(hparams.get('ds_workers', os.getenv('NUM_WORKERS', 1))),
-                                           prefetch_factor=hparams.get('dataloader_prefetch_factor', 2),
+                                           num_workers=hparams['ds_workers'],
+                                           prefetch_factor=hparams['dataloader_prefetch_factor'],
                                            shuffle=False)
 
     def test_dataloader(self):
         return self.val_dataloader()
-    
+
     def run_model(self, sample, return_output=False, infer=False):
         """
             steps:
@@ -190,7 +192,7 @@ class AcousticTask(BaseTask):
     def _on_validation_start(self):
         if self.use_vocoder:
             self.vocoder.to_device(self.device)
-    
+
     def _validation_step(self, sample, batch_idx):
         losses = self.run_model(sample, return_output=False, infer=False)
         total_loss = sum(losses.values())

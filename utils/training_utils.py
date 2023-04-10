@@ -72,13 +72,13 @@ class WarmupCosineSchedule(LambdaLR):
 #==========Torch samplers==========
 
 class DsBatchSampler(Sampler):
-    def __init__(self, dataset, max_tokens, max_sentences, sub_indices=None,
+    def __init__(self, dataset, max_batch_frames, max_batch_size, sub_indices=None,
                  num_replicas=None, rank=None,
                  required_batch_count_multiple=1, batch_by_size=True, sort_by_similar_size=True,
                  shuffle_sample=False, shuffle_batch=False, seed=0, drop_last=False) -> None:
         self.dataset = dataset
-        self.max_tokens = max_tokens
-        self.max_sentences = max_sentences
+        self.max_batch_frames = max_batch_frames
+        self.max_batch_size = max_batch_size
         self.sub_indices = sub_indices
         self.num_replicas = num_replicas
         self.rank = rank
@@ -115,9 +115,9 @@ class DsBatchSampler(Sampler):
             indices = self.sub_indices if self.sub_indices is not None else list(range(len(self.dataset)))
 
         if self.batch_by_size:
-            batches = utils.batch_by_size(indices, self.dataset.num_tokens, max_tokens=self.max_tokens, max_sentences=self.max_sentences)
+            batches = utils.batch_by_size(indices, self.dataset.num_frames, max_batch_samples=self.max_batch_frames, max_batch_size=self.max_batch_size)
         else:
-            batches = [indices[i:i + self.max_sentences] for i in range(0, len(indices), self.max_sentences)]
+            batches = [indices[i:i + self.max_batch_size] for i in range(0, len(indices), self.max_batch_size)]
 
         floored_total_batch_count = (len(batches) // self.num_replicas) * self.num_replicas
         if self.drop_last and len(batches) > floored_total_batch_count:
@@ -163,22 +163,28 @@ class DsBatchSampler(Sampler):
 
 
 class DsEvalBatchSampler(Sampler):
-    def __init__(self, dataset, max_tokens, max_sentences, rank=None, batch_by_size=True) -> None:
+    def __init__(self, dataset, max_batch_frames, max_batch_size, rank=None, batch_by_size=True) -> None:
         self.dataset = dataset
-        self.max_tokens = max_tokens
-        self.max_sentences = max_sentences
+        self.max_batch_samples = max_batch_frames
+        self.max_batch_size = max_batch_size
         self.rank = rank
         self.batch_by_size = batch_by_size
         self.batches = None
-        self.batch_size = max_sentences
+        self.batch_size = max_batch_size
         self.drop_last = False
 
         if self.rank == 0:
             indices = list(range(len(self.dataset)))
             if self.batch_by_size:
-                self.batches = utils.batch_by_size(indices, self.dataset.num_tokens, max_tokens=self.max_tokens, max_sentences=self.max_sentences)
+                self.batches = utils.batch_by_size(
+                    indices, self.dataset.num_frames,
+                    max_batch_samples=self.max_batch_samples, max_batch_size=self.max_batch_size
+                )
             else:
-                self.batches = [indices[i:i + self.max_sentences] for i in range(0, len(indices), self.max_sentences)]
+                self.batches = [
+                    indices[i:i + self.max_batch_size]
+                    for i in range(0, len(indices), self.max_batch_size)
+                ]
         else:
             self.batches = [[0]]
 

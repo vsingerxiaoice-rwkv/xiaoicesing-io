@@ -11,7 +11,7 @@ class BaseDataset(Dataset):
         Base class for datasets.
         1. *sizes*:
             clipped length if "max_frames" is set;
-        2. *num_tokens*:
+        2. *num_frames*:
             unclipped length.
 
         Subclasses should define:
@@ -38,7 +38,7 @@ class BaseDataset(Dataset):
     def __len__(self):
         return len(self._sizes)
 
-    def num_tokens(self, index):
+    def num_frames(self, index):
         return self.size(index)
 
     def size(self, index):

@@ -62,14 +62,14 @@ class BaseTask(pl.LightningModule):
         self.loaded_optimizer_states_dict = {}
         self.example_input_array = None
 
-        self.max_tokens = hparams['max_tokens']
-        self.max_sentences = hparams['max_sentences']
-        self.max_eval_tokens = hparams['max_eval_tokens']
-        if self.max_eval_tokens == -1:
-            hparams['max_eval_tokens'] = self.max_eval_tokens = self.max_tokens
-        self.max_eval_sentences = hparams['max_eval_sentences']
-        if self.max_eval_sentences == -1:
-            hparams['max_eval_sentences'] = self.max_eval_sentences = self.max_sentences
+        self.max_batch_frames = hparams['max_batch_frames']
+        self.max_batch_size = hparams['max_batch_size']
+        self.max_val_batch_frames = hparams['max_val_batch_frames']
+        if self.max_val_batch_frames == -1:
+            hparams['max_val_batch_frames'] = self.max_val_batch_frames = self.max_batch_frames
+        self.max_val_batch_size = hparams['max_val_batch_frames']
+        if self.max_val_batch_size == -1:
+            hparams['max_val_batch_frames'] = self.max_val_batch_size = self.max_batch_size
 
         self.training_sampler = None
         self.model = None

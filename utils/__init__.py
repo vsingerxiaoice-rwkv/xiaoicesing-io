@@ -1,8 +1,7 @@
 import glob
+import os
 import re
 import time
-import os
-import sys
 import types
 from collections import OrderedDict
 
@@ -36,18 +35,18 @@ def collate_nd(values, pad_value=0, max_len=None):
     return res
 
 
-def _is_batch_full(batch, num_tokens, max_tokens, max_sentences):
+def _is_batch_full(batch, num_frames, max_batch_frames, max_batch_size):
     if len(batch) == 0:
         return 0
-    if len(batch) == max_sentences:
+    if len(batch) == max_batch_size:
         return 1
-    if num_tokens > max_tokens:
+    if num_frames > max_batch_frames:
         return 1
     return 0
 
 
 def batch_by_size(
-        indices, num_tokens_fn, max_tokens=80000, max_sentences=48,
+        indices, num_frames_fn, max_batch_samples=80000, max_batch_size=48,
         required_batch_size_multiple=1
 ):
     """
@@ -56,11 +55,11 @@ def batch_by_size(
 
     Args:
         indices (List[int]): ordered list of dataset indices
-        num_tokens_fn (callable): function that returns the number of tokens at
+        num_frames_fn (callable): function that returns the number of frames at
             a given index
-        max_tokens (int, optional): max number of tokens in each batch
+        max_batch_samples (int, optional): max number of frames in each batch
             (default: 80000).
-        max_sentences (int, optional): max number of sentences in each
+        max_batch_size (int, optional): max number of sentences in each
             batch (default: 48).
     """
     bsz_mult = required_batch_size_multiple
@@ -74,16 +73,16 @@ def batch_by_size(
     batches = []
     for i in range(len(indices)):
         idx = indices[i]
-        num_tokens = num_tokens_fn(idx)
-        sample_lens.append(num_tokens)
-        sample_len = max(sample_len, num_tokens)
-        assert sample_len <= max_tokens, (
-            "sentence at index {} of size {} exceeds max_tokens "
-            "limit of {}!".format(idx, sample_len, max_tokens)
+        num_frames = num_frames_fn(idx)
+        sample_lens.append(num_frames)
+        sample_len = max(sample_len, num_frames)
+        assert sample_len <= max_batch_samples, (
+            "sentence at index {} of size {} exceeds max_batch_samples "
+            "limit of {}!".format(idx, sample_len, max_batch_samples)
         )
-        num_tokens = (len(batch) + 1) * sample_len
+        num_frames = (len(batch) + 1) * sample_len
 
-        if _is_batch_full(batch, num_tokens, max_tokens, max_sentences):
+        if _is_batch_full(batch, num_frames, max_batch_samples, max_batch_size):
             mod_len = max(
                 bsz_mult * (len(batch) // bsz_mult),
                 len(batch) % bsz_mult,
