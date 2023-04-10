@@ -115,7 +115,11 @@ class DsBatchSampler(Sampler):
             indices = self.sub_indices if self.sub_indices is not None else list(range(len(self.dataset)))
 
         if self.batch_by_size:
-            batches = utils.batch_by_size(indices, self.dataset.num_frames, max_batch_samples=self.max_batch_frames, max_batch_size=self.max_batch_size)
+            batches = utils.batch_by_size(
+                indices, self.dataset.num_frames,
+                max_batch_frames=self.max_batch_frames,
+                max_batch_size=self.max_batch_size
+            )
         else:
             batches = [indices[i:i + self.max_batch_size] for i in range(0, len(indices), self.max_batch_size)]
 
@@ -126,7 +130,9 @@ class DsBatchSampler(Sampler):
         else:
             leftovers = (rng.permutation(len(batches) - floored_total_batch_count) + floored_total_batch_count).tolist()
 
-        batch_assignment = rng.permuted(np.arange(floored_total_batch_count).reshape(-1, self.num_replicas).transpose(), axis=0)[self.rank].tolist()
+        batch_assignment = rng.permuted(
+            np.arange(floored_total_batch_count).reshape(-1, self.num_replicas).transpose(), axis=0
+        )[self.rank].tolist()
         floored_batch_count = len(batch_assignment)
         ceiled_batch_count = floored_batch_count + (1 if len(leftovers) > 0 else 0)
         if self.rank < len(leftovers):
@@ -178,7 +184,7 @@ class DsEvalBatchSampler(Sampler):
             if self.batch_by_size:
                 self.batches = utils.batch_by_size(
                     indices, self.dataset.num_frames,
-                    max_batch_samples=self.max_batch_samples, max_batch_size=self.max_batch_size
+                    max_batch_frames=self.max_batch_samples, max_batch_size=self.max_batch_size
                 )
             else:
                 self.batches = [

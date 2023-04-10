@@ -46,7 +46,7 @@ def _is_batch_full(batch, num_frames, max_batch_frames, max_batch_size):
 
 
 def batch_by_size(
-        indices, num_frames_fn, max_batch_samples=80000, max_batch_size=48,
+        indices, num_frames_fn, max_batch_frames=80000, max_batch_size=48,
         required_batch_size_multiple=1
 ):
     """
@@ -57,7 +57,7 @@ def batch_by_size(
         indices (List[int]): ordered list of dataset indices
         num_frames_fn (callable): function that returns the number of frames at
             a given index
-        max_batch_samples (int, optional): max number of frames in each batch
+        max_batch_frames (int, optional): max number of frames in each batch
             (default: 80000).
         max_batch_size (int, optional): max number of sentences in each
             batch (default: 48).
@@ -76,13 +76,13 @@ def batch_by_size(
         num_frames = num_frames_fn(idx)
         sample_lens.append(num_frames)
         sample_len = max(sample_len, num_frames)
-        assert sample_len <= max_batch_samples, (
+        assert sample_len <= max_batch_frames, (
             "sentence at index {} of size {} exceeds max_batch_samples "
-            "limit of {}!".format(idx, sample_len, max_batch_samples)
+            "limit of {}!".format(idx, sample_len, max_batch_frames)
         )
         num_frames = (len(batch) + 1) * sample_len
 
-        if _is_batch_full(batch, num_frames, max_batch_samples, max_batch_size):
+        if _is_batch_full(batch, num_frames, max_batch_frames, max_batch_size):
             mod_len = max(
                 bsz_mult * (len(batch) // bsz_mult),
                 len(batch) % bsz_mult,
