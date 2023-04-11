@@ -23,14 +23,6 @@ all
 
 str, List[str]
 
-##### default
-
-_none_
-
-##### Constraints
-
-_none_
-
 ### Neural networks
 
 #### hidden_size
@@ -48,10 +40,6 @@ int
 ##### default
 
 _256_
-
-##### Constraints
-
-__none__
 
 #### residual_channels
 
@@ -115,14 +103,6 @@ all
 
 str, List[str]
 
-##### default
-
-_none_
-
-##### Constraints
-
-_none_
-
 ### Training, validation and inference
 
 #### task_cls
@@ -144,10 +124,6 @@ float
 ##### default
 
 _0.0004_
-
-##### Constraints
-
-_none_
 
 #### max_batch_frames
 
