@@ -189,7 +189,7 @@ class AcousticTask(BaseTask):
         total_loss = sum([v for v in losses.values() if isinstance(v, torch.Tensor) and v.requires_grad])
         return total_loss, {**losses, 'batch_size': sample['tokens'].size()[0]}
 
-    def _on_validation_start(self):
+    def on_train_start(self):
         if self.use_vocoder:
             self.vocoder.to_device(self.device)
 
