@@ -18,10 +18,10 @@ parser.add_argument('--overwrite', required=False, default=False,
                     action='store_true', help='Overwrite if the output file exists.')
 args = parser.parse_args()
 assert args.drop is not None or args.retain is not None, 'Either --drop or --retain should be specified.'
-if args.drop and not re.fullmatch(r'\d+(,\d+)*', args.drop):
+if args.drop and not re.fullmatch(r'(\d+)?(,\d+)*,?', args.drop):
     print(f'Invalid format for --drop: \'{args.drop}\'')
     exit(-1)
-if args.retain and not re.fullmatch(r'\d+(,\d+)*', args.retain):
+if args.retain and not re.fullmatch(r'(\d+)?(,\d+)*,?', args.retain):
     print(f'Invalid format for --retain: \'{args.retain}\'')
     exit(-1)
 
@@ -40,9 +40,9 @@ spk_embed = ckpt_loaded['state_dict']['model.fs2.spk_embed.weight']
 num_spk, hidden_size = spk_embed.shape
 all_ids = set(range(num_spk))
 if args.drop is not None:
-    drop_ids = set([int(i) for i in args.drop.split(',')]).intersection(all_ids)
+    drop_ids = set([int(i) for i in args.drop.split(',') if i != '']).intersection(all_ids)
 else:
-    drop_ids = all_ids - set([int(i) for i in args.retain.split(',')])
+    drop_ids = all_ids - set([int(i) for i in args.retain.split(',') if i != ''])
 
 fill_list = None
 if args.fill == 'zeros':
