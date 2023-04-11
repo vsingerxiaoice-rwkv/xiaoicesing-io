@@ -31,16 +31,6 @@ def merge_slurs(param):
     param['ph_dur'] = ' '.join([str(d) for d in ph_dur])
 
 
-def cross_fade(a: np.ndarray, b: np.ndarray, idx: int):
-    result = np.zeros(idx + b.shape[0])
-    fade_len = a.shape[0] - idx
-    np.copyto(dst=result[:idx], src=a[:idx])
-    k = np.linspace(0, 1.0, num=fade_len, endpoint=True)
-    result[idx: a.shape[0]] = (1 - k) * a[idx:] + k * b[: fade_len]
-    np.copyto(dst=result[a.shape[0]:], src=b[fade_len:])
-    return result
-
-
 def trans_f0_seq(feature_pit, transform):
     feature_pit = feature_pit * 2 ** (transform / 12)
     return round(feature_pit, 1)
@@ -134,6 +124,16 @@ def parse_commandline_spk_mix(mix: str) -> dict:
     for name in proportion_map:
         proportion_map[name] /= sum_all_proportions
     return proportion_map
+
+
+def cross_fade(a: np.ndarray, b: np.ndarray, idx: int):
+    result = np.zeros(idx + b.shape[0])
+    fade_len = a.shape[0] - idx
+    np.copyto(dst=result[:idx], src=a[:idx])
+    k = np.linspace(0, 1.0, num=fade_len, endpoint=True)
+    result[idx: a.shape[0]] = (1 - k) * a[idx:] + k * b[: fade_len]
+    np.copyto(dst=result[a.shape[0]:], src=b[fade_len:])
+    return result
 
 
 def save_wav(wav, path, sr, norm=False):

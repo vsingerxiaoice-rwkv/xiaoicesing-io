@@ -1,5 +1,5 @@
 import json
-import os
+import pathlib
 
 import numpy as np
 import torch
@@ -21,7 +21,7 @@ class DiffSingerAcousticInfer(BaseSVSInfer):
         if load_model:
             self.ph_encoder = TokenTextEncoder(vocab_list=build_phoneme_list())
             if hparams['use_spk_id']:
-                with open(os.path.join(hparams['work_dir'], 'spk_map.json'), 'r', encoding='utf8') as f:
+                with open(pathlib.Path(hparams['work_dir']) / 'spk_map.json', 'r', encoding='utf8') as f:
                     self.spk_map = json.load(f)
                 assert isinstance(self.spk_map, dict) and len(self.spk_map) > 0, 'Invalid or empty speaker map!'
                 assert len(self.spk_map) == len(set(self.spk_map.values())), 'Duplicate speaker id in speaker map!'

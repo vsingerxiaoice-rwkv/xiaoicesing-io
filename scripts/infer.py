@@ -5,9 +5,9 @@ import os
 import pathlib
 import sys
 
-root_dir = str(pathlib.Path(__file__).parent.parent.resolve())
-os.environ['PYTHONPATH'] = root_dir
-sys.path.insert(0, root_dir)
+root_dir = pathlib.Path(__file__).parent.parent.resolve()
+os.environ['PYTHONPATH'] = str(root_dir)
+sys.path.insert(0, str(root_dir))
 
 import numpy as np
 import torch
@@ -32,31 +32,36 @@ parser.add_argument('--mel', action='store_true', required=False, default=False,
                     help='Save intermediate mel format instead of waveform')
 args = parser.parse_args()
 
-name = os.path.basename(args.proj).split('.')[0] if not args.title else args.title
+proj = pathlib.Path(args.proj)
+name = proj.stem if not args.title else args.title
 exp = args.exp
-if not os.path.exists(f'{root_dir}/checkpoints/{exp}'):
-    for ckpt in os.listdir(os.path.join(root_dir, 'checkpoints')):
-        if ckpt.startswith(exp):
-            print(f'| match ckpt by prefix: {ckpt}')
-            exp = ckpt
+if not (root_dir / 'checkpoints' / exp).exists():
+    for ckpt in (root_dir / 'checkpoints').iterdir():
+        if not ckpt.is_dir():
+            continue
+        if ckpt.name.startswith(exp):
+            print(f'| match ckpt by prefix: {ckpt.name}')
+            exp = ckpt.name
             break
-    assert os.path.exists(f'{root_dir}/checkpoints/{exp}'), 'There are no matching exp in \'checkpoints\' folder. ' \
-                                                            'Please specify \'--exp\' as the folder name or prefix.'
+    else:
+        raise FileNotFoundError('There are no matching exp in \'checkpoints\' folder. '
+                                'Please specify \'--exp\' as the folder name or prefix.')
 else:
     print(f'| found ckpt by name: {exp}')
 
-out = args.out
-if not out:
-    out = os.path.dirname(os.path.abspath(args.proj))
+if args.out:
+    out = pathlib.Path(args.out)
+else:
+    out = proj.parent
 
 sys.argv = [
-    f'{root_dir}/inference/ds_cascade.py',
+    sys.argv[0],
     '--exp_name',
     exp,
     '--infer'
 ]
 
-with open(args.proj, 'r', encoding='utf-8') as f:
+with open(proj, 'r', encoding='utf-8') as f:
     params = json.load(f)
 if not isinstance(params, list):
     params = [params]
@@ -78,7 +83,7 @@ if args.speedup > 0:
 sample_rate = hparams['audio_sample_rate']
 
 # Check for vocoder path
-assert os.path.exists(os.path.join(root_dir, hparams['vocoder_ckpt'])), \
+assert (root_dir / hparams['vocoder_ckpt']).exists(), \
     f'Vocoder ckpt \'{hparams["vocoder_ckpt"]}\' not found. ' \
     f'Please put it to the checkpoints directory to run inference.'
 
@@ -98,7 +103,7 @@ for param in params:
     merge_slurs(param)
 
 
-def infer_once(path: str, save_mel=False):
+def infer_once(path: pathlib.Path, save_mel=False):
     if save_mel:
         result = []
     else:
@@ -148,7 +153,7 @@ def infer_once(path: str, save_mel=False):
 os.makedirs(out, exist_ok=True)
 suffix = '.wav' if not args.mel else '.mel.pt'
 if args.num == 1:
-    infer_once(os.path.join(out, f'{name}{suffix}'), save_mel=args.mel)
+    infer_once(out / (name + suffix), save_mel=args.mel)
 else:
     for i in range(1, args.num + 1):
-        infer_once(os.path.join(out, f'{name}-{str(i).zfill(3)}{suffix}'), save_mel=args.mel)
+        infer_once(out / f'{name}-{str(i).zfill(3)}{suffix}', save_mel=args.mel)

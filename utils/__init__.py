@@ -1,5 +1,4 @@
-import glob
-import os
+import pathlib
 import re
 import time
 import types
@@ -135,18 +134,20 @@ def load_ckpt(
         required_category=None, prefix_in_ckpt='model', key_in_ckpt='state_dict',
         strict=True, device='cpu'
 ):
-    if os.path.isfile(ckpt_base_dir):
+    if not isinstance(ckpt_base_dir, pathlib.Path):
+        ckpt_base_dir = pathlib.Path(ckpt_base_dir)
+    if ckpt_base_dir.is_file():
         checkpoint_path = [ckpt_base_dir]
     elif ckpt_steps is not None:
-        checkpoint_path = [os.path.join(ckpt_base_dir, f'model_ckpt_steps_{int(ckpt_steps)}.ckpt')]
+        checkpoint_path = [ckpt_base_dir / f'model_ckpt_steps_{int(ckpt_steps)}.ckpt']
     else:
         base_dir = ckpt_base_dir
         checkpoint_path = [
-            os.path.join(base_dir, ckpt_file)
+            base_dir / ckpt_file
             for ckpt_file in sorted(
                 [
-                    os.path.basename(ckpt)
-                    for ckpt in glob.glob(f'{base_dir}/model_ckpt_steps_*.ckpt')
+                    ckpt.name
+                    for ckpt in base_dir.glob('model_ckpt_steps_*.ckpt')
                 ],
                 key=lambda x: int(re.findall(fr'model_ckpt_steps_(\d+).ckpt', x.replace('\\', '/'))[0])
             )

@@ -1,7 +1,6 @@
 import json
-import os
-from typing import Union
 from pathlib import Path
+from typing import Union
 
 import torch
 import torch.nn as nn
@@ -24,7 +23,7 @@ class BaseExporter:
     # noinspection PyMethodMayBeStatic
     def build_spk_map(self) -> dict:
         if hparams['use_spk_id']:
-            with open(os.path.join(hparams['work_dir'], 'spk_map.json'), 'r', encoding='utf8') as f:
+            with open(Path(hparams['work_dir']) / 'spk_map.json', 'r', encoding='utf8') as f:
                 spk_map = json.load(f)
             assert isinstance(spk_map, dict) and len(spk_map) > 0, 'Invalid or empty speaker map!'
             assert len(spk_map) == len(set(spk_map.values())), 'Duplicate speaker id in speaker map!'

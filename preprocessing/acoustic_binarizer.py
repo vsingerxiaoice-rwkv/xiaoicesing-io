@@ -9,7 +9,7 @@
 import csv
 import json
 import os
-import os.path
+import pathlib
 import random
 import shutil
 from copy import deepcopy
@@ -37,13 +37,13 @@ class AcousticBinarizer(BaseBinarizer):
         super().__init__()
         self.lr = LengthRegulator()
 
-    def load_meta_data(self, raw_data_dir, ds_id):
+    def load_meta_data(self, raw_data_dir: pathlib.Path, ds_id):
         meta_info = {
             'category': 'acoustic',
             'format': 'grid'
         }
-        meta_file = os.path.join(raw_data_dir, 'meta.json')
-        if os.path.exists(meta_file):
+        meta_file = raw_data_dir / 'meta.json'
+        if meta_file.exists():
             meta_info.update(json.load(open(meta_file, 'r', encoding='utf8')))
         category = meta_info['category']
         assert category == 'acoustic', \
@@ -53,11 +53,11 @@ class AcousticBinarizer(BaseBinarizer):
         meta_data_dict = {}
         if meta_info['format'] == 'csv':
             for utterance_label in csv.DictReader(
-                    open(os.path.join(raw_data_dir, 'transcriptions.csv'), 'r', encoding='utf-8')
+                    open(raw_data_dir / 'transcriptions.csv', 'r', encoding='utf-8')
             ):
                 item_name = utterance_label['name']
                 temp_dict = {
-                    'wav_fn': f'{raw_data_dir}/wavs/{item_name}.wav',
+                    'wav_fn': str(raw_data_dir / 'wavs' / f'{item_name}.wav'),
                     'ph_seq': utterance_label['ph_seq'].split(),
                     'ph_dur': [float(x) for x in utterance_label['ph_dur'].split()],
                     'spk_id': ds_id
@@ -66,7 +66,7 @@ class AcousticBinarizer(BaseBinarizer):
                     f'Lengths of ph_seq and ph_dur mismatch in \'{item_name}\'.'
                 meta_data_dict[f'{ds_id}:{item_name}'] = temp_dict
         else:
-            utterance_labels = open(os.path.join(raw_data_dir, 'transcriptions.txt'), 'r', encoding='utf-8').readlines()
+            utterance_labels = open(raw_data_dir / 'transcriptions.txt', 'r', encoding='utf-8').readlines()
             for utterance_label in utterance_labels:
                 song_info = utterance_label.split('|')
                 item_name = song_info[0]
@@ -131,7 +131,7 @@ class AcousticBinarizer(BaseBinarizer):
         plt.title('Phoneme Distribution Summary', fontsize=30)
         plt.xlabel('Phoneme', fontsize=20)
         plt.ylabel('Number of occurrences', fontsize=20)
-        filename = os.path.join(hparams['binary_data_dir'], 'phoneme_distribution.jpg')
+        filename = self.binary_data_dir / 'phoneme_distribution.jpg'
         plt.savefig(fname=filename,
                     bbox_inches='tight',
                     pad_inches=0.25)
@@ -145,7 +145,7 @@ class AcousticBinarizer(BaseBinarizer):
                                     f' (-) {sorted(missing_phones)}')
 
         # Copy dictionary to binary data dir
-        shutil.copy(locate_dictionary(), os.path.join(hparams['binary_data_dir'], 'dictionary.txt'))
+        shutil.copy(locate_dictionary(), self.binary_data_dir / 'dictionary.txt')
 
     def process_data_split(self, prefix, num_workers=0, apply_augmentation=False):
         data_dir = hparams['binary_data_dir']
@@ -189,7 +189,7 @@ class AcousticBinarizer(BaseBinarizer):
                 postprocess(item)
 
         builder.finalize()
-        with open(os.path.join(data_dir, f'{prefix}.lengths'), 'wb') as f:
+        with open(data_dir / f'{prefix}.lengths', 'wb') as f:
             # noinspection PyTypeChecker
             np.save(f, lengths)
 

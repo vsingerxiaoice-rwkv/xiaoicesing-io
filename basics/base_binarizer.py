@@ -1,6 +1,7 @@
 import json
 import logging
 import os
+import pathlib
 import random
 from copy import deepcopy
 
@@ -38,12 +39,15 @@ class BaseBinarizer:
     def __init__(self, data_dir=None):
         if data_dir is None:
             data_dir = hparams['raw_data_dir']
+        if not isinstance(data_dir, list):
+            data_dir = [data_dir]
 
         speakers = hparams['speakers']
         assert isinstance(speakers, list), 'Speakers must be a list'
         assert len(speakers) == len(set(speakers)), 'Speakers cannot contain duplicate names'
 
-        self.raw_data_dirs = data_dir if isinstance(data_dir, list) else [data_dir]
+        self.raw_data_dirs = [pathlib.Path(d) for d in data_dir]
+        self.binary_data_dir = pathlib.Path(hparams['binary_data_dir'])
         if hparams['use_spk_id']:
             assert len(speakers) == len(self.raw_data_dirs), \
                 'Number of raw data dirs must equal number of speaker names!'
@@ -57,7 +61,7 @@ class BaseBinarizer:
 
         # load each dataset
         for ds_id, data_dir in enumerate(self.raw_data_dirs):
-            self.load_meta_data(data_dir, ds_id)
+            self.load_meta_data(pathlib.Path(data_dir), ds_id)
         self.item_names = sorted(list(self.items.keys()))
         self._train_item_names, self._test_item_names = self.split_train_test_set()
 
@@ -65,7 +69,7 @@ class BaseBinarizer:
             random.seed(hparams['seed'])
             random.shuffle(self.item_names)
 
-    def load_meta_data(self, raw_data_dir, ds_id):
+    def load_meta_data(self, raw_data_dir: pathlib.Path, ds_id):
         raise NotImplementedError()
 
     def split_train_test_set(self):

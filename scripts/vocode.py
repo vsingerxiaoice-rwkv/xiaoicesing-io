@@ -4,15 +4,15 @@ import os
 import pathlib
 import sys
 
-root_dir = str(pathlib.Path(__file__).parent.parent.resolve())
-os.environ['PYTHONPATH'] = root_dir
-sys.path.insert(0, root_dir)
+root_dir = pathlib.Path(__file__).parent.parent.resolve()
+os.environ['PYTHONPATH'] = str(root_dir)
+sys.path.insert(0, str(root_dir))
 
 import numpy as np
 import torch
 import tqdm
 
-from basics.base_svs_infer import BaseSVSInfer
+from inference.ds_acoustic import DiffSingerAcousticInfer
 from utils.infer_utils import cross_fade, save_wav
 from utils.hparams import set_hparams, hparams
 
@@ -26,19 +26,20 @@ parser.add_argument('--out', type=str, required=False, help='Path of the output 
 parser.add_argument('--title', type=str, required=False, help='Title of output file')
 args = parser.parse_args()
 
-name = os.path.basename(args.mel).split('.')[0] if not args.title else args.title
+mel = pathlib.Path(args.mel)
+name = mel.stem if not args.title else args.title
 config = None
 if args.exp:
-    config = f'{root_dir}/checkpoints/{args.exp}/config.yaml'
+    config = root_dir / 'checkpoints' / args.exp / 'config.yaml'
 elif args.config:
-    config = args.config
+    config = pathlib.Path(args.config)
 else:
     assert False, 'Either argument \'--exp\' or \'--config\' should be specified.'
 
 sys.argv = [
-    f'{root_dir}/inference/ds_e2e.py',
+    sys.argv[0],
     '--config',
-    config
+    str(config)
 ]
 set_hparams(print_hparams=False)
 
@@ -50,18 +51,20 @@ if args.ckpt:
 
 
 out = args.out
-if not out:
-    out = os.path.dirname(os.path.abspath(args.mel))
+if args.out:
+    out = pathlib.Path(args.out)
+else:
+    out = mel.parent
 
-mel_seq = torch.load(args.mel)
+mel_seq = torch.load(mel)
+assert isinstance(mel_seq, list), 'Not a valid mel sequence.'
+assert len(mel_seq) > 0, 'Mel sequence is empty.'
+
 sample_rate = hparams['audio_sample_rate']
-
-infer_ins = None
-if len(mel_seq) > 0:
-    infer_ins = BaseSVSInfer(hparams, load_model=False)
+infer_ins = DiffSingerAcousticInfer(load_model=False)
 
 
-def run_vocoder(path: str):
+def run_vocoder(path: pathlib.Path):
     result = np.zeros(0)
     current_length = 0
 
@@ -81,4 +84,4 @@ def run_vocoder(path: str):
 
 
 os.makedirs(out, exist_ok=True)
-run_vocoder(os.path.join(out, f'{name}.wav'))
+run_vocoder(out / (name + '.wav'))

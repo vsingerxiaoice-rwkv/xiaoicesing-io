@@ -1,5 +1,6 @@
 import json
 import os
+import pathlib
 
 import numpy as np
 import torch
@@ -15,8 +16,8 @@ from .utils import init_weights, get_padding
 LRELU_SLOPE = 0.1
 
 
-def load_model(model_path):
-    config_file = os.path.join(os.path.split(model_path)[0], 'config.json')
+def load_model(model_path: pathlib.Path):
+    config_file = model_path.with_name('config.json')
     with open(config_file) as f:
         data = f.read()
 

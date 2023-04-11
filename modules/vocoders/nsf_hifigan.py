@@ -1,4 +1,5 @@
 import os
+import pathlib
 
 import torch
 try:
@@ -16,9 +17,9 @@ from utils.hparams import hparams
 @register_vocoder
 class NsfHifiGAN(BaseVocoder):
     def __init__(self):
-        model_path = hparams['vocoder_ckpt']
-        assert os.path.exists(model_path), 'HifiGAN model file is not found!'
-        rank_zero_info('| Load HifiGAN: ' + model_path)
+        model_path = pathlib.Path(hparams['vocoder_ckpt'])
+        assert model_path.exists(), 'HifiGAN model file is not found!'
+        rank_zero_info(f'| Load HifiGAN: {model_path}')
         self.model, self.h = load_model(model_path)
     
     @property

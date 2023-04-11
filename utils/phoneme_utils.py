@@ -33,10 +33,10 @@ def locate_dictionary():
     if config_dict_path.exists():
         return config_dict_path
     work_dir = pathlib.Path(hparams['work_dir'])
-    ckpt_dict_path = work_dir.joinpath(config_dict_path.name)
+    ckpt_dict_path = work_dir / config_dict_path.name
     if ckpt_dict_path.exists():
         return ckpt_dict_path
-    ckpt_dict_path = work_dir.joinpath('dictionary.txt')
+    ckpt_dict_path = work_dir / 'dictionary.txt'
     if ckpt_dict_path.exists():
         return ckpt_dict_path
     raise FileNotFoundError('Unable to locate the dictionary file. '

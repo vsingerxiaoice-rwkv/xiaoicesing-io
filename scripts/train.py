@@ -1,7 +1,7 @@
 import importlib
 import os
-import sys
-os.environ['TORCH_CUDNN_V8_API_ENABLED'] = '1' # Prevent unacceptable slowdowns when using 16 precision
+
+os.environ['TORCH_CUDNN_V8_API_ENABLED'] = '1'  # Prevent unacceptable slowdowns when using 16 precision
 
 from utils.hparams import set_hparams, hparams
 
@@ -9,6 +9,7 @@ set_hparams()
 if hparams['ddp_backend'] == 'nccl_no_p2p':
     print("Disabling NCCL P2P")
     os.environ['NCCL_P2P_DISABLE'] = '1'
+
 
 def run_task():
     assert hparams['task_cls'] != ''
