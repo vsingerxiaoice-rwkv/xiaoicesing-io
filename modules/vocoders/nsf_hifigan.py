@@ -1,7 +1,7 @@
-import os
 import pathlib
 
 import torch
+
 try:
     from lightning.pytorch.utilities.rank_zero import rank_zero_info
 except ModuleNotFoundError:
