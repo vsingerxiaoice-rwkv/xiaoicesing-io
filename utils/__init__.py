@@ -61,6 +61,8 @@ def batch_by_size(
             (default: 80000).
         max_batch_size (int, optional): max number of sentences in each
             batch (default: 48).
+        required_batch_size_multiple: require the batch size to be multiple
+            of a given number
     """
     bsz_mult = required_batch_size_multiple
 

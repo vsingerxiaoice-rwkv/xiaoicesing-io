@@ -1,27 +1,25 @@
-from copy import deepcopy
-from glob import glob
 import math
 import os
-from pathlib import Path
 import re
-from typing import Optional, Dict
-import warnings
-
-import numpy as np
-import torch
-from torch.optim.lr_scheduler import LambdaLR
-from torch.utils.data.distributed import Sampler, DistributedSampler
+from copy import deepcopy
+from glob import glob
+from pathlib import Path
+from typing import Dict
 
 import lightning.pytorch as pl
-from lightning.pytorch.callbacks import ModelCheckpoint, TQDMProgressBar, RichProgressBar
+import numpy as np
+import torch
+from lightning.pytorch.callbacks import ModelCheckpoint, TQDMProgressBar
 from lightning.pytorch.strategies import DDPStrategy
-from lightning.pytorch.trainer.states import RunningStage
 from lightning.pytorch.utilities.rank_zero import rank_zero_info
+from torch.optim.lr_scheduler import LambdaLR
+from torch.utils.data.distributed import Sampler
 
 import utils
 from utils.hparams import hparams
 
-#==========LR schedulers==========
+
+# ==========LR schedulers==========
 
 class RSQRTSchedule(object):
     def __init__(self, optimizer):
@@ -48,6 +46,7 @@ class RSQRTSchedule(object):
     def get_lr(self):
         return self.optimizer.param_groups[0]['lr']
 
+
 class WarmupCosineSchedule(LambdaLR):
     """ Linear warmup and then cosine decay.
         Linearly increases learning rate from 0 to 1 over `warmup_steps` training steps.
@@ -55,6 +54,7 @@ class WarmupCosineSchedule(LambdaLR):
         If `cycles` (default=0.5) is different from default, learning rate follows cosine function after warmup.
         `eta_min` (default=0.0) corresponds to the minimum learning rate reached by the scheduler.
     """
+
     def __init__(self, optimizer, warmup_steps, t_total, eta_min=0.0, cycles=.5, last_epoch=-1):
         self.warmup_steps = warmup_steps
         self.t_total = t_total
@@ -69,7 +69,8 @@ class WarmupCosineSchedule(LambdaLR):
         progress = (step - self.warmup_steps) / max(1, self.t_total - self.warmup_steps)
         return max(self.eta_min, 0.5 * (1. + math.cos(math.pi * self.cycles * 2.0 * progress)))
 
-#==========Torch samplers==========
+
+# ==========Torch samplers==========
 
 class DsBatchSampler(Sampler):
     def __init__(self, dataset, max_batch_frames, max_batch_size, sub_indices=None,
@@ -107,7 +108,8 @@ class DsBatchSampler(Sampler):
             if self.sort_by_similar_size:
                 grid = int(hparams.get('sampler_frame_count_grid', 200))
                 assert grid > 0
-                sizes = (np.round(np.array(self.dataset._sizes)[indices] / grid) * grid).clip(grid, None).astype(np.int64)
+                sizes = (np.round(np.array(self.dataset._sizes)[indices] / grid) * grid).clip(grid, None).astype(
+                    np.int64)
                 indices = indices[np.argsort(sizes, kind='mergesort')]
 
             indices = indices.tolist()
@@ -140,10 +142,13 @@ class DsBatchSampler(Sampler):
         elif len(leftovers) > 0:
             batch_assignment.append(batch_assignment[self.epoch % floored_batch_count])
         if self.required_batch_count_multiple > 1 and ceiled_batch_count % self.required_batch_count_multiple != 0:
-            # batch_assignment = batch_assignment[:((floored_batch_count // self.required_batch_count_multiple) * self.required_batch_count_multiple)]
-            ceiled_batch_count = math.ceil(ceiled_batch_count / self.required_batch_count_multiple) * self.required_batch_count_multiple
+            # batch_assignment = batch_assignment[:((floored_batch_count \
+            # // self.required_batch_count_multiple) * self.required_batch_count_multiple)]
+            ceiled_batch_count = math.ceil(
+                ceiled_batch_count / self.required_batch_count_multiple) * self.required_batch_count_multiple
             for i in range(ceiled_batch_count - len(batch_assignment)):
-                batch_assignment.append(batch_assignment[(i + self.epoch * self.required_batch_count_multiple) % floored_batch_count])
+                batch_assignment.append(
+                    batch_assignment[(i + self.epoch * self.required_batch_count_multiple) % floored_batch_count])
 
         self.batches = [deepcopy(batches[i]) for i in batch_assignment]
 
@@ -200,15 +205,16 @@ class DsEvalBatchSampler(Sampler):
     def __len__(self):
         return len(self.batches)
 
-#==========PL related==========
+
+# ==========PL related==========
 
 class DsModelCheckpoint(ModelCheckpoint):
     def __init__(
-        self,
-        *args,
-        permanent_ckpt_start,
-        permanent_ckpt_interval,
-        **kwargs
+            self,
+            *args,
+            permanent_ckpt_start,
+            permanent_ckpt_interval,
+            **kwargs
     ):
         super().__init__(*args, **kwargs)
         self.permanent_ckpt_start = permanent_ckpt_start or 0
@@ -234,7 +240,7 @@ class DsModelCheckpoint(ModelCheckpoint):
         super().on_validation_end(trainer, pl_module)
 
     def _update_best_and_save(
-        self, current: torch.Tensor, trainer: "pl.Trainer", monitor_candidates: Dict[str, torch.Tensor]
+            self, current: torch.Tensor, trainer: "pl.Trainer", monitor_candidates: Dict[str, torch.Tensor]
     ) -> None:
         k = len(self.best_k_models) + 1 if self.save_top_k == -1 else self.save_top_k
 
@@ -270,8 +276,8 @@ class DsModelCheckpoint(ModelCheckpoint):
         if search:
             step = int(search.group(0)[6:])
             if self.enable_permanent_ckpt and \
-                step >= self.permanent_ckpt_start and \
-                (step - self.permanent_ckpt_start) % self.permanent_ckpt_interval == 0:
+                    step >= self.permanent_ckpt_start and \
+                    (step - self.permanent_ckpt_start) % self.permanent_ckpt_interval == 0:
                 rank_zero_info(f'Checkpoint {relative_path} is now permanent.')
                 return
         super()._remove_checkpoint(trainer, filepath)
@@ -321,7 +327,7 @@ def get_strategy(accelerator, devices, num_nodes, strategy, backend):
     if accelerator != 'auto' and accelerator != 'gpu':
         return strategy
 
-    from lightning_fabric.utilities.imports import _IS_INTERACTIVE
+    from lightning.fabric.utilities.imports import _IS_INTERACTIVE
     from lightning.pytorch.accelerators import AcceleratorRegistry
     from lightning.pytorch.accelerators.cuda import CUDAAccelerator
     from lightning.pytorch.accelerators.hpu import HPUAccelerator

@@ -1,21 +1,19 @@
-from datetime import datetime
-from functools import partial
 import logging
 import os
 import pathlib
 import shutil
 import sys
+from datetime import datetime
 
 import matplotlib
+
 matplotlib.use('Agg')
 
-from torch import nn
 import torch.utils.data
 from torchmetrics import MeanMetric
 import lightning.pytorch as pl
 from lightning.pytorch.callbacks import LearningRateMonitor
 from lightning.pytorch.loggers import TensorBoardLogger
-from lightning.pytorch.utilities import grad_norm
 from lightning.pytorch.utilities.rank_zero import rank_zero_debug, rank_zero_only
 
 from basics.base_module import CategorizedModule
