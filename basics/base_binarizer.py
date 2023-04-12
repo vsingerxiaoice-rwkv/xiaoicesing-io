@@ -5,6 +5,8 @@ import pathlib
 import random
 from copy import deepcopy
 
+import torch
+
 from utils.hparams import hparams
 from utils.phoneme_utils import build_phoneme_list
 from utils.text_encoder import TokenTextEncoder
@@ -54,6 +56,7 @@ class BaseBinarizer:
 
         self.binarization_args = hparams['binarization_args']
         self.augmentation_args = hparams.get('augmentation_args', {})
+        self.device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
 
         self.spk_map = None
         self.items = {}

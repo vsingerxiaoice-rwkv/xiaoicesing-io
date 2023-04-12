@@ -229,7 +229,7 @@ class AcousticBinarizer(BaseBinarizer):
 
         # get ground truth dur
         processed_input['mel2ph'] = get_mel2ph_torch(
-            self.lr, torch.from_numpy(processed_input['ph_dur']), length, self.timestep
+            self.lr, torch.from_numpy(processed_input['ph_dur']), length, self.timestep, device=self.device
         ).cpu().numpy()
 
         if hparams.get('use_key_shift_embed', False):
