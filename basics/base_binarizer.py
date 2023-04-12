@@ -5,7 +5,7 @@ import pathlib
 import random
 from copy import deepcopy
 
-from utils.hparams import set_hparams, hparams
+from utils.hparams import hparams
 from utils.phoneme_utils import build_phoneme_list
 from utils.text_encoder import TokenTextEncoder
 
@@ -64,7 +64,7 @@ class BaseBinarizer:
         for ds_id, data_dir in enumerate(self.raw_data_dirs):
             self.load_meta_data(pathlib.Path(data_dir), ds_id)
         self.item_names = sorted(list(self.items.keys()))
-        self._train_item_names, self._test_item_names = self.split_train_test_set()
+        self._train_item_names, self._valid_item_names = self.split_train_valid_set()
 
         if self.binarization_args['shuffle']:
             random.seed(hparams['seed'])
@@ -73,36 +73,40 @@ class BaseBinarizer:
     def load_meta_data(self, raw_data_dir: pathlib.Path, ds_id):
         raise NotImplementedError()
 
-    def split_train_test_set(self):
+    def split_train_valid_set(self):
+        """
+        Split the dataset into training set and validation set.
+        :return: train_item_names, valid_item_names
+        """
         item_names = set(deepcopy(self.item_names))
         prefixes = set([str(pr) for pr in hparams['test_prefixes']])
-        test_item_names = set()
+        valid_item_names = set()
         # Add prefixes that specified speaker index and matches exactly item name to test set
         for prefix in deepcopy(prefixes):
             if prefix in item_names:
-                test_item_names.add(prefix)
+                valid_item_names.add(prefix)
                 prefixes.remove(prefix)
         # Add prefixes that exactly matches item name without speaker id to test set
         for prefix in deepcopy(prefixes):
             for name in item_names:
                 if name.split(':')[-1] == prefix:
-                    test_item_names.add(name)
+                    valid_item_names.add(name)
                     prefixes.remove(prefix)
         # Add names with one of the remaining prefixes to test set
         for prefix in deepcopy(prefixes):
             for name in item_names:
                 if name.startswith(prefix):
-                    test_item_names.add(name)
+                    valid_item_names.add(name)
                     prefixes.remove(prefix)
         for prefix in prefixes:
             for name in item_names:
                 if name.split(':')[-1].startswith(prefix):
-                    test_item_names.add(name)
-        test_item_names = sorted(list(test_item_names))
-        train_item_names = [x for x in item_names if x not in set(test_item_names)]
+                    valid_item_names.add(name)
+        valid_item_names = sorted(list(valid_item_names))
+        train_item_names = [x for x in item_names if x not in set(valid_item_names)]
         logging.info("train {}".format(len(train_item_names)))
-        logging.info("test {}".format(len(test_item_names)))
-        return train_item_names, test_item_names
+        logging.info("test {}".format(len(valid_item_names)))
+        return train_item_names, valid_item_names
 
     @property
     def train_item_names(self):
@@ -110,11 +114,7 @@ class BaseBinarizer:
 
     @property
     def valid_item_names(self):
-        return self._test_item_names
-
-    @property
-    def test_item_names(self):
-        return self._test_item_names
+        return self._valid_item_names
 
     def build_spk_map(self):
         spk_map = {x: i for i, x in enumerate(hparams['speakers'])}
@@ -122,12 +122,10 @@ class BaseBinarizer:
         self.spk_map = spk_map
 
     def meta_data_iterator(self, prefix):
-        if prefix == 'valid':
-            item_names = self.valid_item_names
-        elif prefix == 'test':
-            item_names = self.test_item_names
-        else:
+        if prefix == 'train':
             item_names = self.train_item_names
+        else:
+            item_names = self.valid_item_names
         for item_name in item_names:
             meta_data = self.items[item_name]
             yield item_name, meta_data
@@ -154,8 +152,3 @@ class BaseBinarizer:
 
     def process_item(self, item_name, meta_data, binarization_args):
         raise NotImplementedError()
-
-
-if __name__ == "__main__":
-    set_hparams()
-    BaseBinarizer().process()
