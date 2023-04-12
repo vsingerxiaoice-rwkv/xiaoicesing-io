@@ -39,12 +39,8 @@ def get_pitch_parselmouth(wav_data, length, hparams, speed=1, interp_uv=False):
 
 
 @torch.no_grad()
-def get_mel2ph_torch(lr, durs, length, hparams, device='cpu'):
-    ph_acc = torch.round(
-        torch.cumsum(
-            durs.to(device), dim=0
-        ) * hparams['audio_sample_rate'] / hparams['hop_size'] + 0.5
-    ).long()
+def get_mel2ph_torch(lr, durs, length, timestep, device='cpu'):
+    ph_acc = torch.round(torch.cumsum(durs.to(device), dim=0) / timestep + 0.5).long()
     ph_dur = torch.diff(ph_acc, dim=0, prepend=torch.LongTensor([0]).to(device))
     mel2ph = lr(ph_dur[None])[0]
     num_frames = mel2ph.shape[0]

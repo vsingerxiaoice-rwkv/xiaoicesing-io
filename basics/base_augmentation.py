@@ -1,3 +1,6 @@
+from utils.hparams import hparams
+
+
 class BaseAugmentation:
     """
     Base class for data augmentation.
@@ -8,6 +11,7 @@ class BaseAugmentation:
     def __init__(self, data_dirs: list, augmentation_args: dict):
         self.raw_data_dirs = data_dirs
         self.augmentation_args = augmentation_args
+        self.timestep = hparams['hop_size'] / hparams['audio_sample_rate']
 
     def process_item(self, item: dict, **kwargs) -> dict:
         raise NotImplementedError()

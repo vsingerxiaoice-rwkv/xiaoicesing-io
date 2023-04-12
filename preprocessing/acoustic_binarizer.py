@@ -215,7 +215,7 @@ class AcousticBinarizer(BaseBinarizer):
             'length': length,
             'mel': mel,
             'tokens': np.array(self.phone_encoder.encode(meta_data['ph_seq']), dtype=np.int64),
-            'ph_dur': np.array(meta_data['ph_dur']),
+            'ph_dur': np.array(meta_data['ph_dur']).astype(np.float32),
         }
 
         # get ground truth f0
@@ -228,7 +228,9 @@ class AcousticBinarizer(BaseBinarizer):
         processed_input['f0'] = gt_f0.astype(np.float32)
 
         # get ground truth dur
-        processed_input['mel2ph'] = get_mel2ph_torch(self.lr, torch.from_numpy(processed_input['ph_dur']), length, hparams).cpu().numpy()
+        processed_input['mel2ph'] = get_mel2ph_torch(
+            self.lr, torch.from_numpy(processed_input['ph_dur']), length, self.timestep
+        ).cpu().numpy()
 
         if hparams.get('use_key_shift_embed', False):
             processed_input['key_shift'] = 0.

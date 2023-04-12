@@ -35,11 +35,11 @@ class SpectrogramStretchAugmentation(BaseAugmentation):
 
         if speed != 1. or hparams.get('use_speed_embed', False):
             aug_item['length'] = mel.shape[0]
-            aug_item['speed'] = int(np.round(hparams['hop_size'] * speed)) / hparams['hop_size'] # real speed
+            aug_item['speed'] = int(np.round(hparams['hop_size'] * speed)) / hparams['hop_size']  # real speed
             aug_item['seconds'] /= aug_item['speed']
             aug_item['ph_dur'] /= aug_item['speed']
             aug_item['mel2ph'] = get_mel2ph_torch(
-                self.lr, torch.from_numpy(aug_item['ph_dur']), aug_item['length'], hparams, device=self.device
+                self.lr, torch.from_numpy(aug_item['ph_dur']), aug_item['length'], self.timestep, device=self.device
             ).cpu().numpy()
             f0, _, _ = get_pitch_parselmouth(
                 wav, aug_item['length'], hparams, speed=speed, interp_uv=hparams['interp_uv']

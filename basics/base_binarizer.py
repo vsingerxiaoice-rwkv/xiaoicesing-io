@@ -58,6 +58,7 @@ class BaseBinarizer:
         self.spk_map = None
         self.items = {}
         self.phone_encoder = TokenTextEncoder(vocab_list=build_phoneme_list())
+        self.timestep = hparams['hop_size'] / hparams['audio_sample_rate']
 
         # load each dataset
         for ds_id, data_dir in enumerate(self.raw_data_dirs):
