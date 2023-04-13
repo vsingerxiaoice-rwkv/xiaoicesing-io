@@ -30,8 +30,16 @@ def get_pitch_parselmouth(wav_data, length, hparams, speed=1, interp_uv=False):
         time_step=time_step, voicing_threshold=0.6,
         pitch_floor=f0_min, pitch_ceiling=f0_max).selected_array['frequency']
     len_f0 = f0.shape[0]
-    pad_size = (int(len(wav_data) // hop_size) - len_f0 + 1) // 2
-    f0 = np.pad(f0, [[pad_size, length - len_f0 - pad_size]], mode='constant')
+    lpad = (int(len(wav_data) // hop_size) - len_f0 + 1) // 2
+    rpad = length - len_f0 - lpad
+    if lpad < 0:
+        f0 = f0[-lpad:]
+        lpad = 0
+    if rpad < 0:
+        f0 = f0[:rpad]
+        rpad = 0
+    if lpad > 0 or rpad > 0:
+        f0 = np.pad(f0, [[lpad, rpad]], mode='constant')
     uv = f0 == 0
     if interp_uv:
         f0, uv = interp_f0(f0, uv)
