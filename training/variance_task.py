@@ -58,3 +58,9 @@ class VarianceDataset(BaseDataset):
             spk_ids = torch.LongTensor([s['spk_id'] for s in samples])
             batch['spk_ids'] = spk_ids
         return batch
+
+
+class VarianceTask(BaseTask):
+    def __init__(self):
+        super().__init__()
+        self.dataset_cls = VarianceDataset
