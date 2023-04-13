@@ -8,7 +8,6 @@ import torch
 import torch.distributions
 import torch.optim
 import torch.utils.data
-from lightning.pytorch.utilities.rank_zero import rank_zero_only
 from tqdm import tqdm
 
 import utils
@@ -64,17 +63,10 @@ class AcousticTask(BaseTask):
         self.logged_gt_wav = set()
 
     def build_model(self):
-        model = DiffSingerAcoustic(
+        return DiffSingerAcoustic(
             vocab_size=len(self.phone_encoder),
             out_dims=hparams['audio_num_mel_bins']
         )
-
-        @rank_zero_only
-        def print_arch():
-            utils.print_arch(model)
-
-        print_arch()
-        return model
 
     # noinspection PyAttributeOutsideInit
     def build_losses(self):

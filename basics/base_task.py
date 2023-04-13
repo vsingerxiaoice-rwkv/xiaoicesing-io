@@ -7,6 +7,7 @@ from datetime import datetime
 
 import matplotlib
 
+import utils
 from utils.text_encoder import TokenTextEncoder
 
 matplotlib.use('Agg')
@@ -88,6 +89,8 @@ class BaseTask(pl.LightningModule):
     def setup(self, stage):
         self.phone_encoder = self.build_phone_encoder()
         self.model = self.build_model()
+        self.print_arch()
+        self.build_losses()
         self.train_dataset = self.dataset_cls(hparams['train_set_name'])
         self.valid_dataset = self.dataset_cls(hparams['valid_set_name'])
 
@@ -98,6 +101,10 @@ class BaseTask(pl.LightningModule):
 
     def build_model(self):
         raise NotImplementedError()
+
+    @rank_zero_only
+    def print_arch(self):
+        utils.print_arch(self.model)
 
     def build_losses(self):
         raise NotImplementedError()
@@ -119,7 +126,7 @@ class BaseTask(pl.LightningModule):
         :return: total loss: torch.Tensor, loss_log: dict, other_log: dict
         """
         losses = self.run_model(sample)
-        total_loss = sum([v for v in losses.values() if isinstance(v, torch.Tensor) and v.requires_grad])
+        total_loss = sum(losses.values())
         return total_loss, {**losses, 'batch_size': sample['size']}
 
     def training_step(self, sample, batch_idx, optimizer_idx=-1):
