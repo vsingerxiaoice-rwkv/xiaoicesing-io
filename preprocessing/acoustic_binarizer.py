@@ -150,7 +150,7 @@ class AcousticBinarizer(BaseBinarizer):
         }
 
         # get ground truth f0
-        gt_f0, _, uv = get_pitch_parselmouth(
+        gt_f0, uv = get_pitch_parselmouth(
             wav, length, hparams, interp_uv=hparams['interp_uv']
         )
         if uv.all():  # All unvoiced

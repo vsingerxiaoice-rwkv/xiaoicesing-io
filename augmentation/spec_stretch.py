@@ -41,7 +41,7 @@ class SpectrogramStretchAugmentation(BaseAugmentation):
             aug_item['mel2ph'] = get_mel2ph_torch(
                 self.lr, torch.from_numpy(aug_item['ph_dur']), aug_item['length'], self.timestep, device=self.device
             ).cpu().numpy()
-            f0, _, _ = get_pitch_parselmouth(
+            f0, _ = get_pitch_parselmouth(
                 wav, aug_item['length'], hparams, speed=speed, interp_uv=hparams['interp_uv']
             )
             aug_item['f0'] = f0.astype(np.float32)

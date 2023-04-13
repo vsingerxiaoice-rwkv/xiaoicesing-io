@@ -5,7 +5,7 @@ import torch
 warnings.filterwarnings("ignore")
 
 import parselmouth
-from utils.pitch_utils import f0_to_coarse, interp_f0
+from utils.pitch_utils import interp_f0
 import numpy as np
 
 
@@ -25,7 +25,8 @@ def get_pitch_parselmouth(wav_data, length, hparams, speed=1, interp_uv=False):
     f0_min = 65
     f0_max = 800
 
-    f0 = parselmouth.Sound(wav_data, hparams['audio_sample_rate']).to_pitch_ac(
+    # noinspection PyArgumentList
+    f0 = parselmouth.Sound(wav_data, sampling_frequency=hparams['audio_sample_rate']).to_pitch_ac(
         time_step=time_step, voicing_threshold=0.6,
         pitch_floor=f0_min, pitch_ceiling=f0_max).selected_array['frequency']
     len_f0 = f0.shape[0]
@@ -34,8 +35,7 @@ def get_pitch_parselmouth(wav_data, length, hparams, speed=1, interp_uv=False):
     uv = f0 == 0
     if interp_uv:
         f0, uv = interp_f0(f0, uv)
-    f0_coarse = f0_to_coarse(f0)
-    return f0, f0_coarse, uv
+    return f0, uv
 
 
 @torch.no_grad()

@@ -226,7 +226,7 @@ class AcousticTask(BaseTask):
                     import matplotlib.pyplot as plt
                     # f0_pred_, _ = get_pitch(wav_pred, mel_pred, hparams)
                     f0_pred_ = f0_pred
-                    f0_gt_, _, _ = get_pitch_parselmouth(wav_gt, len(mel_gt), hparams)
+                    f0_gt_, _ = get_pitch_parselmouth(wav_gt, len(mel_gt), hparams)
                     fig = plt.figure()
                     plt.plot(f0_pred_, label=r'$f0_P$')
                     plt.plot(f0_gt_, label=r'$f0_G$')
@@ -257,7 +257,7 @@ class AcousticTask(BaseTask):
         spec_vmax = hparams['mel_vmax']
         heatmap = plt.pcolor(mel.T, vmin=spec_vmin, vmax=spec_vmax)
         fig.colorbar(heatmap)
-        f0, _, _ = get_pitch_parselmouth(wav_out, len(mel), hparams)
+        f0, _ = get_pitch_parselmouth(wav_out, len(mel), hparams)
         f0 = (f0 - 100) / (800 - 100) * 80 * (f0 > 0)
         plt.plot(f0, c='white', linewidth=1, alpha=0.6)
         if mel2ph is not None and str_phs is not None:
