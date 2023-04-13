@@ -70,9 +70,9 @@ class BaseTask(pl.LightningModule):
         self.max_val_batch_frames = hparams['max_val_batch_frames']
         if self.max_val_batch_frames == -1:
             hparams['max_val_batch_frames'] = self.max_val_batch_frames = self.max_batch_frames
-        self.max_val_batch_size = hparams['max_val_batch_frames']
+        self.max_val_batch_size = hparams['max_val_batch_size']
         if self.max_val_batch_size == -1:
-            hparams['max_val_batch_frames'] = self.max_val_batch_size = self.max_batch_size
+            hparams['max_val_batch_size'] = self.max_val_batch_size = self.max_batch_size
 
         self.training_sampler = None
         self.model = None
