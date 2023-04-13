@@ -21,26 +21,12 @@ from modules.toplevel import DiffSingerAcoustic
 from modules.vocoders.registry import get_vocoder_cls
 from utils.binarizer_utils import get_pitch_parselmouth
 from utils.hparams import hparams
-from utils.indexed_datasets import IndexedDataset
-from utils.phoneme_utils import build_phoneme_list
 from utils.plot import spec_to_figure
-from utils.text_encoder import TokenTextEncoder
-from utils.training_utils import DsBatchSampler, DsEvalBatchSampler
 
 matplotlib.use('Agg')
 
 
 class AcousticDataset(BaseDataset):
-    def __init__(self, prefix):
-        super().__init__()
-        self.data_dir = hparams['binary_data_dir']
-        self.prefix = prefix
-        self.sizes = np.load(os.path.join(self.data_dir, f'{self.prefix}.lengths'))
-        self.indexed_ds = IndexedDataset(self.data_dir, self.prefix)
-
-    def __getitem__(self, index):
-        return self.indexed_ds[index]
-
     def collater(self, samples):
         if len(samples) == 0:
             return {}
@@ -64,6 +50,7 @@ class AcousticDataset(BaseDataset):
             batch['spk_ids'] = spk_ids
         return batch
 
+
 class AcousticTask(BaseTask):
     def __init__(self):
         super().__init__()
@@ -76,83 +63,18 @@ class AcousticTask(BaseTask):
         self.stats = {}
         self.logged_gt_wav = set()
 
-    def setup(self, stage):
-        self.phone_encoder = self.build_phone_encoder()
-        self.model = self.build_model()
-        self.train_dataset = self.dataset_cls(hparams['train_set_name'])
-        self.valid_dataset = self.dataset_cls(hparams['valid_set_name'])
-
-    @staticmethod
-    def build_phone_encoder():
-        phone_list = build_phoneme_list()
-        return TokenTextEncoder(vocab_list=phone_list)
-
     def build_model(self):
         model = DiffSingerAcoustic(
             vocab_size=len(self.phone_encoder),
             out_dims=hparams['audio_num_mel_bins']
         )
+
         @rank_zero_only
         def print_arch():
             utils.print_arch(model)
+
         print_arch()
         return model
-
-    def build_optimizer(self, model):
-        optimizer = torch.optim.AdamW(
-            filter(lambda p: p.requires_grad, model.parameters()),
-            lr=hparams['lr'],
-            betas=(hparams['optimizer_adam_beta1'], hparams['optimizer_adam_beta2']),
-            weight_decay=hparams['weight_decay'])
-        return optimizer
-
-    def build_scheduler(self, optimizer):
-        # return WarmupCosineSchedule(optimizer,
-        #                             warmup_steps=hparams['warmup_updates'],
-        #                             t_total=hparams['max_updates'],
-        #                             eta_min=0)
-        return torch.optim.lr_scheduler.StepLR(
-            optimizer, step_size=hparams['lr_decay_steps'], gamma=hparams['lr_decay_gamma']
-        )
-
-    def train_dataloader(self):
-        self.training_sampler = DsBatchSampler(
-            self.train_dataset,
-            max_batch_frames=self.max_batch_frames,
-            max_batch_size=self.max_batch_size,
-            num_replicas=(self.trainer.distributed_sampler_kwargs or {}).get('num_replicas', 1),
-            rank=(self.trainer.distributed_sampler_kwargs or {}).get('rank', 0),
-            sort_by_similar_size=hparams['sort_by_len'],
-            required_batch_count_multiple=hparams['accumulate_grad_batches'],
-            shuffle_sample=True,
-            shuffle_batch=False,
-            seed=hparams['seed']
-        )
-        return torch.utils.data.DataLoader(self.train_dataset,
-                                           collate_fn=self.train_dataset.collater,
-                                           batch_sampler=self.training_sampler,
-                                           num_workers=hparams['ds_workers'],
-                                           prefetch_factor=hparams['dataloader_prefetch_factor'],
-                                           pin_memory=True,
-                                           persistent_workers=True)
-
-    def val_dataloader(self):
-        sampler = DsEvalBatchSampler(
-            self.valid_dataset,
-            max_batch_frames=self.max_val_batch_frames,
-            max_batch_size=self.max_val_batch_size,
-            rank=(self.trainer.distributed_sampler_kwargs or {}).get('rank', 0),
-            batch_by_size=False
-        )
-        return torch.utils.data.DataLoader(self.valid_dataset,
-                                           collate_fn=self.valid_dataset.collater,
-                                           batch_sampler=sampler,
-                                           num_workers=hparams['ds_workers'],
-                                           prefetch_factor=hparams['dataloader_prefetch_factor'],
-                                           shuffle=False)
-
-    def test_dataloader(self):
-        return self.val_dataloader()
 
     def run_model(self, sample, return_output=False, infer=False):
         """
@@ -200,7 +122,8 @@ class AcousticTask(BaseTask):
             'total_loss': total_loss
         }
 
-        if batch_idx < hparams['num_valid_plots'] and (self.trainer.distributed_sampler_kwargs or {}).get('rank', 0) == 0:
+        if batch_idx < hparams['num_valid_plots'] and (self.trainer.distributed_sampler_kwargs or {}).get('rank',
+                                                                                                          0) == 0:
             _, mel_pred = self.run_model(sample, return_output=True, infer=True)
             if self.use_vocoder:
                 self.plot_wav(batch_idx, sample['mel'], mel_pred, f0=sample['f0'])
