@@ -270,5 +270,8 @@ class GaussianDiffusion(nn.Module):
             x = x.squeeze(1).transpose(1, 2)  # [B, T, M]
             return self.denorm_spec(x)
 
+    def norm_spec(self, x):
+        return (x - self.spec_min) / (self.spec_max - self.spec_min) * 2 - 1
+
     def denorm_spec(self, x):
         return (x + 1) / 2 * (self.spec_max - self.spec_min) + self.spec_min
