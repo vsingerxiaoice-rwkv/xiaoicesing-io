@@ -16,6 +16,7 @@ from basics.base_dataset import BaseDataset
 from basics.base_task import BaseTask
 from basics.base_vocoder import BaseVocoder
 from modules.fastspeech.tts_modules import mel2ph_to_dur
+from modules.losses.dur_loss import DurationLoss
 from modules.toplevel import DiffSingerVariance
 from modules.vocoders.registry import get_vocoder_cls
 from utils.binarizer_utils import get_pitch_parselmouth
@@ -42,6 +43,7 @@ class VarianceDataset(BaseDataset):
         if hparams['use_spk_id']:
             spk_ids = torch.LongTensor([s['spk_id'] for s in samples])
             batch['spk_ids'] = spk_ids
+
         return batch
 
 
@@ -49,3 +51,14 @@ class VarianceTask(BaseTask):
     def __init__(self):
         super().__init__()
         self.dataset_cls = VarianceDataset
+
+    def build_model(self):
+        # return DiffSingerVariance()
+        raise NotImplementedError()
+
+    # noinspection PyAttributeOutsideInit
+    def build_losses(self):
+        self.dur_loss = DurationLoss(
+            loss_type=hparams['dur_loss_type'],
+            offset=hparams['dur_log_offset']
+        )

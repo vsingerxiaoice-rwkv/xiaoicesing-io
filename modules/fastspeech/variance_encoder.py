@@ -53,11 +53,13 @@ class FastSpeech2Variance(nn.Module):
 
         predictor_hidden = hparams['predictor_hidden'] if hparams['predictor_hidden'] > 0 else self.hidden_size
         self.dur_predictor = DurationPredictor(
-            hparams['hidden_size'],
+            in_dims=hparams['hidden_size'],
             n_chans=predictor_hidden,
             n_layers=hparams['dur_predictor_layers'],
-            dropout_rate=hparams['predictor_dropout'], padding=hparams['ffn_padding'],
-            kernel_size=hparams['dur_predictor_kernel']
+            dropout_rate=hparams['predictor_dropout'],
+            padding=hparams['ffn_padding'],
+            kernel_size=hparams['dur_predictor_kernel'],
+            offset=hparams['dur_log_offset']
         )
 
     def forward(self, txt_tokens, midi, midi_dur, gt_ph_dur, **kwargs):

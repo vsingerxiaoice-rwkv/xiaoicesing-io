@@ -64,10 +64,10 @@ class DurationPredictor(torch.nn.Module):
         the outputs are calculated in log domain but in `inference`, those are calculated in linear domain.
     """
 
-    def __init__(self, idim, n_layers=2, n_chans=384, kernel_size=3, dropout_rate=0.1, offset=1.0, padding='SAME'):
+    def __init__(self, in_dims, n_layers=2, n_chans=384, kernel_size=3, dropout_rate=0.1, offset=1.0, padding='SAME'):
         """Initilize duration predictor module.
         Args:
-            idim (int): Input dimension.
+            in_dims (int): Input dimension.
             n_layers (int, optional): Number of convolutional layers.
             n_chans (int, optional): Number of channels of convolutional layers.
             kernel_size (int, optional): Kernel size of convolutional layers.
@@ -80,7 +80,7 @@ class DurationPredictor(torch.nn.Module):
         self.kernel_size = kernel_size
         self.padding = padding
         for idx in range(n_layers):
-            in_chans = idim if idx == 0 else n_chans
+            in_chans = in_dims if idx == 0 else n_chans
             self.conv += [torch.nn.Sequential(
                 torch.nn.ConstantPad1d(((kernel_size - 1) // 2, (kernel_size - 1) // 2)
                                        if padding == 'SAME'
@@ -90,69 +90,56 @@ class DurationPredictor(torch.nn.Module):
                 LayerNorm(n_chans, dim=1),
                 torch.nn.Dropout(dropout_rate)
             )]
-        if hparams['dur_loss'] in ['mse', 'huber']:
-            odims = 1
-        elif hparams['dur_loss'] == 'mog':
-            odims = 15
-        elif hparams['dur_loss'] == 'crf':
-            odims = 32
-            from torchcrf import CRF
-            self.crf = CRF(odims, batch_first=True)
-        self.linear = torch.nn.Linear(n_chans, odims)
+        if hparams['dur_loss_type'] in ['mse', 'huber']:
+            self.out_dims = 1
+        # elif hparams['dur_loss_type'] == 'mog':
+        #     out_dims = 15
+        # elif hparams['dur_loss_type'] == 'crf':
+        #     out_dims = 32
+        #     from torchcrf import CRF
+        #     self.crf = CRF(out_dims, batch_first=True)
+        else:
+            raise NotImplementedError()
+        self.linear = torch.nn.Linear(n_chans, self.out_dims)
 
-    def _forward(self, xs, x_masks=None, is_inference=False):
+    def out2dur(self, xs):
+        if hparams['dur_loss_type'] in ['mse']:
+            # NOTE: calculate in log domain
+            xs = xs.squeeze(-1)  # (B, Tmax)
+            dur = torch.clamp(torch.round(xs.exp() - self.offset), min=0).long()  # avoid negative value
+        # elif hparams['dur_loss_type'] == 'crf':
+        #     dur = torch.LongTensor(self.crf.decode(xs)).cuda()
+        else:
+            raise NotImplementedError()
+        return dur
+
+    def forward(self, xs, x_masks=None, infer=True):
+        """Calculate forward propagation.
+        Args:
+            xs (Tensor): Batch of input sequences (B, Tmax, idim).
+            x_masks (BoolTensor, optional): Batch of masks indicating padded part (B, Tmax).
+            infer (bool): Whether inference
+        Returns:
+            (train) FloatTensor: Batch of predicted durations in log domain (B, Tmax);
+            (infer) LongTensor: Batch of predicted durations in linear domain (B, Tmax).
+        """
         xs = xs.transpose(1, -1)  # (B, idim, Tmax)
         for f in self.conv:
             xs = f(xs)  # (B, C, Tmax)
             if x_masks is not None:
                 xs = xs * (1 - x_masks.float())[:, None, :]
-
         xs = self.linear(xs.transpose(1, -1))  # [B, T, C]
         xs = xs * (1 - x_masks.float())[:, :, None]  # (B, T, C)
-        if is_inference:
+        if infer:
             return self.out2dur(xs), xs
         else:
-            if hparams['dur_loss'] in ['mse']:
+            if self.out_dims == 1:
                 xs = xs.squeeze(-1)  # (B, Tmax)
-        return xs
-
-    def out2dur(self, xs):
-        if hparams['dur_loss'] in ['mse']:
-            # NOTE: calculate in log domain
-            xs = xs.squeeze(-1)  # (B, Tmax)
-            dur = torch.clamp(torch.round(xs.exp() - self.offset), min=0).long()  # avoid negative value
-        elif hparams['dur_loss'] == 'mog':
-            return NotImplementedError
-        elif hparams['dur_loss'] == 'crf':
-            dur = torch.LongTensor(self.crf.decode(xs)).cuda()
-        return dur
-
-    def forward(self, xs, x_masks=None):
-        """Calculate forward propagation.
-        Args:
-            xs (Tensor): Batch of input sequences (B, Tmax, idim).
-            x_masks (ByteTensor, optional): Batch of masks indicating padded part (B, Tmax).
-        Returns:
-            Tensor: Batch of predicted durations in log domain (B, Tmax).
-        """
-        return self._forward(xs, x_masks, False)
-
-    def inference(self, xs, x_masks=None):
-        """Inference duration.
-        Args:
-            xs (Tensor): Batch of input sequences (B, Tmax, idim).
-            x_masks (ByteTensor, optional): Batch of masks indicating padded part (B, Tmax).
-        Returns:
-            LongTensor: Batch of predicted durations in linear domain (B, Tmax).
-        """
-        return self._forward(xs, x_masks, True)
+            return xs
 
 
 class LengthRegulator(torch.nn.Module):
-    def __init__(self, pad_value=0.0):
-        super(LengthRegulator, self).__init__()
-        self.pad_value = pad_value
-
+    # noinspection PyMethodMayBeStatic
     def forward(self, dur, dur_padding=None, alpha=1.0):
         """
         Example (no batch dim version):
@@ -187,6 +174,7 @@ class LengthRegulator(torch.nn.Module):
 
 
 class StretchRegulator(torch.nn.Module):
+    # noinspection PyMethodMayBeStatic
     def forward(self, dur, mel2ph):
         """
         Example (no batch dim version):

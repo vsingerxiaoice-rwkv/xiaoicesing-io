@@ -33,7 +33,7 @@ VARIANCE_ITEM_ATTRIBUTES = [
     'ph_dur',  # durations of phonemes, in seconds
     'ph_midi',  # phoneme-level mean MIDI pitch
     'word_dur',  # durations of words/syllables (vowel-consonant pattern)
-    # 'mel2ph',
+    'mel2ph',  # mel2ph format representing gt ph_dur
     # 'base_pitch',
     # 'f0'
 ]
@@ -123,17 +123,17 @@ class VarianceBinarizer(BaseBinarizer):
             'seconds': seconds,
             'length': length,
             'tokens': np.array(self.phone_encoder.encode(meta_data['ph_seq']), dtype=np.int64),
-            'ph_dur': np.array(meta_data['ph_dur']).astype(np.float32),
             'word_dur': np.array(meta_data['word_dur']).astype(np.float32),
         }
 
         # Below: calculate phoneme-level mean pitch for MIDI input
-        ph_dur = torch.from_numpy(processed_input['ph_dur']).to(self.device)
+        ph_dur = torch.FloatTensor(meta_data['ph_dur']).to(self.device)
         mel2ph = get_mel2ph_torch(
             self.lr, ph_dur, round(seconds / self.timestep), self.timestep, device=self.device
         )
         ph_acc = torch.round(torch.cumsum(ph_dur, dim=0) / self.timestep + 0.5).long()
         ph_dur_long = torch.diff(ph_acc, dim=0, prepend=torch.LongTensor([0]).to(self.device))
+
         mel2dur = torch.gather(F.pad(ph_dur_long, [1, 0], value=1), 0, mel2ph)  # frame-level phone duration
         note_dur = torch.FloatTensor(meta_data['note_dur']).to(self.device)
         mel2note = get_mel2ph_torch(
@@ -152,5 +152,9 @@ class VarianceBinarizer(BaseBinarizer):
         ph_midi = mel2ph.new_zeros(ph_dur.shape[0] + 1).float().scatter_add(
             0, mel2ph, frame_step_pitch / ((mel2dur - mel2dur_rest) + (mel2dur == mel2dur_rest))  # avoid div by zero
         )[1:]
+
+        processed_input['ph_dur'] = ph_dur_long.cpu().numpy()  # number of frames of each phone
         processed_input['ph_midi'] = ph_midi.long().cpu().numpy()
+        processed_input['mel2ph'] = mel2ph.cpu().numpy()
+
         return processed_input
