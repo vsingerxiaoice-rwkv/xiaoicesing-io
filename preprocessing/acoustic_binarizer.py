@@ -11,22 +11,18 @@ import json
 import os
 import pathlib
 import random
-import shutil
 from copy import deepcopy
 
 import matplotlib.pyplot as plt
 import numpy as np
 import torch
-from tqdm import tqdm
 
 from basics.base_binarizer import BaseBinarizer, BinarizationError
-from utils.binarizer_utils import get_pitch_parselmouth, get_mel2ph_torch
 from modules.fastspeech.tts_modules import LengthRegulator
 from modules.vocoders.registry import VOCODERS
+from utils.binarizer_utils import get_pitch_parselmouth, get_mel2ph_torch
 from utils.hparams import hparams
-from utils.indexed_datasets import IndexedDatasetBuilder
-from utils.multiprocess_utils import chunked_multiprocess_run
-from utils.phoneme_utils import build_phoneme_list, locate_dictionary
+from utils.phoneme_utils import build_phoneme_list
 
 os.environ["OMP_NUM_THREADS"] = "1"
 ACOUSTIC_ITEM_ATTRIBUTES = ['spk_id', 'mel', 'tokens', 'mel2ph', 'f0', 'key_shift', 'speed']
@@ -34,7 +30,7 @@ ACOUSTIC_ITEM_ATTRIBUTES = ['spk_id', 'mel', 'tokens', 'mel2ph', 'f0', 'key_shif
 
 class AcousticBinarizer(BaseBinarizer):
     def __init__(self):
-        super().__init__()
+        super().__init__(data_attrs=ACOUSTIC_ITEM_ATTRIBUTES)
         self.lr = LengthRegulator()
 
     def load_meta_data(self, raw_data_dir: pathlib.Path, ds_id):
@@ -80,15 +76,6 @@ class AcousticBinarizer(BaseBinarizer):
                     f'Lengths of ph_seq and ph_dur mismatch in \'{item_name}\'.'
                 meta_data_dict[f'{ds_id}:{item_name}'] = temp_dict
         self.items.update(meta_data_dict)
-
-    def process(self):
-        super().process()
-        self.process_data_split('valid')
-        self.process_data_split(
-            'train',
-            num_workers=int(self.binarization_args.get('num_workers', os.getenv('N_PROC', 0))),
-            apply_augmentation=len(self.augmentation_args) > 0
-        )
 
     def check_coverage(self):
         # Group by phonemes in the dictionary.
@@ -144,61 +131,6 @@ class AcousticBinarizer(BaseBinarizer):
                                     f' (+) {sorted(unrecognizable_phones)}\n'
                                     f' (-) {sorted(missing_phones)}')
 
-        # Copy dictionary to binary data dir
-        shutil.copy(locate_dictionary(), self.binary_data_dir / 'dictionary.txt')
-
-    def process_data_split(self, prefix, num_workers=0, apply_augmentation=False):
-        args = []
-        builder = IndexedDatasetBuilder(self.binary_data_dir, prefix=prefix, allowed_attr=ACOUSTIC_ITEM_ATTRIBUTES)
-        lengths = []
-        total_sec = 0
-        total_raw_sec = 0
-
-        for item_name, meta_data in self.meta_data_iterator(prefix):
-            args.append([item_name, meta_data, self.binarization_args])
-
-        aug_map = self.arrange_data_augmentation(prefix) if apply_augmentation else {}
-
-        def postprocess(_item):
-            nonlocal total_sec, total_raw_sec
-            if _item is None:
-                return
-            builder.add_item(_item)
-            lengths.append(_item['length'])
-            total_sec += _item['seconds']
-            total_raw_sec += _item['seconds']
-
-            for task in aug_map.get(_item['name'], []):
-                aug_item = task['func'](_item, **task['kwargs'])
-                builder.add_item(aug_item)
-                lengths.append(aug_item['length'])
-                total_sec += aug_item['seconds']
-
-        if num_workers > 0:
-            # code for parallel processing
-            for item in tqdm(
-                    chunked_multiprocess_run(self.process_item, args, num_workers=num_workers),
-                    total=len(list(self.meta_data_iterator(prefix)))
-            ):
-                postprocess(item)
-        else:
-            # code for single cpu processing
-            for a in tqdm(args):
-                item = self.process_item(*a)
-                postprocess(item)
-
-        builder.finalize()
-        with open(self.binary_data_dir / f'{prefix}.lengths', 'wb') as f:
-            # noinspection PyTypeChecker
-            np.save(f, lengths)
-
-        if apply_augmentation:
-            print(f'| {prefix} total duration (before augmentation): {total_raw_sec:.2f}s')
-            print(
-                f'| {prefix} total duration (after augmentation): {total_sec:.2f}s ({total_sec / total_raw_sec:.2f}x)')
-        else:
-            print(f'| {prefix} total duration: {total_raw_sec:.2f}s')
-
     def process_item(self, item_name, meta_data, binarization_args):
         if hparams['vocoder'] in VOCODERS:
             wav, mel = VOCODERS[hparams['vocoder']].wav2spec(meta_data['wav_fn'])
@@ -239,10 +171,10 @@ class AcousticBinarizer(BaseBinarizer):
 
         return processed_input
 
-    def arrange_data_augmentation(self, prefix):
+    def arrange_data_augmentation(self, data_iterator):
         aug_map = {}
         aug_list = []
-        all_item_names = [item_name for item_name, _ in self.meta_data_iterator(prefix)]
+        all_item_names = [item_name for item_name, _ in data_iterator]
         total_scale = 0
         if self.augmentation_args.get('random_pitch_shifting') is not None:
             from augmentation.spec_stretch import SpectrogramStretchAugmentation

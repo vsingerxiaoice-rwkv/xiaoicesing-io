@@ -3,12 +3,17 @@ import logging
 import os
 import pathlib
 import random
+import shutil
 from copy import deepcopy
 
+import numpy as np
 import torch
+from tqdm import tqdm
 
 from utils.hparams import hparams
-from utils.phoneme_utils import build_phoneme_list
+from utils.indexed_datasets import IndexedDatasetBuilder
+from utils.multiprocess_utils import chunked_multiprocess_run
+from utils.phoneme_utils import build_phoneme_list, locate_dictionary
 from utils.text_encoder import TokenTextEncoder
 
 
@@ -38,7 +43,7 @@ class BaseBinarizer:
             the phoneme set.
     """
 
-    def __init__(self, data_dir=None):
+    def __init__(self, data_dir=None, data_attrs=None):
         if data_dir is None:
             data_dir = hparams['raw_data_dir']
         if not isinstance(data_dir, list):
@@ -50,6 +55,8 @@ class BaseBinarizer:
 
         self.raw_data_dirs = [pathlib.Path(d) for d in data_dir]
         self.binary_data_dir = pathlib.Path(hparams['binary_data_dir'])
+        self.data_attrs = [] if data_attrs is None else data_attrs
+
         if hparams['use_spk_id']:
             assert len(speakers) == len(self.raw_data_dirs), \
                 'Number of raw data dirs must equal number of speaker names!'
@@ -135,17 +142,77 @@ class BaseBinarizer:
 
     def process(self):
         os.makedirs(hparams['binary_data_dir'], exist_ok=True)
+
+        # Copy spk_map and dictionary to binary data dir
         self.build_spk_map()
         print("| spk_map: ", self.spk_map)
         spk_map_fn = f"{hparams['binary_data_dir']}/spk_map.json"
         json.dump(self.spk_map, open(spk_map_fn, 'w', encoding='utf-8'))
+        shutil.copy(locate_dictionary(), self.binary_data_dir / 'dictionary.txt')
         self.check_coverage()
+
+        # Process train set and valid set
+        self.process_dataset('valid')
+        self.process_dataset(
+            'train',
+            num_workers=int(self.binarization_args['num_workers']),
+            apply_augmentation=len(self.augmentation_args) > 0
+        )
 
     def check_coverage(self):
         raise NotImplementedError()
 
-    def process_data_split(self, prefix, num_workers=0, apply_augmentation=False):
-        raise NotImplementedError()
+    def process_dataset(self, prefix, num_workers=0, apply_augmentation=False):
+        args = []
+        builder = IndexedDatasetBuilder(self.binary_data_dir, prefix=prefix, allowed_attr=self.data_attrs)
+        lengths = []
+        total_sec = 0
+        total_raw_sec = 0
+
+        for item_name, meta_data in self.meta_data_iterator(prefix):
+            args.append([item_name, meta_data, self.binarization_args])
+
+        aug_map = self.arrange_data_augmentation(self.meta_data_iterator(prefix)) if apply_augmentation else {}
+
+        def postprocess(_item):
+            nonlocal total_sec, total_raw_sec
+            if _item is None:
+                return
+            builder.add_item(_item)
+            lengths.append(_item['length'])
+            total_sec += _item['seconds']
+            total_raw_sec += _item['seconds']
+
+            for task in aug_map.get(_item['name'], []):
+                aug_item = task['func'](_item, **task['kwargs'])
+                builder.add_item(aug_item)
+                lengths.append(aug_item['length'])
+                total_sec += aug_item['seconds']
+
+        if num_workers > 0:
+            # code for parallel processing
+            for item in tqdm(
+                    chunked_multiprocess_run(self.process_item, args, num_workers=num_workers),
+                    total=len(list(self.meta_data_iterator(prefix)))
+            ):
+                postprocess(item)
+        else:
+            # code for single cpu processing
+            for a in tqdm(args):
+                item = self.process_item(*a)
+                postprocess(item)
+
+        builder.finalize()
+        with open(self.binary_data_dir / f'{prefix}.lengths', 'wb') as f:
+            # noinspection PyTypeChecker
+            np.save(f, lengths)
+
+        if apply_augmentation:
+            print(f'| {prefix} total duration (before augmentation): {total_raw_sec:.2f}s')
+            print(
+                f'| {prefix} total duration (after augmentation): {total_sec:.2f}s ({total_sec / total_raw_sec:.2f}x)')
+        else:
+            print(f'| {prefix} total duration: {total_raw_sec:.2f}s')
 
     def arrange_data_augmentation(self, prefix):
         """
