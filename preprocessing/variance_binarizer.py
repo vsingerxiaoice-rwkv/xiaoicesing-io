@@ -11,20 +11,15 @@
 import csv
 import os
 import pathlib
-import shutil
 
 import librosa
 import numpy as np
 import torch
 import torch.nn.functional as F
-from tqdm import tqdm
 
 from basics.base_binarizer import BaseBinarizer
 from modules.fastspeech.tts_modules import LengthRegulator
 from utils.binarizer_utils import get_mel2ph_torch
-from utils.indexed_datasets import IndexedDatasetBuilder
-from utils.multiprocess_utils import chunked_multiprocess_run
-from utils.phoneme_utils import locate_dictionary
 
 os.environ["OMP_NUM_THREADS"] = "1"
 VARIANCE_ITEM_ATTRIBUTES = [
@@ -41,7 +36,7 @@ VARIANCE_ITEM_ATTRIBUTES = [
 
 class VarianceBinarizer(BaseBinarizer):
     def __init__(self):
-        super().__init__()
+        super().__init__(data_attrs=VARIANCE_ITEM_ATTRIBUTES)
         self.lr = LengthRegulator()
 
     def load_meta_data(self, raw_data_dir: pathlib.Path, ds_id):
@@ -66,52 +61,9 @@ class VarianceBinarizer(BaseBinarizer):
             meta_data_dict[f'{ds_id}:{item_name}'] = temp_dict
         self.items.update(meta_data_dict)
 
-    def process(self):
-        super().process()
-        self.process_data_split('valid')
-        self.process_data_split('train', num_workers=self.binarization_args['num_workers'])
-
     def check_coverage(self):
-        shutil.copy(locate_dictionary(), self.binary_data_dir / 'dictionary.txt')
         print('Coverage checks are temporarily skipped.')
         pass
-
-    def process_data_split(self, prefix, num_workers=0, apply_augmentation=False):
-        args = []
-        builder = IndexedDatasetBuilder(self.binary_data_dir, prefix=prefix, allowed_attr=VARIANCE_ITEM_ATTRIBUTES)
-        lengths = []
-        total_raw_sec = 0
-
-        for item_name, meta_data in self.meta_data_iterator(prefix):
-            args.append([item_name, meta_data, self.binarization_args])
-
-        def postprocess(_item):
-            nonlocal total_raw_sec
-            if _item is None:
-                return
-            builder.add_item(_item)
-            lengths.append(_item['length'])
-            total_raw_sec += _item['seconds']
-
-        if num_workers > 0:
-            # code for parallel processing
-            for item in tqdm(
-                    chunked_multiprocess_run(self.process_item, args, num_workers=num_workers),
-                    total=len(list(self.meta_data_iterator(prefix)))
-            ):
-                postprocess(item)
-        else:
-            # code for single cpu processing
-            for a in tqdm(args):
-                item = self.process_item(*a)
-                postprocess(item)
-
-        builder.finalize()
-        with open(self.binary_data_dir / f'{prefix}.lengths', 'wb') as f:
-            # noinspection PyTypeChecker
-            np.save(f, lengths)
-
-        print(f'| {prefix} total duration: {total_raw_sec:.2f}s')
 
     def process_item(self, item_name, meta_data, binarization_args):
         length = len(meta_data['ph_dur'])  # temporarily use number of tokens as sample length
@@ -159,3 +111,6 @@ class VarianceBinarizer(BaseBinarizer):
         processed_input['mel2ph'] = mel2ph.cpu().numpy()
 
         return processed_input
+
+    def arrange_data_augmentation(self, data_iterator):
+        return {}
