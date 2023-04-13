@@ -34,11 +34,19 @@ class VarianceDataset(BaseDataset):
         ph_dur = utils.collate_nd([s['ph_dur'] for s in samples], 0)
         ph_midi = utils.collate_nd([s['ph_midi'] for s in samples], 0)
         midi_dur = utils.collate_nd([s['word_dur'] for s in samples], 0)
+        mel2ph = utils.collate_nd([s['mel2ph'] for s in samples], 0)
+        base_pitch = utils.collate_nd([s['base_pitch'] for s in samples], 0)
+        delta_pitch = utils.collate_nd([s['delta_pitch'] for s in samples], 0)
+        uv = utils.collate_nd([s['uv'] for s in samples], 0)
         batch.update({
             'tokens': tokens,
             'ph_dur': ph_dur,
             'midi': ph_midi,
-            'midi_dur': midi_dur
+            'midi_dur': midi_dur,
+            'mel2ph': mel2ph,
+            'base_pitch': base_pitch,
+            'delta_pitch': delta_pitch,
+            'uv': uv
         })
         if hparams['use_spk_id']:
             spk_ids = torch.LongTensor([s['spk_id'] for s in samples])
