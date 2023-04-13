@@ -86,11 +86,13 @@ class VarianceBinarizer(BaseBinarizer):
     @torch.no_grad()
     def process_item(self, item_name, meta_data, binarization_args):
         seconds = sum(meta_data['ph_dur'])
+        length = round(seconds / self.timestep)
         ph_dur = torch.FloatTensor(meta_data['ph_dur']).to(self.device)
         mel2ph = get_mel2ph_torch(
-            self.lr, ph_dur, round(seconds / self.timestep), self.timestep, device=self.device
+            self.lr, ph_dur, length, self.timestep, device=self.device
         )
-        length = mel2ph.shape[0]
+        ph_acc = torch.round(torch.cumsum(ph_dur, dim=0) / self.timestep + 0.5).long()
+        ph_dur_long = torch.diff(ph_acc, dim=0, prepend=torch.LongTensor([0]).to(self.device))
         processed_input = {
             'name': item_name,
             'wav_fn': meta_data['wav_fn'],
@@ -99,12 +101,11 @@ class VarianceBinarizer(BaseBinarizer):
             'length': length,
             'tokens': np.array(self.phone_encoder.encode(meta_data['ph_seq']), dtype=np.int64),
             'word_dur': np.array(meta_data['word_dur']).astype(np.float32),
+            'ph_dur': ph_dur_long.cpu().numpy(),  # number of frames of each phone
+            'mel2ph': mel2ph.cpu().numpy(),
         }
 
         # Below: calculate frame-level MIDI pitch, which is a step function curve
-        ph_acc = torch.round(torch.cumsum(ph_dur, dim=0) / self.timestep + 0.5).long()
-        ph_dur_long = torch.diff(ph_acc, dim=0, prepend=torch.LongTensor([0]).to(self.device))
-
         mel2dur = torch.gather(F.pad(ph_dur_long, [1, 0], value=1), 0, mel2ph)  # frame-level phone duration
         note_dur = torch.FloatTensor(meta_data['note_dur']).to(self.device)
         mel2note = get_mel2ph_torch(
@@ -126,9 +127,7 @@ class VarianceBinarizer(BaseBinarizer):
             0, mel2ph, frame_midi_pitch / ((mel2dur - mel2dur_rest) + (mel2dur == mel2dur_rest))  # avoid div by zero
         )[1:]
 
-        processed_input['ph_dur'] = ph_dur_long.cpu().numpy()  # number of frames of each phone
         processed_input['ph_midi'] = ph_midi.long().cpu().numpy()
-        processed_input['mel2ph'] = mel2ph.cpu().numpy()
 
         # Below: interpolate and smooth the pitch step curve as the base pitch curve
         frame_midi_pitch = frame_midi_pitch.cpu().numpy()
