@@ -126,7 +126,7 @@ class VarianceBinarizer(BaseBinarizer):
             'word_dur': np.array(meta_data['word_dur']).astype(np.float32),
         }
 
-        # Below: calculate phoneme-level mean pitch for MIDI input
+        # Below: calculate frame-level MIDI pitch, which is a step function curve
         ph_dur = torch.FloatTensor(meta_data['ph_dur']).to(self.device)
         mel2ph = get_mel2ph_torch(
             self.lr, ph_dur, round(seconds / self.timestep), self.timestep, device=self.device
@@ -143,7 +143,8 @@ class VarianceBinarizer(BaseBinarizer):
             [(librosa.note_to_midi(n) if n != 'rest' else 0) for n in meta_data['note_seq']]
         ).to(self.device)
         frame_step_pitch = torch.gather(F.pad(note_pitch, [1, 0], value=0), 0, mel2note)  # => frame-level MIDI pitch
-        # Below: handle rest parts where pitch == 0 in frame_step_pitch
+
+        # Below: calculate phoneme-level mean MIDI pitch, eliminating rest frames
         ph_dur_rest = mel2ph.new_zeros(len(ph_dur) + 1).scatter_add(
             0, mel2ph, (frame_step_pitch == 0).long()
         )[1:]
