@@ -48,4 +48,6 @@ class BaseDataset(Dataset):
         return self._sizes[index]
 
     def collater(self, samples):
-        raise NotImplementedError()
+        return {
+            'size': len(samples)
+        }

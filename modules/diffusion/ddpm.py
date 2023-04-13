@@ -4,7 +4,6 @@ from inspect import isfunction
 
 import numpy as np
 import torch
-import torch.nn.functional as F
 from torch import nn
 from tqdm import tqdm
 
@@ -67,7 +66,7 @@ beta_schedule = {
 
 class GaussianDiffusion(nn.Module):
     def __init__(self, out_dims, timesteps=1000, k_step=1000,
-                 denoiser_type=None, loss_type=None, betas=None,
+                 denoiser_type=None, betas=None,
                  spec_min=None, spec_max=None):
         super().__init__()
         self.denoise_fn: nn.Module = DIFF_DENOISERS[denoiser_type](hparams)
@@ -85,7 +84,6 @@ class GaussianDiffusion(nn.Module):
         timesteps, = betas.shape
         self.num_timesteps = int(timesteps)
         self.k_step = k_step
-        self.loss_type = loss_type
 
         self.noise_list = deque(maxlen=4)
 
@@ -190,32 +188,19 @@ class GaussianDiffusion(nn.Module):
 
         return x_prev
 
-    def q_sample(self, x_start, t, noise=None):
-        noise = default(noise, lambda: torch.randn_like(x_start))
+    def q_sample(self, x_start, t, noise):
         return (
                 extract(self.sqrt_alphas_cumprod, t, x_start.shape) * x_start +
                 extract(self.sqrt_one_minus_alphas_cumprod, t, x_start.shape) * noise
         )
 
-    def p_losses(self, x_start, t, cond, noise=None, nonpadding=None):
+    def p_losses(self, x_start, t, cond, noise=None):
         noise = default(noise, lambda: torch.randn_like(x_start))
 
         x_noisy = self.q_sample(x_start=x_start, t=t, noise=noise)
         x_recon = self.denoise_fn(x_noisy, t, cond)
 
-        if self.loss_type == 'l1':
-            if nonpadding is not None:
-                loss = ((noise - x_recon).abs() * nonpadding.unsqueeze(1)).mean()
-            else:
-                # print('are you sure w/o nonpadding?')
-                loss = (noise - x_recon).abs().mean()
-
-        elif self.loss_type == 'l2':
-            loss = F.mse_loss(noise, x_recon)
-        else:
-            raise NotImplementedError()
-
-        return loss
+        return x_recon, noise
 
     def forward(self, condition, gt_spec=None, infer=True):
         """
@@ -284,9 +269,6 @@ class GaussianDiffusion(nn.Module):
                     x = self.p_sample(x, torch.full((b,), i, device=device, dtype=torch.long), cond)
             x = x.squeeze(1).transpose(1, 2)  # [B, T, M]
             return self.denorm_spec(x)
-
-    def norm_spec(self, x):
-        return (x - self.spec_min) / (self.spec_max - self.spec_min) * 2 - 1
 
     def denorm_spec(self, x):
         return (x + 1) / 2 * (self.spec_max - self.spec_min) + self.spec_min

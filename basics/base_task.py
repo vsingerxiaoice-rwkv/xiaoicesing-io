@@ -97,23 +97,33 @@ class BaseTask(pl.LightningModule):
         return TokenTextEncoder(vocab_list=phone_list)
 
     def build_model(self):
-        raise NotImplementedError
+        raise NotImplementedError()
+
+    def build_losses(self):
+        raise NotImplementedError()
+
+    def run_model(self, sample, infer=False):
+        """
+        steps:
+            1. run the full model
+            2. calculate losses if not infer
+        """
+        raise NotImplementedError()
 
     def on_train_epoch_start(self):
         if self.training_sampler is not None:
             self.training_sampler.set_epoch(self.current_epoch)
 
-    def _training_step(self, sample, batch_idx, optimizer_idx):
+    def _training_step(self, sample):
         """
-
-        :param sample:
-        :param batch_idx:
         :return: total loss: torch.Tensor, loss_log: dict, other_log: dict
         """
-        raise NotImplementedError
+        losses = self.run_model(sample)
+        total_loss = sum([v for v in losses.values() if isinstance(v, torch.Tensor) and v.requires_grad])
+        return total_loss, {**losses, 'batch_size': sample['size']}
 
     def training_step(self, sample, batch_idx, optimizer_idx=-1):
-        total_loss, log_outputs = self._training_step(sample, batch_idx, optimizer_idx)
+        total_loss, log_outputs = self._training_step(sample)
 
         # logs to progress bar
         self.log_dict(log_outputs, prog_bar=True, logger=False, on_step=True, on_epoch=False)
@@ -144,7 +154,7 @@ class BaseTask(pl.LightningModule):
         :param batch_idx:
         :return: loss_log: dict, weight: int
         """
-        raise NotImplementedError
+        raise NotImplementedError()
 
     def validation_step(self, sample, batch_idx):
         """

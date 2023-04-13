@@ -17,6 +17,7 @@ from basics.base_dataset import BaseDataset
 from basics.base_task import BaseTask
 from basics.base_vocoder import BaseVocoder
 from modules.fastspeech.tts_modules import mel2ph_to_dur
+from modules.losses.diff_loss import DiffusionNoiseLoss
 from modules.toplevel import DiffSingerAcoustic
 from modules.vocoders.registry import get_vocoder_cls
 from utils.binarizer_utils import get_pitch_parselmouth
@@ -28,19 +29,18 @@ matplotlib.use('Agg')
 
 class AcousticDataset(BaseDataset):
     def collater(self, samples):
-        if len(samples) == 0:
-            return {}
+        batch = super().collater(samples)
+
         tokens = utils.collate_nd([s['tokens'] for s in samples], 0)
         f0 = utils.collate_nd([s['f0'] for s in samples], 0.0)
         mel2ph = utils.collate_nd([s['mel2ph'] for s in samples], 0)
         mel = utils.collate_nd([s['mel'] for s in samples], 0.0)
-        batch = {
-            'size': len(samples),
+        batch.update({
             'tokens': tokens,
             'mel2ph': mel2ph,
             'mel': mel,
             'f0': f0,
-        }
+        })
         if hparams.get('use_key_shift_embed', False):
             batch['key_shift'] = torch.FloatTensor([s['key_shift'] for s in samples])[:, None]
         if hparams.get('use_speed_embed', False):
@@ -76,14 +76,13 @@ class AcousticTask(BaseTask):
         print_arch()
         return model
 
-    def run_model(self, sample, return_output=False, infer=False):
-        """
-            steps:
-            1. run the full model, calc the main loss
-            2. calculate loss for dur_predictor, pitch_predictor, energy_predictor
-        """
+    # noinspection PyAttributeOutsideInit
+    def build_losses(self):
+        self.mel_loss = DiffusionNoiseLoss(loss_type=hparams['diff_loss_type'])
+
+    def run_model(self, sample, infer=False):
         txt_tokens = sample['tokens']  # [B, T_t]
-        target = sample['mel']  # [B, T_s, 80]
+        target = sample['mel']  # [B, T_s, M]
         mel2ph = sample['mel2ph']  # [B, T_s]
         f0 = sample['f0']
         key_shift = sample.get('key_shift')
@@ -98,25 +97,23 @@ class AcousticTask(BaseTask):
                             spk_embed_id=spk_embed_id,
                             gt_mel=target, infer=infer)
 
-        losses = {}
-        if not infer:
-            losses['mel'] = output
-        if not return_output:
-            return losses
+        if infer:
+            mel_pred = output
+            return mel_pred
         else:
-            return losses, output
-
-    def _training_step(self, sample, batch_idx, _):
-        losses = self.run_model(sample)
-        total_loss = sum([v for v in losses.values() if isinstance(v, torch.Tensor) and v.requires_grad])
-        return total_loss, {**losses, 'batch_size': sample['tokens'].size()[0]}
+            x_recon, noise = output
+            mel_loss = self.mel_loss(x_recon, noise)
+            losses = {
+                'mel_loss': mel_loss
+            }
+            return losses
 
     def on_train_start(self):
         if self.use_vocoder:
             self.vocoder.to_device(self.device)
 
     def _validation_step(self, sample, batch_idx):
-        losses = self.run_model(sample, return_output=False, infer=False)
+        losses = self.run_model(sample, infer=False)
         total_loss = sum(losses.values())
         outputs = {
             'total_loss': total_loss
@@ -124,7 +121,7 @@ class AcousticTask(BaseTask):
 
         if batch_idx < hparams['num_valid_plots'] and (self.trainer.distributed_sampler_kwargs or {}).get('rank',
                                                                                                           0) == 0:
-            _, mel_pred = self.run_model(sample, return_output=True, infer=True)
+            mel_pred = self.run_model(sample, infer=True)
             if self.use_vocoder:
                 self.plot_wav(batch_idx, sample['mel'], mel_pred, f0=sample['f0'])
             self.plot_mel(batch_idx, sample['mel'], mel_pred, name=f'diffmel_{batch_idx}')
@@ -163,7 +160,7 @@ class AcousticTask(BaseTask):
         self.vocoder: BaseVocoder = get_vocoder_cls(hparams)()
 
     def test_step(self, sample, batch_idx):
-        _, mel_pred = self.run_model(sample, return_output=True, infer=True)
+        mel_pred = self.run_model(sample, infer=True)
         sample['outputs'] = mel_pred
         return self.after_infer(sample)
 
