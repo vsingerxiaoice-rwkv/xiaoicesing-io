@@ -1,13 +1,3 @@
-"""
-    item: one piece of data
-    item_name: data id
-    wav_fn: wave file path
-    spk: dataset name
-    ph_seq: phoneme sequence
-    ph_dur: phoneme durations
-    midi_seq: midi note sequence
-    midi_dur: midi note durations
-"""
 import csv
 import os
 import pathlib
@@ -26,15 +16,15 @@ from utils.hparams import hparams
 
 os.environ["OMP_NUM_THREADS"] = "1"
 VARIANCE_ITEM_ATTRIBUTES = [
-    'spk_id',  # index number of dataset/speaker
-    'tokens',  # index numbers of phonemes
-    'ph_dur',  # durations of phonemes, in number of frames
-    'ph_midi',  # phoneme-level mean MIDI pitch
-    'word_dur',  # durations of words/syllables (vowel-consonant pattern)
-    'mel2ph',  # mel2ph format representing gt ph_dur
-    'base_pitch',  # interpolated and smoothed frame-level MIDI pitch
-    'delta_pitch',  # delta_pitch = actual_pitch - base_pitch, in semitones
-    'uv',  # flag of unvoiced frames where f0 == 0
+    'spk_id',  # index number of dataset/speaker, int64
+    'tokens',  # index numbers of phonemes, int64[T_ph,]
+    'ph_dur',  # durations of phonemes, in number of frames, int64[T_ph,]
+    'midi',  # phoneme-level mean MIDI pitch, int64[T_ph,]
+    'ph2word',  # similar to mel2ph format, representing number of phones within each note, int64[T_ph,]
+    'mel2ph',  # mel2ph format representing number of frames within each phone, int64[T_t,]
+    'base_pitch',  # interpolated and smoothed frame-level MIDI pitch, float32[T_t,]
+    'delta_pitch',  # delta_pitch = actual_pitch - base_pitch, in semitones, float32[T_t,]
+    'uv',  # flag of unvoiced frames where f0 == 0, bool[T_t,]
 ]
 
 
@@ -68,14 +58,18 @@ class VarianceBinarizer(BaseBinarizer):
                 'wav_fn': str(raw_data_dir / 'wavs' / f'{item_name}.wav'),
                 'ph_seq': utterance_label['ph_seq'].split(),
                 'ph_dur': [float(x) for x in utterance_label['ph_dur'].split()],
-                'word_dur': [float(x) for x in utterance_label['word_dur'].split()],
+                'ph_num': [int(x) for x in utterance_label['ph_num'].split()],
                 'note_seq': utterance_label['note_seq'].split(),
                 'note_dur': [float(x) for x in utterance_label['note_dur'].split()],
             }
-            assert len(temp_dict['ph_seq']) == len(temp_dict['ph_dur']) == len(temp_dict['word_dur']), \
-                f'Lengths of ph_seq, ph_dur and word_dur mismatch in \'{item_name}\'.'
+            assert len(temp_dict['ph_seq']) == len(temp_dict['ph_dur']), \
+                f'Lengths of ph_seq and ph_dur mismatch in \'{item_name}\'.'
+            assert len(temp_dict['ph_seq']) == sum(temp_dict['ph_num']), \
+                f'Sum of ph_num does not equal length of ph_seq in \'{item_name}\'.'
             assert len(temp_dict['note_seq']) == len(temp_dict['note_dur']), \
                 f'Lengths of note_seq and note_dur mismatch in \'{item_name}\'.'
+            assert any([note != 'rest' for note in temp_dict['note_seq']]), \
+                f'All notes are rest in \'{item_name}\'.'
             meta_data_dict[f'{ds_id}:{item_name}'] = temp_dict
         self.items.update(meta_data_dict)
 
@@ -87,12 +81,16 @@ class VarianceBinarizer(BaseBinarizer):
     def process_item(self, item_name, meta_data, binarization_args):
         seconds = sum(meta_data['ph_dur'])
         length = round(seconds / self.timestep)
-        ph_dur = torch.FloatTensor(meta_data['ph_dur']).to(self.device)
+        t_txt = len(meta_data['ph_seq'])
+        ph_dur_sec = torch.FloatTensor(meta_data['ph_dur']).to(self.device)
+        ph_acc = torch.round(torch.cumsum(ph_dur_sec, dim=0) / self.timestep + 0.5).long()
+        ph_dur = torch.diff(ph_acc, dim=0, prepend=torch.LongTensor([0]).to(self.device))
+        ph_num = torch.LongTensor(meta_data['ph_num']).to(self.device)
+        ph2word = self.lr(ph_num[None])[0]
         mel2ph = get_mel2ph_torch(
-            self.lr, ph_dur, length, self.timestep, device=self.device
+            self.lr, ph_dur_sec, length, self.timestep, device=self.device
         )
-        ph_acc = torch.round(torch.cumsum(ph_dur, dim=0) / self.timestep + 0.5).long()
-        ph_dur_long = torch.diff(ph_acc, dim=0, prepend=torch.LongTensor([0]).to(self.device))
+
         processed_input = {
             'name': item_name,
             'wav_fn': meta_data['wav_fn'],
@@ -100,13 +98,13 @@ class VarianceBinarizer(BaseBinarizer):
             'seconds': seconds,
             'length': length,
             'tokens': np.array(self.phone_encoder.encode(meta_data['ph_seq']), dtype=np.int64),
-            'word_dur': np.array(meta_data['word_dur']).astype(np.float32),
-            'ph_dur': ph_dur_long.cpu().numpy(),  # number of frames of each phone
+            'ph_dur': ph_dur.cpu().numpy(),
+            'ph2word': ph2word.cpu().numpy(),
             'mel2ph': mel2ph.cpu().numpy(),
         }
 
         # Below: calculate frame-level MIDI pitch, which is a step function curve
-        mel2dur = torch.gather(F.pad(ph_dur_long, [1, 0], value=1), 0, mel2ph)  # frame-level phone duration
+        mel2dur = torch.gather(F.pad(ph_dur, [1, 0], value=1), 0, mel2ph)  # frame-level phone duration
         note_dur = torch.FloatTensor(meta_data['note_dur']).to(self.device)
         mel2note = get_mel2ph_torch(
             self.lr, note_dur, mel2ph.shape[0], self.timestep, device=self.device
@@ -114,20 +112,17 @@ class VarianceBinarizer(BaseBinarizer):
         note_pitch = torch.FloatTensor(
             [(librosa.note_to_midi(n) if n != 'rest' else 0) for n in meta_data['note_seq']]
         ).to(self.device)
-        if (note_pitch == 0).all():
-            print(f'Skipped \'{item_name}\': all rest notes')
-            return None
         frame_midi_pitch = torch.gather(F.pad(note_pitch, [1, 0], value=0), 0, mel2note)  # => frame-level MIDI pitch
 
         # Below: calculate phoneme-level mean MIDI pitch, eliminating rest frames
         rest = frame_midi_pitch == 0
-        ph_dur_rest = mel2ph.new_zeros(len(ph_dur) + 1).scatter_add(0, mel2ph, rest.long())[1:]
+        ph_dur_rest = mel2ph.new_zeros(t_txt + 1).scatter_add(0, mel2ph, rest.long())[1:]
         mel2dur_rest = torch.gather(F.pad(ph_dur_rest, [1, 0], value=1), 0, mel2ph)  # frame-level rest phone duration
-        ph_midi = mel2ph.new_zeros(ph_dur.shape[0] + 1).float().scatter_add(
+        ph_midi = mel2ph.new_zeros(t_txt + 1).float().scatter_add(
             0, mel2ph, frame_midi_pitch / ((mel2dur - mel2dur_rest) + (mel2dur == mel2dur_rest))  # avoid div by zero
         )[1:]
 
-        processed_input['ph_midi'] = ph_midi.long().cpu().numpy()
+        processed_input['midi'] = ph_midi.long().cpu().numpy()
 
         # Below: interpolate and smooth the pitch step curve as the base pitch curve
         frame_midi_pitch = frame_midi_pitch.cpu().numpy()

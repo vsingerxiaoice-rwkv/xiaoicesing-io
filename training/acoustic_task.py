@@ -111,8 +111,8 @@ class AcousticTask(BaseTask):
             'total_loss': total_loss
         }
 
-        if batch_idx < hparams['num_valid_plots'] and (self.trainer.distributed_sampler_kwargs or {}).get('rank',
-                                                                                                          0) == 0:
+        if batch_idx < hparams['num_valid_plots'] \
+                and (self.trainer.distributed_sampler_kwargs or {}).get('rank', 0) == 0:
             mel_pred = self.run_model(sample, infer=True)
             if self.use_vocoder:
                 self.plot_wav(batch_idx, sample['mel'], mel_pred, f0=sample['f0'])
