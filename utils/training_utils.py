@@ -174,7 +174,7 @@ class DsBatchSampler(Sampler):
 class DsEvalBatchSampler(Sampler):
     def __init__(self, dataset, max_batch_frames, max_batch_size, rank=None, batch_by_size=True) -> None:
         self.dataset = dataset
-        self.max_batch_samples = max_batch_frames
+        self.max_batch_frames = max_batch_frames
         self.max_batch_size = max_batch_size
         self.rank = rank
         self.batch_by_size = batch_by_size
@@ -187,7 +187,7 @@ class DsEvalBatchSampler(Sampler):
             if self.batch_by_size:
                 self.batches = utils.batch_by_size(
                     indices, self.dataset.num_frames,
-                    max_batch_frames=self.max_batch_samples, max_batch_size=self.max_batch_size
+                    max_batch_frames=self.max_batch_frames, max_batch_size=self.max_batch_size
                 )
             else:
                 self.batches = [
