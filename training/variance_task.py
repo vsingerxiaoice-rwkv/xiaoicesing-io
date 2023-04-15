@@ -49,6 +49,10 @@ class VarianceTask(BaseTask):
     def __init__(self):
         super().__init__()
         self.dataset_cls = VarianceDataset
+        if hparams['predict_dur']:
+            self.lambda_dur_loss = hparams['lambda_dur_loss']
+        if hparams['predict_pitch']:
+            self.lambda_pitch_loss = hparams['lambda_pitch_loss']
 
     def build_model(self):
         return DiffSingerVariance(
@@ -60,8 +64,11 @@ class VarianceTask(BaseTask):
         if hparams['predict_dur']:
             dur_hparams = hparams['dur_prediction_args']
             self.dur_loss = DurationLoss(
+                offset=dur_hparams['log_offset'],
                 loss_type=dur_hparams['loss_type'],
-                offset=dur_hparams['log_offset']
+                lambda_pdur=dur_hparams['lambda_pdur_loss'],
+                lambda_wdur=dur_hparams['lambda_wdur_loss'],
+                lambda_sdur=dur_hparams['lambda_sdur_loss']
             )
         if hparams['predict_pitch']:
             pitch_hparams = hparams['pitch_prediction_args']
@@ -87,14 +94,14 @@ class VarianceTask(BaseTask):
             dur_pred, pitch_pred = output
             return dur_pred, pitch_pred
         else:
-            dur_pred_xs, pitch_prob = output
+            dur_pred, pitch_prob = output
             losses = {}
-            if dur_pred_xs is not None:
-                losses['dur_loss'] = self.dur_loss.forward(dur_pred_xs, ph_dur)
+            if dur_pred is not None:
+                losses['dur_loss'] = self.lambda_dur_loss * self.dur_loss(dur_pred, ph_dur, ph2word=ph2word)
             if pitch_prob is not None:
                 pitch_delta = sample['pitch_delta']
                 uv = sample['uv']
-                losses['pitch_loss'] = self.pitch_loss.forward(pitch_prob, pitch_delta, ~uv)
+                losses['pitch_loss'] = self.lambda_pitch_loss * self.pitch_loss(pitch_prob, pitch_delta, ~uv)
             return losses
 
     def _validation_step(self, sample, batch_idx):

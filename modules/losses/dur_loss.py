@@ -4,7 +4,12 @@ from torch import Tensor
 
 
 class DurationLoss(nn.Module):
-    def __init__(self, loss_type, offset=1.0):
+    """
+    Loss module as combination of phone duration loss, word duration loss and sentence duration loss.
+    """
+
+    def __init__(self, offset, loss_type,
+                 lambda_pdur=0.6, lambda_wdur=0.3, lambda_sdur=0.1):
         super().__init__()
         self.loss_type = loss_type
         if self.loss_type == 'mse':
@@ -15,6 +20,36 @@ class DurationLoss(nn.Module):
             raise NotImplementedError()
         self.offset = offset
 
-    def forward(self, xs_pred: Tensor, xs_gt: Tensor) -> Tensor:
-        xs_gt_log = torch.log(xs_gt + self.offset)  # calculate in log domain
-        return self.loss(xs_pred, xs_gt_log)
+        self.lambda_pdur = lambda_pdur
+        self.lambda_wdur = lambda_wdur
+        self.lambda_sdur = lambda_sdur
+
+    def linear2log(self, any_dur):
+        return torch.log(any_dur + self.offset)
+
+    # noinspection PyMethodMayBeStatic
+    def pdur2wdur(self, ph_dur, ph2word):
+        b = ph_dur.shape[0]
+        word_dur = ph_dur.new_zeros(b, ph2word.max() + 1).scatter_add(
+            1, ph2word, ph_dur
+        )[:, 1:]  # [B, T_ph] => [B, T_w]
+        return word_dur
+
+    def forward(self, dur_pred: Tensor, dur_gt: Tensor, ph2word: Tensor) -> Tensor:
+        # pdur_loss
+        pdur_loss = self.lambda_pdur * self.loss(self.linear2log(dur_pred), self.linear2log(dur_gt))
+
+        # wdur loss
+        wdur_pred = self.pdur2wdur(dur_pred, ph2word)
+        wdur_gt = self.pdur2wdur(dur_gt, ph2word)
+        wdur_loss = self.lambda_wdur * self.loss(self.linear2log(wdur_pred), self.linear2log(wdur_gt))
+
+        # sdur loss
+        sdur_pred = dur_pred.sum(dim=1)
+        sdur_gt = dur_gt.sum(dim=1)
+        sdur_loss = self.lambda_sdur * self.loss(self.linear2log(sdur_pred), self.linear2log(sdur_gt))
+
+        # combine
+        dur_loss = pdur_loss + wdur_loss + sdur_loss
+
+        return dur_loss

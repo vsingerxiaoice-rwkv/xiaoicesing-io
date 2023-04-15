@@ -38,16 +38,21 @@ hidden_size: 256
 
 predict_dur: true
 dur_cascade: false
+lambda_dur_loss: 1.0
 dur_prediction_args:
   hidden_size: 384
   dropout: 0.1
-  num_layers: 2
+  num_layers: 4
   kernel_size: 3
   log_offset: 1.0
   loss_type: mse
+  lambda_pdur_loss: 0.6
+  lambda_wdur_loss: 0.3
+  lambda_sdur_loss: 0.1
 
 predict_pitch: true
 pitch_cascade: true
+lambda_pitch_loss: 1.0
 pitch_prediction_args:
   pitch_delta_vmin: -12.75
   pitch_delta_vmax: 12.75
