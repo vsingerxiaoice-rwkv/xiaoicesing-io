@@ -27,21 +27,18 @@ class DurationLoss(nn.Module):
     def linear2log(self, any_dur):
         return torch.log(any_dur + self.offset)
 
-    # noinspection PyMethodMayBeStatic
-    def pdur2wdur(self, ph_dur, ph2word):
-        b = ph_dur.shape[0]
-        word_dur = ph_dur.new_zeros(b, ph2word.max() + 1).scatter_add(
-            1, ph2word, ph_dur
-        )[:, 1:]  # [B, T_ph] => [B, T_w]
-        return word_dur
-
     def forward(self, dur_pred: Tensor, dur_gt: Tensor, ph2word: Tensor) -> Tensor:
         # pdur_loss
         pdur_loss = self.lambda_pdur * self.loss(self.linear2log(dur_pred), self.linear2log(dur_gt))
 
         # wdur loss
-        wdur_pred = self.pdur2wdur(dur_pred, ph2word)
-        wdur_gt = self.pdur2wdur(dur_gt, ph2word)
+        shape = dur_pred.shape[0], ph2word.max() + 1
+        wdur_pred = dur_pred.new_zeros(*shape).scatter_add(
+            1, ph2word, dur_pred
+        )[:, 1:]  # [B, T_ph] => [B, T_w]
+        wdur_gt = dur_gt.new_zeros(*shape).scatter_add(
+            1, ph2word, dur_gt
+        )[:, 1:]  # [B, T_ph] => [B, T_w]
         wdur_loss = self.lambda_wdur * self.loss(self.linear2log(wdur_pred), self.linear2log(wdur_gt))
 
         # sdur loss
