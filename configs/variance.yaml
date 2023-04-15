@@ -37,19 +37,23 @@ pndm_speedup: 10
 hidden_size: 256
 
 predict_dur: true
-dur_predictor_hidden: 384
-dur_predictor_dropout: 0.1
-dur_predictor_kernel: 3
-dur_predictor_layers: 2
-dur_log_offset: 1.0
-dur_loss_type: mse
 dur_cascade: false
+dur_prediction_args:
+  hidden_size: 384
+  dropout: 0.1
+  num_layers: 2
+  kernel_size: 3
+  log_offset: 1.0
+  loss_type: mse
 
 predict_pitch: true
-pitch_delta_vmin: -12.75
-pitch_delta_vmax: 12.75
-pitch_delta_num_bins: 256
-pitch_delta_deviation: 0.25
+pitch_cascade: true
+pitch_prediction_args:
+  pitch_delta_vmin: -12.75
+  pitch_delta_vmax: 12.75
+  num_pitch_bins: 256
+  deviation: 0.25
+  hidden_size: 512
 
 residual_layers: 20
 residual_channels: 384

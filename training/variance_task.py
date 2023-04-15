@@ -58,16 +58,18 @@ class VarianceTask(BaseTask):
     # noinspection PyAttributeOutsideInit
     def build_losses(self):
         if hparams['predict_dur']:
+            dur_hparams = hparams['dur_prediction_args']
             self.dur_loss = DurationLoss(
-                loss_type=hparams['dur_loss_type'],
-                offset=hparams['dur_log_offset']
+                loss_type=dur_hparams['loss_type'],
+                offset=dur_hparams['log_offset']
             )
         if hparams['predict_pitch']:
+            pitch_hparams = hparams['pitch_prediction_args']
             self.pitch_loss = CurveLoss2d(
-                vmin=hparams['pitch_delta_vmin'],
-                vmax=hparams['pitch_delta_vmax'],
-                num_bins=hparams['pitch_delta_num_bins'],
-                deviation=hparams['pitch_delta_deviation']
+                vmin=pitch_hparams['pitch_delta_vmin'],
+                vmax=pitch_hparams['pitch_delta_vmax'],
+                num_bins=pitch_hparams['num_pitch_bins'],
+                deviation=pitch_hparams['deviation']
             )
 
     def run_model(self, sample, infer=False):

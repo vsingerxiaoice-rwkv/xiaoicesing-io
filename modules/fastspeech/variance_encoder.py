@@ -44,7 +44,6 @@ class FastSpeech2Variance(nn.Module):
         self.txt_embed = Embedding(vocab_size, hparams['hidden_size'], PAD_INDEX)
         self.midi_embed = Embedding(128, hparams['hidden_size'], PAD_INDEX)
         self.word_dur_embed = Linear(1, hparams['hidden_size'])
-        self.dur_log_offset = hparams['dur_log_offset']
 
         if hparams['use_spk_id']:
             self.spk_embed = Embedding(hparams['num_spk'], hparams['hidden_size'])
@@ -54,16 +53,17 @@ class FastSpeech2Variance(nn.Module):
             ffn_kernel_size=hparams['enc_ffn_kernel_size'], num_heads=hparams['num_heads']
         )
 
-        predictor_hidden = hparams['dur_predictor_hidden'] \
-            if hparams['dur_predictor_hidden'] > 0 else self.hidden_size
+        dur_hparams = hparams['dur_prediction_args']
+        self.wdur_log_offset = dur_hparams['log_offset']
         self.dur_predictor = DurationPredictor(
             in_dims=hparams['hidden_size'],
-            n_chans=predictor_hidden,
-            n_layers=hparams['dur_predictor_layers'],
-            dropout_rate=hparams['dur_predictor_dropout'],
+            n_chans=dur_hparams['hidden_size'],
+            n_layers=dur_hparams['num_layers'],
+            dropout_rate=dur_hparams['dropout'],
             padding=hparams['ffn_padding'],
-            kernel_size=hparams['dur_predictor_kernel'],
-            offset=hparams['dur_log_offset']
+            kernel_size=dur_hparams['kernel_size'],
+            offset=dur_hparams['log_offset'],
+            dur_loss_type=dur_hparams['loss_type']
         )
 
     def forward(self, txt_tokens, midi, ph2word, ph_dur=None, word_dur=None, infer=True):
@@ -83,22 +83,19 @@ class FastSpeech2Variance(nn.Module):
                 1, ph2word, ph_dur
             )[:, 1:]  # [B, T_ph] => [B, T_w]
         word_dur = torch.gather(F.pad(word_dur, [1, 0], value=0), 1, ph2word)  # [B, T_w] => [B, T_ph]
-        word_dur_embed = self.word_dur_embed(torch.log(word_dur.float() + self.dur_log_offset))
+        word_dur_embed = self.word_dur_embed(torch.log(word_dur.float() + self.wdur_log_offset))
         encoder_out = self.encoder(txt_tokens, midi_embed, word_dur_embed)
 
         if not hparams['predict_dur']:
             return encoder_out, None
 
-        if infer:
-            ph_dur, _ = self.dur_predictor(encoder_out, x_mask=txt_tokens == 0, infer=True)
-            return encoder_out, ph_dur
-        else:
-            ph_dur_xs = self.dur_predictor(encoder_out, x_mask=txt_tokens == 0, infer=False)
-            return encoder_out, ph_dur_xs
+        ph_dur_pred = self.dur_predictor(encoder_out, x_mask=txt_tokens == 0, infer=infer)
+
+        return encoder_out, ph_dur_pred
 
 
 class DummyPitchPredictor(nn.Module):
-    def __init__(self, vmin, vmax, num_bins, deviation):
+    def __init__(self, vmin, vmax, num_bins, deviation, in_dims=256, hidden_size=512):
         super().__init__()
         self.vmin = vmin
         self.vmax = vmax
@@ -106,10 +103,10 @@ class DummyPitchPredictor(nn.Module):
         self.sigma = deviation / self.interval
         self.register_buffer('x', torch.arange(num_bins).float().reshape(1, 1, -1))  # [1, 1, N]
 
-        self.base_pitch_embed = Linear(1, hparams['hidden_size'])
+        self.base_pitch_embed = Linear(1, in_dims)
         self.net = nn.Sequential(
-            Linear(hparams['hidden_size'], hparams['pitch_predictor_hidden']),
-            Linear(hparams['pitch_predictor_hidden'], hparams['num_pitch_bins'])
+            Linear(hparams['hidden_size'], hidden_size),
+            Linear(hidden_size, num_bins)
         )
 
     def bins_to_values(self, bins):

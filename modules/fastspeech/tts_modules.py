@@ -64,7 +64,8 @@ class DurationPredictor(torch.nn.Module):
         the outputs are calculated in log domain but in `inference`, those are calculated in linear domain.
     """
 
-    def __init__(self, in_dims, n_layers=2, n_chans=384, kernel_size=3, dropout_rate=0.1, offset=1.0, padding='SAME'):
+    def __init__(self, in_dims, n_layers=2, n_chans=384, kernel_size=3,
+                 dropout_rate=0.1, offset=1.0, padding='SAME', dur_loss_type='mse'):
         """Initilize duration predictor module.
         Args:
             in_dims (int): Input dimension.
@@ -90,7 +91,9 @@ class DurationPredictor(torch.nn.Module):
                 LayerNorm(n_chans, dim=1),
                 torch.nn.Dropout(dropout_rate)
             )]
-        if hparams['dur_loss_type'] in ['mse', 'huber']:
+
+        self.loss_type = dur_loss_type
+        if self.loss_type in ['mse', 'huber']:
             self.out_dims = 1
         # elif hparams['dur_loss_type'] == 'mog':
         #     out_dims = 15
@@ -103,10 +106,9 @@ class DurationPredictor(torch.nn.Module):
         self.linear = torch.nn.Linear(n_chans, self.out_dims)
 
     def out2dur(self, xs):
-        if hparams['dur_loss_type'] in ['mse']:
-            # NOTE: calculate in log domain
-            xs = xs.squeeze(-1)  # (B, Tmax)
-            dur = torch.clamp(torch.round(xs.exp() - self.offset), min=0).long()  # avoid negative value
+        if self.loss_type in ['mse', 'huber']:
+            # NOTE: calculate loss in log domain
+            dur = xs.squeeze(-1).exp() - self.offset  # (B, Tmax)
         # elif hparams['dur_loss_type'] == 'crf':
         #     dur = torch.LongTensor(self.crf.decode(xs)).cuda()
         else:
@@ -120,8 +122,7 @@ class DurationPredictor(torch.nn.Module):
             x_masks (BoolTensor, optional): Batch of masks indicating padded part (B, Tmax).
             infer (bool): Whether inference
         Returns:
-            (train) FloatTensor: Batch of predicted durations in log domain (B, Tmax);
-            (infer) LongTensor: Batch of predicted durations in linear domain (B, Tmax).
+            (train) FloatTensor, (infer) LongTensor: Batch of predicted durations in linear domain (B, Tmax).
         """
         xs = xs.transpose(1, -1)  # (B, idim, Tmax)
         for f in self.conv:
@@ -130,12 +131,11 @@ class DurationPredictor(torch.nn.Module):
                 xs = xs * (1 - x_masks.float())[:, None, :]
         xs = self.linear(xs.transpose(1, -1))  # [B, T, C]
         xs = xs * (1 - x_masks.float())[:, :, None]  # (B, T, C)
+
+        dur_pred = self.out2dur(xs)
         if infer:
-            return self.out2dur(xs), xs
-        else:
-            if self.out_dims == 1:
-                xs = xs.squeeze(-1)  # (B, Tmax)
-            return xs
+            dur_pred = torch.clamp(torch.round(dur_pred), min=0).long()  # avoid negative value
+        return dur_pred
 
 
 class LengthRegulator(torch.nn.Module):
