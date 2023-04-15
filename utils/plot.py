@@ -38,15 +38,16 @@ def dur_to_figure(dur_gt, dur_pred, txt):
     dur_gt = np.cumsum(dur_gt)
     dur_pred = np.cumsum(dur_pred)
     width = max(12, min(48, len(txt) // 2))
-    fig = plt.figure(figsize=(width, 6))
-    plt.vlines(dur_pred, 10, 20, colors='r', label='pred')
+    fig = plt.figure(figsize=(width, 8))
+    plt.vlines(dur_pred, 12, 22, colors='r', label='pred')
     plt.vlines(dur_gt, 0, 10, colors='b', label='gt')
     for i in range(len(txt)):
         shift = (i % 8) + 1
-        plt.text((dur_pred[i-1] + dur_pred[i]) / 2 if i > 0 else dur_pred[i] / 2, 10 + shift, txt[i],
+        plt.text((dur_pred[i-1] + dur_pred[i]) / 2 if i > 0 else dur_pred[i] / 2, 12 + shift, txt[i],
                  size=16, horizontalalignment='center')
         plt.text((dur_gt[i-1] + dur_gt[i]) / 2 if i > 0 else dur_gt[i] / 2, shift, txt[i],
                  size=16, horizontalalignment='center')
+        plt.plot([dur_pred[i], dur_gt[i]], [12, 10], color='black', linewidth=2, linestyle=':')
     plt.yticks([])
     plt.xlim(0, max(dur_pred[-1], dur_gt[-1]))
     fig.legend()
