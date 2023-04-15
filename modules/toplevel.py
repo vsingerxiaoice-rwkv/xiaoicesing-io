@@ -49,15 +49,16 @@ class DiffSingerVariance(CategorizedModule):
         )
         self.lr = LengthRegulator()
 
-        pitch_hparams = hparams['pitch_prediction_args']
-        self.pitch_predictor = DummyPitchPredictor(
-            vmin=pitch_hparams['pitch_delta_vmin'],
-            vmax=pitch_hparams['pitch_delta_vmax'],
-            num_bins=pitch_hparams['num_pitch_bins'],
-            deviation=pitch_hparams['deviation'],
-            in_dims=hparams['hidden_size'],
-            hidden_size=pitch_hparams['hidden_size']
-        )
+        if hparams['predict_pitch']:
+            pitch_hparams = hparams['pitch_prediction_args']
+            self.pitch_predictor = DummyPitchPredictor(
+                vmin=pitch_hparams['pitch_delta_vmin'],
+                vmax=pitch_hparams['pitch_delta_vmax'],
+                num_bins=pitch_hparams['num_pitch_bins'],
+                deviation=pitch_hparams['deviation'],
+                in_dims=hparams['hidden_size'],
+                hidden_size=pitch_hparams['hidden_size']
+            )
 
     @property
     def category(self):

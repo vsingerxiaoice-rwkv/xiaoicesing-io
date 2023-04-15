@@ -132,9 +132,9 @@ class DurationPredictor(torch.nn.Module):
         xs = self.linear(xs.transpose(1, -1))  # [B, T, C]
         xs = xs * (1 - x_masks.float())[:, :, None]  # (B, T, C)
 
-        dur_pred = self.out2dur(xs)
+        dur_pred = torch.clamp(self.out2dur(xs), min=0.)  # avoid negative value
         if infer:
-            dur_pred = torch.clamp(torch.round(dur_pred), min=0).long()  # avoid negative value
+            dur_pred = torch.round(dur_pred).long()
         return dur_pred
 
 

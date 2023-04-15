@@ -55,16 +55,17 @@ class FastSpeech2Variance(nn.Module):
 
         dur_hparams = hparams['dur_prediction_args']
         self.wdur_log_offset = dur_hparams['log_offset']
-        self.dur_predictor = DurationPredictor(
-            in_dims=hparams['hidden_size'],
-            n_chans=dur_hparams['hidden_size'],
-            n_layers=dur_hparams['num_layers'],
-            dropout_rate=dur_hparams['dropout'],
-            padding=hparams['ffn_padding'],
-            kernel_size=dur_hparams['kernel_size'],
-            offset=dur_hparams['log_offset'],
-            dur_loss_type=dur_hparams['loss_type']
-        )
+        if hparams['predict_dur']:
+            self.dur_predictor = DurationPredictor(
+                in_dims=hparams['hidden_size'],
+                n_chans=dur_hparams['hidden_size'],
+                n_layers=dur_hparams['num_layers'],
+                dropout_rate=dur_hparams['dropout'],
+                padding=hparams['ffn_padding'],
+                kernel_size=dur_hparams['kernel_size'],
+                offset=dur_hparams['log_offset'],
+                dur_loss_type=dur_hparams['loss_type']
+            )
 
     def forward(self, txt_tokens, midi, ph2word, ph_dur=None, word_dur=None, infer=True):
         """
@@ -83,13 +84,13 @@ class FastSpeech2Variance(nn.Module):
                 1, ph2word, ph_dur
             )[:, 1:]  # [B, T_ph] => [B, T_w]
         word_dur = torch.gather(F.pad(word_dur, [1, 0], value=0), 1, ph2word)  # [B, T_w] => [B, T_ph]
-        word_dur_embed = self.word_dur_embed(torch.log(word_dur.float() + self.wdur_log_offset))
+        word_dur_embed = self.word_dur_embed(torch.log(word_dur.float() + self.wdur_log_offset)[:, :, None])
         encoder_out = self.encoder(txt_tokens, midi_embed, word_dur_embed)
 
         if not hparams['predict_dur']:
             return encoder_out, None
 
-        ph_dur_pred = self.dur_predictor(encoder_out, x_mask=txt_tokens == 0, infer=infer)
+        ph_dur_pred = self.dur_predictor(encoder_out, x_masks=txt_tokens == 0, infer=infer)
 
         return encoder_out, ph_dur_pred
 

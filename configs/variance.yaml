@@ -46,8 +46,8 @@ dur_prediction_args:
   kernel_size: 3
   log_offset: 1.0
   loss_type: mse
-  lambda_pdur_loss: 0.6
-  lambda_wdur_loss: 0.3
+  lambda_pdur_loss: 0.7
+  lambda_wdur_loss: 0.2
   lambda_sdur_loss: 0.1
 
 predict_pitch: true

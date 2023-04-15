@@ -99,9 +99,9 @@ class VarianceTask(BaseTask):
             if dur_pred is not None:
                 losses['dur_loss'] = self.lambda_dur_loss * self.dur_loss(dur_pred, ph_dur, ph2word=ph2word)
             if pitch_prob is not None:
-                pitch_delta = sample['pitch_delta']
+                delta_pitch = sample['delta_pitch']
                 uv = sample['uv']
-                losses['pitch_loss'] = self.lambda_pitch_loss * self.pitch_loss(pitch_prob, pitch_delta, ~uv)
+                losses['pitch_loss'] = self.lambda_pitch_loss * self.pitch_loss(pitch_prob, delta_pitch, ~uv)
             return losses
 
     def _validation_step(self, sample, batch_idx):
@@ -114,8 +114,12 @@ class VarianceTask(BaseTask):
         if batch_idx < hparams['num_valid_plots'] \
                 and (self.trainer.distributed_sampler_kwargs or {}).get('rank', 0) == 0:
             dur_pred, pitch_pred = self.run_model(sample, infer=True)
-            self.plot_dur(batch_idx, sample['ph_dur'], dur_pred, ph2word=sample['ph2word'])
-            self.plot_curve(batch_idx, sample['base_pitch'] + sample['pitch_delta'], pitch_pred, curve_name='pitch')
+            if dur_pred is not None:
+                self.plot_dur(batch_idx, sample['ph_dur'], dur_pred, ph2word=sample['ph2word'])
+            if pitch_pred is not None:
+                self.plot_curve(
+                    batch_idx, sample['base_pitch'] + sample['delta_pitch'], pitch_pred, curve_name='pitch'
+                )
 
         return outputs, sample['size']
 
