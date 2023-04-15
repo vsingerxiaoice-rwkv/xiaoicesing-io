@@ -29,17 +29,28 @@ def spec_f0_to_figure(spec, f0s, figsize=None):
 
 
 def dur_to_figure(dur_gt, dur_pred, txt):
-    dur_gt = dur_gt.long().cpu().numpy()
-    dur_pred = dur_pred.long().cpu().numpy()
+    if isinstance(dur_gt, torch.Tensor):
+        dur_gt = dur_gt.cpu().numpy()
+    if isinstance(dur_pred, torch.Tensor):
+        dur_pred = dur_pred.cpu().numpy()
+    dur_gt = dur_gt.astype(np.int64)
+    dur_pred = dur_pred.astype(np.int64)
     dur_gt = np.cumsum(dur_gt)
     dur_pred = np.cumsum(dur_pred)
-    fig = plt.figure(figsize=(12, 6))
-    for i in range(len(dur_gt)):
+    width = max(12, min(48, len(txt) // 2))
+    fig = plt.figure(figsize=(width, 6))
+    plt.vlines(dur_pred, 10, 20, colors='r', label='pred')
+    plt.vlines(dur_gt, 0, 10, colors='b', label='gt')
+    for i in range(len(txt)):
         shift = (i % 8) + 1
-        plt.text(dur_gt[i], shift, txt[i])
-        plt.text(dur_pred[i], 10 + shift, txt[i])
-        plt.vlines(dur_gt[i], 0, 10, colors='b')  # blue is gt
-        plt.vlines(dur_pred[i], 10, 20, colors='r')  # red is pred
+        plt.text((dur_pred[i-1] + dur_pred[i]) / 2 if i > 0 else dur_pred[i] / 2, 10 + shift, txt[i],
+                 size=16, horizontalalignment='center')
+        plt.text((dur_gt[i-1] + dur_gt[i]) / 2 if i > 0 else dur_gt[i] / 2, shift, txt[i],
+                 size=16, horizontalalignment='center')
+    plt.yticks([])
+    plt.xlim(0, max(dur_pred[-1], dur_gt[-1]))
+    fig.legend()
+    fig.tight_layout()
     return fig
 
 

@@ -12,6 +12,7 @@ from modules.losses.curve_loss import CurveLoss2d
 from modules.losses.dur_loss import DurationLoss
 from modules.toplevel import DiffSingerVariance
 from utils.hparams import hparams
+from utils.plot import dur_to_figure
 
 matplotlib.use('Agg')
 
@@ -115,7 +116,7 @@ class VarianceTask(BaseTask):
                 and (self.trainer.distributed_sampler_kwargs or {}).get('rank', 0) == 0:
             dur_pred, pitch_pred = self.run_model(sample, infer=True)
             if dur_pred is not None:
-                self.plot_dur(batch_idx, sample['ph_dur'], dur_pred, ph2word=sample['ph2word'])
+                self.plot_dur(batch_idx, sample['ph_dur'], dur_pred, txt=sample['tokens'])
             if pitch_pred is not None:
                 self.plot_curve(
                     batch_idx, sample['base_pitch'] + sample['delta_pitch'], pitch_pred, curve_name='pitch'
@@ -126,9 +127,12 @@ class VarianceTask(BaseTask):
     ############
     # validation plots
     ############
-    def plot_dur(self, batch_idx, gt_dur, pred_dur, ph2word=None):
-        # TODO: plot dur to TensorBoard
-        pass
+    def plot_dur(self, batch_idx, gt_dur, pred_dur, txt=None):
+        name = f'dur_{batch_idx}'
+        gt_dur = gt_dur[0].cpu().numpy()
+        pred_dur = pred_dur[0].cpu().numpy()
+        txt = self.phone_encoder.decode(txt[0].cpu().numpy()).split()
+        self.logger.experiment.add_figure(name, dur_to_figure(gt_dur, pred_dur, txt), self.global_step)
 
     def plot_curve(self, batch_idx, gt_curve, pred_curve, curve_name='curve'):
         # TODO: plot curve to TensorBoard
