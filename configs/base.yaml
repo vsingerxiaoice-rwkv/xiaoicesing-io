@@ -57,7 +57,6 @@ optimizer_adam_beta1: 0.9
 optimizer_adam_beta2: 0.98
 weight_decay: 0
 clip_grad_norm: 1
-dur_loss: mse # huber|mol
 
 ###########
 # train and eval

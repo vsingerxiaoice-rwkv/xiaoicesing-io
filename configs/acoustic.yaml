@@ -79,5 +79,6 @@ val_with_vocoder: true
 val_check_interval: 2000
 num_valid_plots: 10
 max_updates: 320000
+num_ckpt_keep: 5
 permanent_ckpt_start: 120000
 permanent_ckpt_interval: 40000

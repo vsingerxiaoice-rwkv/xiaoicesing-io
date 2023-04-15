@@ -66,7 +66,7 @@ class DurationPredictor(torch.nn.Module):
 
     def __init__(self, in_dims, n_layers=2, n_chans=384, kernel_size=3,
                  dropout_rate=0.1, offset=1.0, padding='SAME', dur_loss_type='mse'):
-        """Initilize duration predictor module.
+        """Initialize duration predictor module.
         Args:
             in_dims (int): Input dimension.
             n_layers (int, optional): Number of convolutional layers.
