@@ -1,6 +1,8 @@
 import torch.nn as nn
 from torch import Tensor
 
+from modules.losses.ssim import SSIMLoss
+
 
 class DiffusionNoiseLoss(nn.Module):
     def __init__(self, loss_type):
@@ -10,6 +12,8 @@ class DiffusionNoiseLoss(nn.Module):
             self.loss = nn.L1Loss()
         elif self.loss_type == 'l2':
             self.loss = nn.MSELoss()
+        elif self.loss_type == 'ssim':
+            self.loss = SSIMLoss()
         else:
             raise NotImplementedError()
 
