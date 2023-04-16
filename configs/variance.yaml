@@ -54,6 +54,7 @@ predict_pitch: true
 pitch_cascade: true
 lambda_pitch_loss: 1.0
 pitch_prediction_args:
+  diff_predictor_mode: 1d
   pitch_delta_vmin: -12.75
   pitch_delta_vmax: 12.75
   num_pitch_bins: 256
