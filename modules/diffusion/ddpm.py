@@ -11,7 +11,7 @@ from modules.diffusion.wavenet import WaveNet
 from utils.hparams import hparams
 
 DIFF_DENOISERS = {
-    'wavenet': lambda hp: WaveNet(hp['audio_num_mel_bins']),
+    'wavenet': lambda attr: WaveNet(attr['num_bins']),
 }
 
 
@@ -69,7 +69,7 @@ class GaussianDiffusion(nn.Module):
                  denoiser_type=None, betas=None,
                  spec_min=None, spec_max=None):
         super().__init__()
-        self.denoise_fn: nn.Module = DIFF_DENOISERS[denoiser_type](hparams)
+        self.denoise_fn: nn.Module = DIFF_DENOISERS[denoiser_type]({'num_bins': out_dims})
         self.out_dims = out_dims
 
         if exists(betas):
