@@ -20,6 +20,7 @@ from lightning.pytorch.loggers import TensorBoardLogger
 from lightning.pytorch.utilities.rank_zero import rank_zero_debug, rank_zero_info, rank_zero_only
 
 from basics.base_module import CategorizedModule
+from utils import filter_kwargs
 from utils.hparams import hparams
 from utils.training_utils import (
     DsModelCheckpoint, DsTQDMProgressBar,
@@ -202,16 +203,19 @@ class BaseTask(pl.LightningModule):
 
     # noinspection PyMethodMayBeStatic
     def build_scheduler(self, optimizer):
-        scheduler = torch.optim.lr_scheduler.StepLR(
-            optimizer, **self.scheduler_params
+        scheduler_cls = torch.optim.lr_scheduler.StepLR
+        scheduler = scheduler_cls(
+            optimizer,
+            **filter_kwargs(self.scheduler_params, scheduler_cls)
         )
         return scheduler
 
     # noinspection PyMethodMayBeStatic
     def build_optimizer(self, model):
-        optimizer = torch.optim.AdamW(
+        optimizer_cls = torch.optim.AdamW
+        optimizer = optimizer_cls(
             filter(lambda p: p.requires_grad, model.parameters()),
-            **self.optimizer_params
+            **filter_kwargs(self.optimizer_params, optimizer_cls)
         )
         return optimizer
 

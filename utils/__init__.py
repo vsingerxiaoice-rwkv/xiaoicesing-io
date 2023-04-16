@@ -1,3 +1,4 @@
+import inspect
 import pathlib
 import re
 import time
@@ -127,6 +128,13 @@ def unpack_dict_to_list(samples):
                 pass
         samples_.append(res)
     return samples_
+
+
+def filter_kwargs(dict_to_filter, kwarg_obj):
+    sig = inspect.signature(kwarg_obj)
+    filter_keys = [param.name for param in sig.parameters.values() if param.kind == param.POSITIONAL_OR_KEYWORD]
+    filtered_dict = {filter_key: dict_to_filter[filter_key] for filter_key in filter_keys if filter_key in dict_to_filter}
+    return filtered_dict
 
 
 def load_ckpt(
