@@ -329,7 +329,7 @@ class CurveDiffusion2d(GaussianDiffusion):
         logits = probs.sigmoid()
         peaks = logits.argmax(dim=2, keepdim=True)  # [B, T, 1]
         start = torch.max(torch.tensor(0, device=logits.device), peaks - self.width)
-        end = torch.min(torch.tensor(self.num_bins, device=logits.device), peaks + self.width)
+        end = torch.min(torch.tensor(self.num_bins - 1, device=logits.device), peaks + self.width)
         logits[(self.x < start) | (self.x > end)] = 0.
         bins = torch.sum(self.x * logits, dim=2) / torch.sum(logits, dim=2)  # [B, T]
         return self.bins_to_values(bins)
