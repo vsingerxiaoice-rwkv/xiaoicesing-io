@@ -59,30 +59,35 @@ class DiffSingerVariance(CategorizedModule):
         if hparams['predict_pitch']:
             pitch_hparams = hparams['pitch_prediction_args']
             self.base_pitch_embed = Linear(1, hparams['hidden_size'])
-            self.pitch_predictor = CurveDiffusion1d(
-                vmin=pitch_hparams['pitch_delta_vmin'],
-                vmax=pitch_hparams['pitch_delta_vmax'],
-                timesteps=hparams['timesteps'],
-                k_step=hparams['K_step'],
-                denoiser_type=hparams['diff_decoder_type'],
-                denoiser_args=(
-                    hparams['residual_layers'],
-                    hparams['residual_channels']
+            diff_predictor_mode = pitch_hparams['diff_predictor_mode']
+            if diff_predictor_mode == '1d':
+                self.pitch_predictor = CurveDiffusion1d(
+                    vmin=pitch_hparams['pitch_delta_vmin'],
+                    vmax=pitch_hparams['pitch_delta_vmax'],
+                    timesteps=hparams['timesteps'],
+                    k_step=hparams['K_step'],
+                    denoiser_type=hparams['diff_decoder_type'],
+                    denoiser_args=(
+                        hparams['residual_layers'],
+                        hparams['residual_channels']
+                    )
                 )
-            )
-            # self.pitch_predictor = CurveDiffusion2d(
-            #     vmin=pitch_hparams['pitch_delta_vmin'],
-            #     vmax=pitch_hparams['pitch_delta_vmax'],
-            #     num_bins=pitch_hparams['num_pitch_bins'],
-            #     deviation=pitch_hparams['deviation'],
-            #     timesteps=hparams['timesteps'],
-            #     k_step=hparams['K_step'],
-            #     denoiser_type=hparams['diff_decoder_type'],
-            #     denoiser_args=(
-            #         hparams['residual_layers'],
-            #         hparams['residual_channels']
-            #     )
-            # )
+            elif diff_predictor_mode == '2d':
+                self.pitch_predictor = CurveDiffusion2d(
+                    vmin=pitch_hparams['pitch_delta_vmin'],
+                    vmax=pitch_hparams['pitch_delta_vmax'],
+                    num_bins=pitch_hparams['num_pitch_bins'],
+                    deviation=pitch_hparams['deviation'],
+                    timesteps=hparams['timesteps'],
+                    k_step=hparams['K_step'],
+                    denoiser_type=hparams['diff_decoder_type'],
+                    denoiser_args=(
+                        hparams['residual_layers'],
+                        hparams['residual_channels']
+                    )
+                )
+            else:
+                raise NotImplementedError()
             # from modules.fastspeech.tts_modules import PitchPredictor
             # self.pitch_predictor = PitchPredictor(
             #     vmin=pitch_hparams['pitch_delta_vmin'],

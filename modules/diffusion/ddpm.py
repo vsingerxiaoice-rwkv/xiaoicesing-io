@@ -307,9 +307,11 @@ class CurveDiffusion2d(GaussianDiffusion):
         )
         self.vmin = vmin
         self.vmax = vmax
+        self.num_bins = num_bins
         self.interval = (vmax - vmin) / (num_bins - 1)  # align with centers of bins
         self.sigma = deviation / self.interval
-        self.register_buffer('x', torch.arange(num_bins).float().reshape(1, 1, -1))  # [1, 1, N]
+        self.width = int(3 * self.sigma)
+        self.register_buffer('x', torch.arange(self.num_bins).float().reshape(1, 1, -1))  # [1, 1, N]
 
     def values_to_bins(self, values):
         return (values - self.vmin) / self.interval
@@ -317,22 +319,17 @@ class CurveDiffusion2d(GaussianDiffusion):
     def bins_to_values(self, bins):
         return bins * self.interval + self.vmin
 
-    def p_losses(self, x_start, t, cond, noise=None):
-        x_recon, noise = super().p_losses(x_start, t, cond, noise=noise)  # [B, 1, M, T]
-        x_recon = self.denorm_spec(x_recon.squeeze(1).transpose(1, 2)).unsqueeze(-1)  # [B, T, M=1]
-        noise = self.denorm_spec(noise.squeeze(1).transpose(1, 2)).unsqueeze(-1)  # [B, T, M=1]
-        return (
-            x_recon.transpose(1, 2).unsqueeze(1),  # [B, 1, M=1, T]
-            noise.transpose(1, 2).unsqueeze(1),  # [B, 1, M=1, T]
-        )
-
     def norm_spec(self, curve):
         miu = self.values_to_bins(curve)[:, :, None]  # [B, T, 1]
         probs = (((self.x - miu) / self.sigma) ** 2 / -2).exp()  # gaussian blur, [B, T, N]
         return super().norm_spec(probs)
 
     def denorm_spec(self, probs):
-        probs = super().denorm_spec(probs)
-        logits = probs.sigmoid()  # [B, T, N]
+        probs = super().denorm_spec(probs)  # [B, T, N]
+        logits = probs.sigmoid()
+        peaks = logits.argmax(dim=2, keepdim=True)  # [B, T, 1]
+        start = torch.max(torch.tensor(0, device=logits.device), peaks - self.width)
+        end = torch.min(torch.tensor(self.num_bins, device=logits.device), peaks + self.width)
+        logits[(self.x < start) | (self.x > end)] = 0.
         bins = torch.sum(self.x * logits, dim=2) / torch.sum(logits, dim=2)  # [B, T]
         return self.bins_to_values(bins)
