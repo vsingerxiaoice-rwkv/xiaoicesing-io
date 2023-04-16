@@ -282,6 +282,8 @@ class GaussianDiffusion(nn.Module):
 class CurveDiffusion1d(GaussianDiffusion):
     def __init__(self, vmin, vmax, timesteps=1000, k_step=1000,
                  denoiser_type=None, denoiser_args=None, betas=None):
+        self.vmin = vmin
+        self.vmax = vmax
         super().__init__(
             1, timesteps=timesteps, k_step=k_step,
             denoiser_type=denoiser_type, denoiser_args=denoiser_args,
@@ -289,10 +291,10 @@ class CurveDiffusion1d(GaussianDiffusion):
         )
 
     def norm_spec(self, x):
-        return super().norm_spec(x.unsqueeze(-1))
+        return super().norm_spec(x.unsqueeze(-1).clamp(min=self.vmin, max=self.vmax))
 
     def denorm_spec(self, x):
-        return super().denorm_spec(x).squeeze(-1)
+        return super().denorm_spec(x).clamp(min=self.vmin, max=self.vmax).squeeze(-1)
 
 
 class CurveDiffusion2d(GaussianDiffusion):
