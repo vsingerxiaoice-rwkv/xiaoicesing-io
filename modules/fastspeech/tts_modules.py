@@ -138,6 +138,73 @@ class DurationPredictor(torch.nn.Module):
         return dur_pred
 
 
+class PitchPredictor(torch.nn.Module):
+    def __init__(self, vmin, vmax, num_bins, deviation,
+                 in_dims, n_layers=5, n_chans=384, kernel_size=5,
+                 dropout_rate=0.1, padding='SAME'):
+        """Initialize pitch predictor module.
+        Args:
+            in_dims (int): Input dimension.
+            n_layers (int, optional): Number of convolutional layers.
+            n_chans (int, optional): Number of channels of convolutional layers.
+            kernel_size (int, optional): Kernel size of convolutional layers.
+            dropout_rate (float, optional): Dropout rate.
+        """
+        super(PitchPredictor, self).__init__()
+        self.vmin = vmin
+        self.vmax = vmax
+        self.interval = (vmax - vmin) / (num_bins - 1)  # align with centers of bins
+        self.sigma = deviation / self.interval
+        self.register_buffer('x', torch.arange(num_bins).float().reshape(1, 1, -1))  # [1, 1, N]
+
+        self.base_pitch_embed = torch.nn.Linear(1, in_dims)
+        self.conv = torch.nn.ModuleList()
+        self.kernel_size = kernel_size
+        self.padding = padding
+        for idx in range(n_layers):
+            in_chans = in_dims if idx == 0 else n_chans
+            self.conv += [torch.nn.Sequential(
+                torch.nn.ConstantPad1d(((kernel_size - 1) // 2, (kernel_size - 1) // 2)
+                                       if padding == 'SAME'
+                                       else (kernel_size - 1, 0), 0),
+                torch.nn.Conv1d(in_chans, n_chans, kernel_size, stride=1, padding=0),
+                torch.nn.ReLU(),
+                LayerNorm(n_chans, dim=1),
+                torch.nn.Dropout(dropout_rate)
+            )]
+        self.linear = torch.nn.Linear(n_chans, num_bins)
+        self.embed_positions = SinusoidalPositionalEmbedding(in_dims, 0, init_size=4096)
+        self.pos_embed_alpha = nn.Parameter(torch.Tensor([1]))
+
+    def bins_to_values(self, bins):
+        return bins * self.interval + self.vmin
+
+    def out2pitch(self, probs):
+        logits = probs.sigmoid()  # [B, T, N]
+        # return logits
+        # logits_sum = logits.sum(dim=2)  # [B, T]
+        bins = torch.sum(self.x * logits, dim=2) / torch.sum(logits, dim=2)  # [B, T]
+        pitch = self.bins_to_values(bins)
+        # uv = logits_sum / (self.sigma * math.sqrt(2 * math.pi)) < 0.3
+        # pitch[uv] = torch.nan
+        return pitch
+
+    def forward(self, xs, base):
+        """
+        :param xs: [B, T, H]
+        :param base: [B, T]
+        :return: [B, T, N]
+        """
+        xs = xs + self.base_pitch_embed(base[..., None])
+        positions = self.pos_embed_alpha * self.embed_positions(xs[..., 0])
+        xs = xs + positions
+        xs = xs.transpose(1, -1)  # (B, idim, Tmax)
+        for f in self.conv:
+            xs = f(xs)  # (B, C, Tmax)
+        xs = self.linear(xs.transpose(1, -1))  # (B, Tmax, H)
+        return self.out2pitch(xs) + base, xs
+
+
 class LengthRegulator(torch.nn.Module):
     # noinspection PyMethodMayBeStatic
     def forward(self, dur, dur_padding=None, alpha=1.0):

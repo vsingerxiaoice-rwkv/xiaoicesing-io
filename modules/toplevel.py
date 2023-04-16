@@ -50,15 +50,24 @@ class DiffSingerVariance(CategorizedModule):
         self.lr = LengthRegulator()
 
         if hparams['predict_pitch']:
+            from modules.fastspeech.tts_modules import PitchPredictor
             pitch_hparams = hparams['pitch_prediction_args']
-            self.pitch_predictor = DummyPitchPredictor(
+            self.pitch_predictor = PitchPredictor(
                 vmin=pitch_hparams['pitch_delta_vmin'],
                 vmax=pitch_hparams['pitch_delta_vmax'],
                 num_bins=pitch_hparams['num_pitch_bins'],
                 deviation=pitch_hparams['deviation'],
                 in_dims=hparams['hidden_size'],
-                hidden_size=pitch_hparams['hidden_size']
+                n_chans=pitch_hparams['hidden_size']
             )
+            # self.pitch_predictor = DummyPitchPredictor(
+            #     vmin=pitch_hparams['pitch_delta_vmin'],
+            #     vmax=pitch_hparams['pitch_delta_vmax'],
+            #     num_bins=pitch_hparams['num_pitch_bins'],
+            #     deviation=pitch_hparams['deviation'],
+            #     in_dims=hparams['hidden_size'],
+            #     hidden_size=pitch_hparams['hidden_size']
+            # )
 
     @property
     def category(self):

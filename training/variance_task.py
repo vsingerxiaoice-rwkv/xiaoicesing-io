@@ -12,7 +12,7 @@ from modules.losses.curve_loss import CurveLoss2d
 from modules.losses.dur_loss import DurationLoss
 from modules.toplevel import DiffSingerVariance
 from utils.hparams import hparams
-from utils.plot import dur_to_figure
+from utils.plot import dur_to_figure, f0_to_figure
 
 matplotlib.use('Agg')
 
@@ -28,7 +28,7 @@ class VarianceDataset(BaseDataset):
         mel2ph = utils.collate_nd([s['mel2ph'] for s in samples], 0)
         base_pitch = utils.collate_nd([s['base_pitch'] for s in samples], 0)
         delta_pitch = utils.collate_nd([s['delta_pitch'] for s in samples], 0)
-        uv = utils.collate_nd([s['uv'] for s in samples], 0)
+        uv = utils.collate_nd([s['uv'] for s in samples], True)
         batch.update({
             'tokens': tokens,
             'ph_dur': ph_dur,
@@ -135,5 +135,8 @@ class VarianceTask(BaseTask):
         self.logger.experiment.add_figure(name, dur_to_figure(gt_dur, pred_dur, txt), self.global_step)
 
     def plot_curve(self, batch_idx, gt_curve, pred_curve, curve_name='curve'):
-        # TODO: plot curve to TensorBoard
-        pass
+        name = f'{curve_name}_{batch_idx}'
+        gt_curve = gt_curve[0].cpu().numpy()
+        pred_curve = pred_curve[0].cpu().numpy()
+        # self.logger.experiment.add_figure(name, spec_to_figure(pred_curve, vmin=0, vmax=1), self.global_step)
+        self.logger.experiment.add_figure(name, f0_to_figure(gt_curve, pred_curve), self.global_step)

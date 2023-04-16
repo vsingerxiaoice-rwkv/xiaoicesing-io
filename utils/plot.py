@@ -55,15 +55,15 @@ def dur_to_figure(dur_gt, dur_pred, txt):
     return fig
 
 
-def f0_to_figure(f0_gt, f0_cwt=None, f0_pred=None):
-    fig = plt.figure()
-    f0_gt = f0_gt.cpu().numpy()
-    plt.plot(f0_gt, color='r', label='gt')
-    if f0_cwt is not None:
-        f0_cwt = f0_cwt.cpu().numpy()
-        plt.plot(f0_cwt, color='b', label='cwt')
-    if f0_pred is not None:
+def f0_to_figure(f0_gt, f0_pred=None):
+    if isinstance(f0_gt, torch.Tensor):
+        f0_gt = f0_gt.cpu().numpy()
+    if isinstance(f0_pred, torch.Tensor):
         f0_pred = f0_pred.cpu().numpy()
+    fig = plt.figure()
+    if f0_pred is not None:
         plt.plot(f0_pred, color='green', label='pred')
+    plt.plot(f0_gt, color='r', label='gt')
     plt.legend()
+    plt.tight_layout()
     return fig

@@ -40,7 +40,7 @@ predict_dur: true
 dur_cascade: false
 lambda_dur_loss: 1.0
 dur_prediction_args:
-  hidden_size: 256
+  hidden_size: 384
   dropout: 0.1
   num_layers: 5
   kernel_size: 3
