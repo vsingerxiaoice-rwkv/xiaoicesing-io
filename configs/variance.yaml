@@ -60,8 +60,8 @@ pitch_prediction_args:
   deviation: 0.25
   hidden_size: 512
 
-residual_layers: 20
-residual_channels: 384
+residual_layers: 10
+residual_channels: 512
 dilation_cycle_length: 4  # *
 diff_decoder_type: 'wavenet'
 diff_loss_type: l2

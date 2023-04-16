@@ -97,37 +97,3 @@ class FastSpeech2Variance(nn.Module):
         ph_dur_pred = self.dur_predictor(encoder_out, x_masks=txt_tokens == PAD_INDEX, infer=infer)
 
         return encoder_out, ph_dur_pred
-
-
-class DummyPitchPredictor(nn.Module):
-    def __init__(self, vmin, vmax, num_bins, deviation, in_dims=256, hidden_size=512):
-        super().__init__()
-        self.vmin = vmin
-        self.vmax = vmax
-        self.interval = (vmax - vmin) / (num_bins - 1)  # align with centers of bins
-        self.sigma = deviation / self.interval
-        self.register_buffer('x', torch.arange(num_bins).float().reshape(1, 1, -1))  # [1, 1, N]
-
-        self.base_pitch_embed = Linear(1, in_dims)
-        self.net = nn.Sequential(
-            Linear(hparams['hidden_size'], hidden_size),
-            Linear(hidden_size, num_bins)
-        )
-
-    def bins_to_values(self, bins):
-        return bins * self.interval + self.vmin
-
-    def out2pitch(self, probs):
-        logits = probs.sigmoid()  # [B, T, N]
-        bins = torch.sum(self.x * logits, dim=2) / torch.sum(logits, dim=2)  # [B, T]
-        return self.bins_to_values(bins)
-
-    def forward(self, condition, base_pitch):
-        """
-        :param condition: [B, T, H]
-        :param base_pitch: [B, T]
-        :return: pitch_pred [B, T], probs [B, T, N]
-        """
-        condition = condition + self.base_pitch_embed(base_pitch[:, :, None])
-        probs = self.net(condition)
-        return self.out2pitch(probs) + base_pitch, probs

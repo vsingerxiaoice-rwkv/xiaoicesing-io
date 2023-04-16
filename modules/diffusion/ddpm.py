@@ -152,7 +152,7 @@ class GaussianDiffusion(nn.Module):
         # no noise when t == 0
         nonzero_mask = (1 - (t == 0).float()).reshape(b, *((1,) * (len(x.shape) - 1)))
         return model_mean + nonzero_mask * (0.5 * model_log_variance).exp() * noise
-    
+
     @torch.no_grad()
     def p_sample_plms(self, x, t, interval, cond, clip_denoised=True, repeat_noise=False):
         """
@@ -161,10 +161,11 @@ class GaussianDiffusion(nn.Module):
 
         def get_x_pred(x, noise_t, t):
             a_t = extract(self.alphas_cumprod, t, x.shape)
-            a_prev = extract(self.alphas_cumprod, torch.max(t-interval, torch.zeros_like(t)), x.shape)
+            a_prev = extract(self.alphas_cumprod, torch.max(t - interval, torch.zeros_like(t)), x.shape)
             a_t_sq, a_prev_sq = a_t.sqrt(), a_prev.sqrt()
 
-            x_delta = (a_prev - a_t) * ((1 / (a_t_sq * (a_t_sq + a_prev_sq))) * x - 1 / (a_t_sq * (((1 - a_prev) * a_t).sqrt() + ((1 - a_t) * a_prev).sqrt())) * noise_t)
+            x_delta = (a_prev - a_t) * ((1 / (a_t_sq * (a_t_sq + a_prev_sq))) * x - 1 / (
+                    a_t_sq * (((1 - a_prev) * a_t).sqrt() + ((1 - a_t) * a_prev).sqrt())) * noise_t)
             x_pred = x + x_delta
 
             return x_pred
@@ -174,7 +175,7 @@ class GaussianDiffusion(nn.Module):
 
         if len(noise_list) == 0:
             x_pred = get_x_pred(x, noise_pred, t)
-            noise_pred_prev = self.denoise_fn(x_pred, max(t-interval, 0), cond=cond)
+            noise_pred_prev = self.denoise_fn(x_pred, max(t - interval, 0), cond=cond)
             noise_pred_prime = (noise_pred + noise_pred_prev) / 2
         elif len(noise_list) == 1:
             noise_pred_prime = (3 * noise_pred - noise_list[-1]) / 2
@@ -226,7 +227,7 @@ class GaussianDiffusion(nn.Module):
                 #               total=t // iteration_interval):
                 #     x = self.p_sample_plms(x, torch.full((b,), i, device=device, dtype=torch.long), iteration_interval,
                 #                            cond)
-                
+
                 from inference.dpm_solver_pytorch import NoiseScheduleVP, model_wrapper, DPM_Solver
                 ## 1. Define the noise schedule.
                 noise_schedule = NoiseScheduleVP(schedule='discrete', betas=self.betas)
@@ -239,8 +240,9 @@ class GaussianDiffusion(nn.Module):
                         ret = fn(x, t, **kwargs)
                         self.bar.update(1)
                         return ret
+
                     return wrapped
-                    
+
                 model_fn = model_wrapper(
                     my_wrapper(self.denoise_fn),
                     noise_schedule,
@@ -275,3 +277,35 @@ class GaussianDiffusion(nn.Module):
 
     def denorm_spec(self, x):
         return (x + 1) / 2 * (self.spec_max - self.spec_min) + self.spec_min
+
+
+class CurveDiffusion(GaussianDiffusion):
+    def __init__(self, vmin, vmax, num_bins, deviation, timesteps=1000, k_step=1000,
+                 denoiser_type=None, betas=None):
+        super().__init__(
+            num_bins, timesteps=timesteps, k_step=k_step,
+            denoiser_type=denoiser_type, betas=betas,
+            spec_min=0., spec_max=1.
+        )
+        self.vmin = vmin
+        self.vmax = vmax
+        self.interval = (vmax - vmin) / (num_bins - 1)  # align with centers of bins
+        self.sigma = deviation / self.interval
+        self.register_buffer('x', torch.arange(num_bins).float().reshape(1, 1, -1))  # [1, 1, N]
+
+    def values_to_bins(self, values):
+        return (values - self.vmin) / self.interval
+
+    def bins_to_values(self, bins):
+        return bins * self.interval + self.vmin
+
+    def norm_spec(self, curve):
+        miu = self.values_to_bins(curve)[:, :, None]  # [B, T, 1]
+        probs = (((self.x - miu) / self.sigma) ** 2 / -2).exp()  # gaussian blur, [B, T, N]
+        return super().norm_spec(probs)
+
+    def denorm_spec(self, probs):
+        probs = super().denorm_spec(probs)
+        logits = probs.sigmoid()  # [B, T, N]
+        bins = torch.sum(self.x * logits, dim=2) / torch.sum(logits, dim=2)  # [B, T]
+        return self.bins_to_values(bins)

@@ -2,10 +2,13 @@ import torch
 import torch.nn.functional as F
 
 from basics.base_module import CategorizedModule
-from modules.diffusion.ddpm import GaussianDiffusion
+from modules.commons.common_layers import (
+    XavierUniformInitLinear as Linear,
+)
+from modules.diffusion.ddpm import GaussianDiffusion, CurveDiffusion
 from modules.fastspeech.acoustic_encoder import FastSpeech2Acoustic
 from modules.fastspeech.tts_modules import LengthRegulator
-from modules.fastspeech.variance_encoder import FastSpeech2Variance, DummyPitchPredictor
+from modules.fastspeech.variance_encoder import FastSpeech2Variance
 from utils.hparams import hparams
 
 
@@ -50,23 +53,25 @@ class DiffSingerVariance(CategorizedModule):
         self.lr = LengthRegulator()
 
         if hparams['predict_pitch']:
-            from modules.fastspeech.tts_modules import PitchPredictor
             pitch_hparams = hparams['pitch_prediction_args']
-            self.pitch_predictor = PitchPredictor(
+            self.base_pitch_embed = Linear(1, hparams['hidden_size'])
+            self.pitch_predictor = CurveDiffusion(
                 vmin=pitch_hparams['pitch_delta_vmin'],
                 vmax=pitch_hparams['pitch_delta_vmax'],
                 num_bins=pitch_hparams['num_pitch_bins'],
                 deviation=pitch_hparams['deviation'],
-                in_dims=hparams['hidden_size'],
-                n_chans=pitch_hparams['hidden_size']
+                timesteps=hparams['timesteps'],
+                k_step=hparams['K_step'],
+                denoiser_type=hparams['diff_decoder_type'],
             )
-            # self.pitch_predictor = DummyPitchPredictor(
+            # from modules.fastspeech.tts_modules import PitchPredictor
+            # self.pitch_predictor = PitchPredictor(
             #     vmin=pitch_hparams['pitch_delta_vmin'],
             #     vmax=pitch_hparams['pitch_delta_vmax'],
             #     num_bins=pitch_hparams['num_pitch_bins'],
             #     deviation=pitch_hparams['deviation'],
             #     in_dims=hparams['hidden_size'],
-            #     hidden_size=pitch_hparams['hidden_size']
+            #     n_chans=pitch_hparams['hidden_size']
             # )
 
     @property
@@ -74,7 +79,7 @@ class DiffSingerVariance(CategorizedModule):
         return 'variance'
 
     def forward(self, txt_tokens, midi, ph2word, ph_dur=None, word_dur=None,
-                mel2ph=None, base_pitch=None, infer=True):
+                mel2ph=None, base_pitch=None, delta_pitch=None, infer=True):
         encoder_out, dur_pred_out = self.fs2(
             txt_tokens, midi=midi, ph2word=ph2word,
             ph_dur=ph_dur, word_dur=word_dur, infer=infer
@@ -90,8 +95,12 @@ class DiffSingerVariance(CategorizedModule):
         encoder_out = F.pad(encoder_out, [0, 0, 1, 0])
         mel2ph_ = mel2ph[..., None].repeat([1, 1, hparams['hidden_size']])
         condition = torch.gather(encoder_out, 1, mel2ph_)
-        pitch_pred, pitch_probs = self.pitch_predictor(condition, base_pitch)
-        if infer:
-            return dur_pred_out, pitch_pred
-        else:
-            return dur_pred_out, pitch_probs
+        pitch_cond = condition + self.base_pitch_embed(base_pitch[:, :, None])
+
+        pitch_pred_out = self.pitch_predictor.forward(pitch_cond, delta_pitch, infer)
+        return dur_pred_out, pitch_pred_out
+        # pitch_pred, pitch_probs = self.pitch_predictor(condition, base_pitch)
+        # if infer:
+        #     return dur_pred_out, pitch_pred
+        # else:
+        #     return dur_pred_out, pitch_probs

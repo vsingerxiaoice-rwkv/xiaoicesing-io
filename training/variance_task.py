@@ -9,6 +9,7 @@ import utils.infer_utils
 from basics.base_dataset import BaseDataset
 from basics.base_task import BaseTask
 from modules.losses.curve_loss import CurveLoss2d
+from modules.losses.diff_loss import DiffusionNoiseLoss
 from modules.losses.dur_loss import DurationLoss
 from modules.toplevel import DiffSingerVariance
 from utils.hparams import hparams
@@ -72,13 +73,16 @@ class VarianceTask(BaseTask):
                 lambda_sdur=dur_hparams['lambda_sdur_loss']
             )
         if hparams['predict_pitch']:
-            pitch_hparams = hparams['pitch_prediction_args']
-            self.pitch_loss = CurveLoss2d(
-                vmin=pitch_hparams['pitch_delta_vmin'],
-                vmax=pitch_hparams['pitch_delta_vmax'],
-                num_bins=pitch_hparams['num_pitch_bins'],
-                deviation=pitch_hparams['deviation']
+            self.pitch_loss = DiffusionNoiseLoss(
+                loss_type=hparams['diff_loss_type']
             )
+            # pitch_hparams = hparams['pitch_prediction_args']
+            # self.pitch_loss = CurveLoss2d(
+            #     vmin=pitch_hparams['pitch_delta_vmin'],
+            #     vmax=pitch_hparams['pitch_delta_vmax'],
+            #     num_bins=pitch_hparams['num_pitch_bins'],
+            #     deviation=pitch_hparams['deviation']
+            # )
 
     def run_model(self, sample, infer=False):
         txt_tokens = sample['tokens']  # [B, T_ph]
@@ -87,22 +91,26 @@ class VarianceTask(BaseTask):
         ph_dur = sample['ph_dur']  # [B, T_ph]
         mel2ph = sample['mel2ph']  # [B, T_t]
         base_pitch = sample['base_pitch']  # [B, T_t]
+        delta_pitch = sample['delta_pitch']  # [B, T_t]
 
         output = self.model(txt_tokens, midi=midi, ph2word=ph2word, ph_dur=ph_dur,
-                            mel2ph=mel2ph, base_pitch=base_pitch, infer=infer)
+                            mel2ph=mel2ph, base_pitch=base_pitch, delta_pitch=delta_pitch,
+                            infer=infer)
 
         if infer:
             dur_pred, pitch_pred = output
             return dur_pred, pitch_pred
         else:
-            dur_pred, pitch_prob = output
+            dur_pred, pitch_pred_out = output
             losses = {}
             if dur_pred is not None:
                 losses['dur_loss'] = self.lambda_dur_loss * self.dur_loss(dur_pred, ph_dur, ph2word=ph2word)
-            if pitch_prob is not None:
-                delta_pitch = sample['delta_pitch']
-                uv = sample['uv']
-                losses['pitch_loss'] = self.lambda_pitch_loss * self.pitch_loss(pitch_prob, delta_pitch, ~uv)
+            if pitch_pred_out is not None:
+                pitch_x_recon, pitch_noise = pitch_pred_out
+                losses['pitch_loss'] = self.pitch_loss.forward(pitch_x_recon, pitch_noise)
+                # delta_pitch = sample['delta_pitch']
+                # uv = sample['uv']
+                # losses['pitch_loss'] = self.lambda_pitch_loss * self.pitch_loss(pitch_prob, delta_pitch, ~uv)
             return losses
 
     def _validation_step(self, sample, batch_idx):
