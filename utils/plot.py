@@ -1,6 +1,7 @@
 import matplotlib.pyplot as plt
 import numpy as np
 import torch
+from matplotlib.ticker import MultipleLocator
 
 LINE_COLORS = ['w', 'r', 'y', 'cyan', 'm', 'b', 'lime']
 
@@ -64,6 +65,7 @@ def curve_to_figure(curve_gt, curve_pred=None):
     if curve_pred is not None:
         plt.plot(curve_pred, color='r', label='pred')
     plt.plot(curve_gt, color='b', label='gt')
+    plt.gca().yaxis.set_major_locator(MultipleLocator(1))
     plt.grid(axis='y')
     plt.legend()
     plt.tight_layout()
