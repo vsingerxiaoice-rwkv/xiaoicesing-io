@@ -322,8 +322,8 @@ class CurveDiffusion2d(GaussianDiffusion):
         x_recon = self.denorm_spec(x_recon.squeeze(1).transpose(1, 2)).unsqueeze(-1)  # [B, T, M=1]
         noise = self.denorm_spec(noise.squeeze(1).transpose(1, 2)).unsqueeze(-1)  # [B, T, M=1]
         return (
-            self.denorm_spec(x_recon).transpose(1, 2).unsqueeze(1),  # [B, 1, M=1, T]
-            self.denorm_spec(noise).transpose(1, 2).unsqueeze(1),  # [B, 1, M=1, T]
+            x_recon.transpose(1, 2).unsqueeze(1),  # [B, 1, M=1, T]
+            noise.transpose(1, 2).unsqueeze(1),  # [B, 1, M=1, T]
         )
 
     def norm_spec(self, curve):
