@@ -13,7 +13,7 @@ from modules.losses.diff_loss import DiffusionNoiseLoss
 from modules.losses.dur_loss import DurationLoss
 from modules.toplevel import DiffSingerVariance
 from utils.hparams import hparams
-from utils.plot import dur_to_figure, f0_to_figure
+from utils.plot import dur_to_figure, curve_to_figure
 
 matplotlib.use('Agg')
 
@@ -150,4 +150,4 @@ class VarianceTask(BaseTask):
         gt_curve = gt_curve[0].cpu().numpy()
         pred_curve = pred_curve[0].cpu().numpy()
         # self.logger.experiment.add_figure(name, spec_to_figure(pred_curve, vmin=0, vmax=1), self.global_step)
-        self.logger.experiment.add_figure(name, f0_to_figure(gt_curve, pred_curve), self.global_step)
+        self.logger.experiment.add_figure(name, curve_to_figure(gt_curve, pred_curve), self.global_step)
