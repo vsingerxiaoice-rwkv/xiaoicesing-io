@@ -326,10 +326,9 @@ class CurveDiffusion2d(GaussianDiffusion):
 
     def denorm_spec(self, probs):
         probs = super().denorm_spec(probs)  # [B, T, N]
-        logits = probs.sigmoid()
-        peaks = logits.argmax(dim=2, keepdim=True)  # [B, T, 1]
-        start = torch.max(torch.tensor(0, device=logits.device), peaks - self.width)
-        end = torch.min(torch.tensor(self.num_bins - 1, device=logits.device), peaks + self.width)
-        logits[(self.x < start) | (self.x > end)] = 0.
-        bins = torch.sum(self.x * logits, dim=2) / torch.sum(logits, dim=2)  # [B, T]
+        peaks = probs.argmax(dim=2, keepdim=True)  # [B, T, 1]
+        start = torch.max(torch.tensor(0, device=probs.device), peaks - self.width)
+        end = torch.min(torch.tensor(self.num_bins - 1, device=probs.device), peaks + self.width)
+        probs[(self.x < start) | (self.x > end)] = 0.
+        bins = torch.sum(self.x * probs, dim=2) / torch.sum(probs, dim=2)  # [B, T]
         return self.bins_to_values(bins)
