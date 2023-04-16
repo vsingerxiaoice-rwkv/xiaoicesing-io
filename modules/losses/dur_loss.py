@@ -28,6 +28,8 @@ class DurationLoss(nn.Module):
         return torch.log(any_dur + self.offset)
 
     def forward(self, dur_pred: Tensor, dur_gt: Tensor, ph2word: Tensor) -> Tensor:
+        dur_gt = dur_gt.to(dtype=dur_pred.dtype)
+
         # pdur_loss
         pdur_loss = self.lambda_pdur * self.loss(self.linear2log(dur_pred), self.linear2log(dur_gt))
 
