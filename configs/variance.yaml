@@ -69,7 +69,7 @@ schedule_type: 'linear'
 
 # train and eval
 num_sanity_val_steps: 1
-lr: 0.0001
+lr: 0.0004
 lr_decay_steps: 5000
 lr_decay_gamma: 0.5
 max_batch_frames: 80000

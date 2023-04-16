@@ -21,6 +21,6 @@ class DiffusionNoiseLoss(nn.Module):
         """
         if nonpadding is not None:
             nonpadding = nonpadding.transpose(1, 2).unsqueeze(1)
-            x_recon *= nonpadding
+            x_recon = x_recon * nonpadding
             noise *= nonpadding
         return self.loss(x_recon, noise)

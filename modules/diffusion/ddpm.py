@@ -317,6 +317,15 @@ class CurveDiffusion2d(GaussianDiffusion):
     def bins_to_values(self, bins):
         return bins * self.interval + self.vmin
 
+    def p_losses(self, x_start, t, cond, noise=None):
+        x_recon, noise = super().p_losses(x_start, t, cond, noise=noise)  # [B, 1, M, T]
+        x_recon = self.denorm_spec(x_recon.squeeze(1).transpose(1, 2)).unsqueeze(-1)  # [B, T, M=1]
+        noise = self.denorm_spec(noise.squeeze(1).transpose(1, 2)).unsqueeze(-1)  # [B, T, M=1]
+        return (
+            self.denorm_spec(x_recon).transpose(1, 2).unsqueeze(1),  # [B, 1, M=1, T]
+            self.denorm_spec(noise).transpose(1, 2).unsqueeze(1),  # [B, 1, M=1, T]
+        )
+
     def norm_spec(self, curve):
         miu = self.values_to_bins(curve)[:, :, None]  # [B, T, 1]
         probs = (((self.x - miu) / self.sigma) ** 2 / -2).exp()  # gaussian blur, [B, T, N]
