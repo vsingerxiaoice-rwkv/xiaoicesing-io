@@ -62,8 +62,8 @@ def f0_to_figure(f0_gt, f0_pred=None):
         f0_pred = f0_pred.cpu().numpy()
     fig = plt.figure()
     if f0_pred is not None:
-        plt.plot(f0_pred, color='green', label='pred')
-    plt.plot(f0_gt, color='r', label='gt')
+        plt.plot(f0_pred, color='r', label='pred')
+    plt.plot(f0_gt, color='b', label='gt')
     plt.legend()
     plt.tight_layout()
     return fig
