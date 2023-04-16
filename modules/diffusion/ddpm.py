@@ -285,7 +285,7 @@ class CurveDiffusion(GaussianDiffusion):
         super().__init__(
             num_bins, timesteps=timesteps, k_step=k_step,
             denoiser_type=denoiser_type, betas=betas,
-            spec_min=0., spec_max=1.
+            spec_min=[0.], spec_max=[1.]
         )
         self.vmin = vmin
         self.vmax = vmax
