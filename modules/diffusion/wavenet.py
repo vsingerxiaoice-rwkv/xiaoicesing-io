@@ -64,26 +64,25 @@ class ResidualBlock(nn.Module):
 
 
 class WaveNet(nn.Module):
-    def __init__(self, in_dims):
+    def __init__(self, in_dims, n_layers, n_chans):
         super().__init__()
-        dim = hparams['residual_channels']
-        self.input_projection = Conv1d(in_dims, dim, 1)
-        self.diffusion_embedding = SinusoidalPosEmb(dim)
+        self.input_projection = Conv1d(in_dims, n_chans, 1)
+        self.diffusion_embedding = SinusoidalPosEmb(n_chans)
         self.mlp = nn.Sequential(
-            nn.Linear(dim, dim * 4),
+            nn.Linear(n_chans, n_chans * 4),
             Mish(),
-            nn.Linear(dim * 4, dim)
+            nn.Linear(n_chans * 4, n_chans)
         )
         self.residual_layers = nn.ModuleList([
             ResidualBlock(
                 encoder_hidden=hparams['hidden_size'],
-                residual_channels=dim,
+                residual_channels=n_chans,
                 dilation=2 ** (i % hparams['dilation_cycle_length'])
             )
-            for i in range(hparams['residual_layers'])
+            for i in range(n_layers)
         ])
-        self.skip_projection = Conv1d(dim, dim, 1)
-        self.output_projection = Conv1d(dim, in_dims, 1)
+        self.skip_projection = Conv1d(n_chans, n_chans, 1)
+        self.output_projection = Conv1d(n_chans, in_dims, 1)
         nn.init.zeros_(self.output_projection.weight)
 
     def forward(self, spec, diffusion_step, cond):

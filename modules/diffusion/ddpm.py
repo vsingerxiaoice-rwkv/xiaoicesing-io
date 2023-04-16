@@ -11,7 +11,7 @@ from modules.diffusion.wavenet import WaveNet
 from utils.hparams import hparams
 
 DIFF_DENOISERS = {
-    'wavenet': lambda attr: WaveNet(attr['num_bins']),
+    'wavenet': lambda args: WaveNet(*args),
 }
 
 
@@ -66,10 +66,10 @@ beta_schedule = {
 
 class GaussianDiffusion(nn.Module):
     def __init__(self, out_dims, timesteps=1000, k_step=1000,
-                 denoiser_type=None, betas=None,
+                 denoiser_type=None, denoiser_args=None, betas=None,
                  spec_min=None, spec_max=None):
         super().__init__()
-        self.denoise_fn: nn.Module = DIFF_DENOISERS[denoiser_type]({'num_bins': out_dims})
+        self.denoise_fn: nn.Module = DIFF_DENOISERS[denoiser_type]((out_dims, *denoiser_args))
         self.out_dims = out_dims
 
         if exists(betas):
@@ -279,13 +279,29 @@ class GaussianDiffusion(nn.Module):
         return (x + 1) / 2 * (self.spec_max - self.spec_min) + self.spec_min
 
 
-class CurveDiffusion(GaussianDiffusion):
+class CurveDiffusion1d(GaussianDiffusion):
+    def __init__(self, vmin, vmax, timesteps=1000, k_step=1000,
+                 denoiser_type=None, denoiser_args=None, betas=None):
+        super().__init__(
+            1, timesteps=timesteps, k_step=k_step,
+            denoiser_type=denoiser_type, denoiser_args=denoiser_args,
+            betas=betas, spec_min=[vmin], spec_max=[vmax]
+        )
+
+    def norm_spec(self, x):
+        return super().norm_spec(x.unsqueeze(-1))
+
+    def denorm_spec(self, x):
+        return super().denorm_spec(x).squeeze(-1)
+
+
+class CurveDiffusion2d(GaussianDiffusion):
     def __init__(self, vmin, vmax, num_bins, deviation, timesteps=1000, k_step=1000,
-                 denoiser_type=None, betas=None):
+                 denoiser_type=None, denoiser_args=None, betas=None):
         super().__init__(
             num_bins, timesteps=timesteps, k_step=k_step,
-            denoiser_type=denoiser_type, betas=betas,
-            spec_min=[0.], spec_max=[1.]
+            denoiser_type=denoiser_type, denoiser_args=denoiser_args,
+            betas=betas, spec_min=[0.], spec_max=[1.]
         )
         self.vmin = vmin
         self.vmax = vmax

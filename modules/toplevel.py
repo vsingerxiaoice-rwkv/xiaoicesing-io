@@ -5,7 +5,7 @@ from basics.base_module import CategorizedModule
 from modules.commons.common_layers import (
     XavierUniformInitLinear as Linear,
 )
-from modules.diffusion.ddpm import GaussianDiffusion, CurveDiffusion
+from modules.diffusion.ddpm import GaussianDiffusion, CurveDiffusion1d, CurveDiffusion2d
 from modules.fastspeech.acoustic_encoder import FastSpeech2Acoustic
 from modules.fastspeech.tts_modules import LengthRegulator
 from modules.fastspeech.variance_encoder import FastSpeech2Variance
@@ -23,6 +23,10 @@ class DiffSingerAcoustic(CategorizedModule):
             timesteps=hparams['timesteps'],
             k_step=hparams['K_step'],
             denoiser_type=hparams['diff_decoder_type'],
+            denoiser_args=(
+                hparams['residual_layers'],
+                hparams['residual_channels']
+            ),
             spec_min=hparams['spec_min'],
             spec_max=hparams['spec_max']
         )
@@ -55,15 +59,31 @@ class DiffSingerVariance(CategorizedModule):
         if hparams['predict_pitch']:
             pitch_hparams = hparams['pitch_prediction_args']
             self.base_pitch_embed = Linear(1, hparams['hidden_size'])
-            self.pitch_predictor = CurveDiffusion(
+            self.pitch_predictor = CurveDiffusion1d(
                 vmin=pitch_hparams['pitch_delta_vmin'],
                 vmax=pitch_hparams['pitch_delta_vmax'],
-                num_bins=pitch_hparams['num_pitch_bins'],
-                deviation=pitch_hparams['deviation'],
                 timesteps=hparams['timesteps'],
                 k_step=hparams['K_step'],
                 denoiser_type=hparams['diff_decoder_type'],
+                denoiser_args=(
+                    hparams['residual_layers'],
+                    hparams['residual_channels']
+                )
             )
+            # self.pitch_predictor = CurveDiffusion2d(
+            #     vmin=pitch_hparams['pitch_delta_vmin'],
+            #     vmax=pitch_hparams['pitch_delta_vmax'],
+            #     num_bins=pitch_hparams['num_pitch_bins'],
+            #     deviation=pitch_hparams['deviation'],
+            #     timesteps=hparams['timesteps'],
+            #     k_step=hparams['K_step'],
+            #     denoiser_type=hparams['diff_decoder_type'],
+            #     denoiser_args=(
+            #         hparams['audio_num_mel_bins'],
+            #         hparams['residual_layers'],
+            #         hparams['residual_channels']
+            #     )
+            # )
             # from modules.fastspeech.tts_modules import PitchPredictor
             # self.pitch_predictor = PitchPredictor(
             #     vmin=pitch_hparams['pitch_delta_vmin'],
@@ -97,7 +117,7 @@ class DiffSingerVariance(CategorizedModule):
         condition = torch.gather(encoder_out, 1, mel2ph_)
         pitch_cond = condition + self.base_pitch_embed(base_pitch[:, :, None])
 
-        pitch_pred_out = self.pitch_predictor.forward(pitch_cond, delta_pitch, infer)
+        pitch_pred_out = self.pitch_predictor(pitch_cond, delta_pitch, infer)
         return dur_pred_out, pitch_pred_out
         # pitch_pred, pitch_probs = self.pitch_predictor(condition, base_pitch)
         # if infer:

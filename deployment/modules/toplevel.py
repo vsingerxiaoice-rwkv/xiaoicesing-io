@@ -23,6 +23,10 @@ class DiffSingerAcousticONNX(CategorizedModule):
             timesteps=hparams['timesteps'],
             k_step=hparams['K_step'],
             denoiser_type=hparams['diff_decoder_type'],
+            denoiser_args=(
+                hparams['residual_layers'],
+                hparams['residual_channels']
+            ),
             spec_min=hparams['spec_min'],
             spec_max=hparams['spec_max']
         )
