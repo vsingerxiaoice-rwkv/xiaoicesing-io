@@ -331,4 +331,4 @@ class CurveDiffusion2d(GaussianDiffusion):
         end = torch.min(torch.tensor(self.num_bins - 1, device=probs.device), peaks + self.width)
         probs[(self.x < start) | (self.x > end)] = 0.
         bins = torch.sum(self.x * probs, dim=2) / torch.sum(probs, dim=2)  # [B, T]
-        return self.bins_to_values(bins)
+        return self.bins_to_values(bins).clamp(min=self.vmin, max=self.vmax)
