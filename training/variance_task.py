@@ -126,8 +126,9 @@ class VarianceTask(BaseTask):
             if dur_pred is not None:
                 self.plot_dur(batch_idx, sample['ph_dur'], dur_pred, txt=sample['tokens'])
             if pitch_pred is not None:
+                base_pitch = sample['base_pitch']
                 self.plot_curve(
-                    batch_idx, sample['base_pitch'] + sample['delta_pitch'], pitch_pred, curve_name='pitch'
+                    batch_idx, base_pitch + sample['delta_pitch'], base_pitch + pitch_pred, curve_name='pitch'
                 )
 
         return outputs, sample['size']
