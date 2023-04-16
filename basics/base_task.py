@@ -17,7 +17,7 @@ from torchmetrics import MeanMetric
 import lightning.pytorch as pl
 from lightning.pytorch.callbacks import LearningRateMonitor
 from lightning.pytorch.loggers import TensorBoardLogger
-from lightning.pytorch.utilities.rank_zero import rank_zero_debug, rank_zero_only
+from lightning.pytorch.utilities.rank_zero import rank_zero_debug, rank_zero_info, rank_zero_only
 
 from basics.base_module import CategorizedModule
 from utils.hparams import hparams
@@ -81,6 +81,16 @@ class BaseTask(pl.LightningModule):
 
         self.valid_metrics = {
             'total_loss': MeanMetric()
+        }
+
+        self.optimizer_params = {
+            'lr': hparams['lr'],
+            'betas': (hparams['optimizer_adam_beta1'], hparams['optimizer_adam_beta2']),
+            'weight_decay': hparams['weight_decay'],
+        }
+        self.scheduler_params = {
+            'step_size': hparams['lr_decay_steps'],
+            'gamma': hparams['lr_decay_gamma'],
         }
 
     ###########
@@ -192,21 +202,17 @@ class BaseTask(pl.LightningModule):
 
     # noinspection PyMethodMayBeStatic
     def build_scheduler(self, optimizer):
-        # return WarmupCosineSchedule(optimizer,
-        #                             warmup_steps=hparams['warmup_updates'],
-        #                             t_total=hparams['max_updates'],
-        #                             eta_min=0)
-        return torch.optim.lr_scheduler.StepLR(
-            optimizer, step_size=hparams['lr_decay_steps'], gamma=hparams['lr_decay_gamma']
+        scheduler = torch.optim.lr_scheduler.StepLR(
+            optimizer, **self.scheduler_params
         )
+        return scheduler
 
     # noinspection PyMethodMayBeStatic
     def build_optimizer(self, model):
         optimizer = torch.optim.AdamW(
             filter(lambda p: p.requires_grad, model.parameters()),
-            lr=hparams['lr'],
-            betas=(hparams['optimizer_adam_beta1'], hparams['optimizer_adam_beta2']),
-            weight_decay=hparams['weight_decay'])
+            **self.optimizer_params
+        )
         return optimizer
 
     def configure_optimizers(self):
@@ -365,3 +371,28 @@ class BaseTask(pl.LightningModule):
         from lightning.pytorch.trainer.states import RunningStage
         if checkpoint.get('trainer_stage', '') == RunningStage.VALIDATING.value:
             self.skip_immediate_validation = True
+
+        if 'optimizer_states' in checkpoint and checkpoint['optimizer_states']:
+            opt_states = checkpoint['optimizer_states']
+            assert len(opt_states) == 1
+            opt_state = opt_states[0]
+            for param_group in opt_state['param_groups']:
+                for k, v in self.optimizer_params.items():
+                    if k in param_group and param_group[k] != v:
+                        rank_zero_info(f'| Overriding optimizer parameter {k} from checkpoint: {param_group[k]} -> {v}')
+                param_group.update(self.optimizer_params)
+                if 'initial_lr' in param_group:
+                    param_group['initial_lr'] = self.optimizer_params['lr']
+
+        if 'lr_schedulers' in checkpoint and checkpoint['lr_schedulers']:
+            assert 'optimizer_states' in checkpoint and checkpoint['optimizer_states']
+            schedulers = checkpoint['lr_schedulers']
+            assert len(schedulers) == 1
+            scheduler = schedulers[0]
+            for k, v in self.scheduler_params.items():
+                if k in scheduler and scheduler[k] != v:
+                    rank_zero_info(f'| Overriding scheduler parameter {k} from checkpoint: {scheduler[k]} -> {v}')
+            scheduler.update(self.scheduler_params)
+            scheduler['base_lrs'] = [group['initial_lr'] for group in checkpoint['optimizer_states'][0]['param_groups']]
+            if '_last_lr' in scheduler:
+                scheduler.pop('_last_lr')
