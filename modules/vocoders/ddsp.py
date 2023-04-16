@@ -122,6 +122,9 @@ class DDSP(BaseVocoder):
     def to_device(self, device):
         pass
 
+    def get_device(self):
+        return 'cpu'
+
     def spec2wav_torch(self, mel, f0):  # mel: [B, T, bins] f0: [B, T]
         if self.args.data.sampling_rate != hparams['audio_sample_rate']:
             print('Mismatch parameters: hparams[\'audio_sample_rate\']=', hparams['audio_sample_rate'], '!=',

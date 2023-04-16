@@ -29,6 +29,9 @@ class NsfHifiGAN(BaseVocoder):
     def to_device(self, device):
         self.model.to(device)
 
+    def get_device(self):
+        return self.device
+
     def spec2wav_torch(self, mel, **kwargs):  # mel: [B, T, bins]
         if self.h.sampling_rate != hparams['audio_sample_rate']:
             print('Mismatch parameters: hparams[\'audio_sample_rate\']=', hparams['audio_sample_rate'], '!=',
