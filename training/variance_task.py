@@ -10,7 +10,7 @@ from basics.base_dataset import BaseDataset
 from basics.base_task import BaseTask
 from modules.losses.curve_loss import CurveLoss2d
 from modules.losses.diff_loss import (
-    DiffusionNoiseLoss, DiffusionNoiseWithSmoothnessLoss
+    DiffusionNoiseLoss, DiffusionNoiseWithSmoothnessLoss, DiffusionNoiseWithSensitivityLoss
 )
 from modules.losses.dur_loss import DurationLoss
 from modules.toplevel import DiffSingerVariance
@@ -153,4 +153,6 @@ class VarianceTask(BaseTask):
         name = f'{curve_name}_{batch_idx}'
         gt_curve = gt_curve[0].cpu().numpy()
         pred_curve = pred_curve[0].cpu().numpy()
+        if base_curve is not None:
+            base_curve = base_curve[0].cpu().numpy()
         self.logger.experiment.add_figure(name, curve_to_figure(gt_curve, pred_curve, base_curve), self.global_step)

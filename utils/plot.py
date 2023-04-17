@@ -62,7 +62,7 @@ def curve_to_figure(curve_gt, curve_pred=None, curve_base=None):
     if isinstance(curve_pred, torch.Tensor):
         curve_pred = curve_pred.cpu().numpy()
     if isinstance(curve_base, torch.Tensor):
-        curve_base = curve_pred.cpu().numpy()
+        curve_base = curve_base.cpu().numpy()
     fig = plt.figure()
     if curve_base is not None:
         plt.plot(curve_base, color='g', label='base')
