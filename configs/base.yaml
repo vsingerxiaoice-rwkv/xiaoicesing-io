@@ -97,4 +97,4 @@ pl_trainer_devices: 'auto'
 pl_trainer_precision: '32-true'
 pl_trainer_num_nodes: 1
 pl_trainer_strategy: 'auto'
-ddp_backend: 'nccl_no_p2p' # choose from 'gloo', 'nccl', 'nccl_no_p2p'
+ddp_backend: 'nccl' # choose from 'gloo', 'nccl', 'nccl_no_p2p'
