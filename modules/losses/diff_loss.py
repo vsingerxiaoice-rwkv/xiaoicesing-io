@@ -56,7 +56,7 @@ class DiffusionNoiseWithSensitivityLoss(DiffusionNoiseLoss):
         x_recon, noise = self._mask_nonpadding(x_recon, noise, nonpadding)
         loss = self._forward(x_recon, noise)
         if reference is not None:
-            difference = reference.diff(dim=1, prepend=reference[:, 0]).abs()
+            difference = reference.diff(dim=1, prepend=reference[:, :1]).abs()
             sensitivity = 1 / (1 + self.alpha * difference)
             loss = loss * sensitivity.transpose(1, 2).unsqueeze(1)
         return loss.mean()
