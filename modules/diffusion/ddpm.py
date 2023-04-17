@@ -266,7 +266,7 @@ class GaussianDiffusion(nn.Module):
                     iteration_interval = hparams['pndm_speedup']
                     for i in tqdm(
                             reversed(range(0, t, iteration_interval)), desc='sample time step',
-                            total=t // iteration_interval
+                            total=t // iteration_interval, disable=not hparams['infer']
                     ):
                         x = self.p_sample_plms(
                             x, torch.full((b,), i, device=device, dtype=torch.long),
