@@ -321,7 +321,7 @@ class CurveDiffusion2d(GaussianDiffusion):
 
     def norm_spec(self, curve):
         miu = self.values_to_bins(curve)[:, :, None]  # [B, T, 1]
-        probs = (((self.x - miu) / self.sigma) ** 2 / -2).exp()  # gaussian blur, [B, T, N]
+        probs = ((self.x - miu) / self.sigma).pow(2).div(-2).exp()  # gaussian blur, [B, T, N]
         return super().norm_spec(probs)
 
     def denorm_spec(self, probs):

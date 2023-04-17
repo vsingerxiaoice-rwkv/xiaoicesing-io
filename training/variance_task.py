@@ -97,22 +97,18 @@ class VarianceTask(BaseTask):
                             mel2ph=mel2ph, base_pitch=base_pitch, delta_pitch=delta_pitch,
                             infer=infer)
 
+        dur_pred, pitch_pred = output
         if infer:
-            dur_pred, pitch_pred = output
             return dur_pred, pitch_pred
         else:
-            dur_pred, pitch_pred_out = output
             losses = {}
             if dur_pred is not None:
                 losses['dur_loss'] = self.lambda_dur_loss * self.dur_loss(dur_pred, ph_dur, ph2word=ph2word)
-            if pitch_pred_out is not None:
-                pitch_x_recon, pitch_noise = pitch_pred_out
+            if pitch_pred is not None:
+                (pitch_x_recon, pitch_noise) = pitch_pred
                 losses['pitch_loss'] = self.lambda_pitch_loss * self.pitch_loss(
                     pitch_x_recon, pitch_noise, (mel2ph > 0).float().unsqueeze(-1)
                 )
-                # delta_pitch = sample['delta_pitch']
-                # uv = sample['uv']
-                # losses['pitch_loss'] = self.lambda_pitch_loss * self.pitch_loss(pitch_prob, delta_pitch, ~uv)
             return losses
 
     def _validation_step(self, sample, batch_idx):

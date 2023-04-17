@@ -82,8 +82,8 @@ class DiffSingerVariance(CategorizedModule):
                     k_step=hparams['K_step'],
                     denoiser_type=hparams['diff_decoder_type'],
                     denoiser_args=(
-                        hparams['residual_layers'],
-                        hparams['residual_channels']
+                        pitch_hparams['residual_layers'],
+                        pitch_hparams['residual_channels']
                     )
                 )
             else:
