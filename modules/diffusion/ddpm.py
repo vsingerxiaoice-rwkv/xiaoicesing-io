@@ -2,6 +2,7 @@ from collections import deque
 from functools import partial
 from inspect import isfunction
 
+import librosa.sequence
 import numpy as np
 import torch
 from torch import nn
@@ -320,6 +321,9 @@ class CurveDiffusion2d(GaussianDiffusion):
         self.sigma = deviation / self.interval
         self.width = int(3 * self.sigma)
         self.register_buffer('x', torch.arange(self.num_bins).float().reshape(1, 1, -1))  # [1, 1, N]
+        xx, yy = np.meshgrid(range(num_bins), range(num_bins))
+        transition = np.maximum(self.width * 2 - abs(xx - yy), 0)
+        self.transition = transition / transition.sum(axis=1, keepdims=True)
 
     def values_to_bins(self, values):
         return (values - self.vmin) / self.interval
@@ -334,8 +338,11 @@ class CurveDiffusion2d(GaussianDiffusion):
 
     def denorm_spec(self, probs):
         probs = super().denorm_spec(probs)  # [B, T, N]
-        probs *= probs > 0
-        peaks = probs.argmax(dim=2, keepdim=True)  # [B, T, 1]
+        probs = probs.softmax(dim=2)
+        sequence = probs.cpu().numpy()
+        peaks = torch.from_numpy(
+            librosa.sequence.viterbi(sequence.transpose(1, 2), self.transition)
+        ).to(probs.device).long().unsqueeze(-1)
         start = torch.max(torch.tensor(0, device=probs.device), peaks - self.width)
         end = torch.min(torch.tensor(self.num_bins - 1, device=probs.device), peaks + self.width)
         probs[(self.x < start) | (self.x > end)] = 0.
