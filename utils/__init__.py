@@ -249,9 +249,12 @@ def build_object_from_config(cls_str, *args, **kwargs):
     return cls_type(*args, **filter_kwargs(kwargs, cls_type))
 
 
-def simulate_lr_scheduler(optimizer_args, scheduler_args, last_epoch=-1):
-    optimizer = build_object_from_config(optimizer_args['optimizer_cls'], [torch.nn.Parameter()], **optimizer_args)
-    optimizer.param_groups[0]['initial_lr'] = optimizer_args['lr']
+def simulate_lr_scheduler(optimizer_args, scheduler_args, last_epoch=-1, num_param_groups=1):
+    optimizer = build_object_from_config(
+        optimizer_args['optimizer_cls'],
+        [{'params': torch.nn.Parameter(), 'initial_lr': optimizer_args['lr']} for _ in range(num_param_groups)],
+        **optimizer_args
+    )
     scheduler = build_object_from_config(scheduler_args['scheduler_cls'], optimizer, last_epoch=last_epoch, **scheduler_args)
 
     if hasattr(scheduler, '_get_closed_form_lr'):

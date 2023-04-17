@@ -394,7 +394,7 @@ class BaseTask(pl.LightningModule):
                             continue
                         rank_zero_info(f'| Overriding optimizer parameter {k} from checkpoint: {param_group[k]} -> {v}')
                         param_group[k] = v
-                if 'initial_lr' in param_group and 'lr' in optimizer_args and param_group['initial_lr'] != optimizer_args['lr']:
+                if 'initial_lr' in param_group and param_group['initial_lr'] != optimizer_args['lr']:
                     rank_zero_info(f'| Overriding optimizer parameter initial_lr from checkpoint: {param_group["initial_lr"]} -> {optimizer_args["lr"]}')
                     param_group['initial_lr'] = optimizer_args['lr']
 
@@ -408,7 +408,11 @@ class BaseTask(pl.LightningModule):
                     rank_zero_info(f'| Overriding scheduler parameter {k} from checkpoint: {scheduler[k]} -> {v}')
                     scheduler[k] = v
             scheduler['base_lrs'] = [group['initial_lr'] for group in checkpoint['optimizer_states'][0]['param_groups']]
-            new_lrs = simulate_lr_scheduler(optimizer_args, scheduler_args, scheduler['last_epoch'])
+            new_lrs = simulate_lr_scheduler(
+                optimizer_args, scheduler_args,
+                last_epoch=scheduler['last_epoch'],
+                num_param_groups=len(checkpoint['optimizer_states'][0]['param_groups'])
+            )
             scheduler['_last_lr'] = new_lrs
             for param_group, new_lr in zip(checkpoint['optimizer_states'][0]['param_groups'], new_lrs):
                 if param_group['lr'] != new_lr:
