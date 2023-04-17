@@ -242,7 +242,7 @@ class LengthRegulator(torch.nn.Module):
 
 class StretchRegulator(torch.nn.Module):
     # noinspection PyMethodMayBeStatic
-    def forward(self, dur, mel2ph):
+    def forward(self, mel2ph, dur=None):
         """
         Example (no batch dim version):
             1. dur = [2,4,3]
@@ -257,6 +257,8 @@ class StretchRegulator(torch.nn.Module):
         :return:
             stretch (B, T_speech)
         """
+        if dur is None:
+            dur = mel2ph_to_dur(mel2ph, mel2ph.max())
         dur = F.pad(dur, [1, 0], value=1)  # Avoid dividing by zero
         mel2dur = torch.gather(dur, 1, mel2ph)
         bound_mask = torch.gt(mel2ph[:, 1:], mel2ph[:, :-1])
