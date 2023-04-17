@@ -56,12 +56,16 @@ def dur_to_figure(dur_gt, dur_pred, txt):
     return fig
 
 
-def curve_to_figure(curve_gt, curve_pred=None):
+def curve_to_figure(curve_gt, curve_pred=None, curve_base=None):
     if isinstance(curve_gt, torch.Tensor):
         curve_gt = curve_gt.cpu().numpy()
     if isinstance(curve_pred, torch.Tensor):
         curve_pred = curve_pred.cpu().numpy()
+    if isinstance(curve_base, torch.Tensor):
+        curve_base = curve_pred.cpu().numpy()
     fig = plt.figure()
+    if curve_base is not None:
+        plt.plot(curve_base, color='g', label='base')
     if curve_pred is not None:
         plt.plot(curve_pred, color='r', label='pred')
     plt.plot(curve_gt, color='b', label='gt')

@@ -128,8 +128,13 @@ class VarianceTask(BaseTask):
                 self.plot_dur(batch_idx, sample['ph_dur'], dur_pred, txt=sample['tokens'])
             if pitch_pred is not None:
                 base_pitch = sample['base_pitch']
+                delta_pitch = sample['delta_pitch']
                 self.plot_curve(
-                    batch_idx, base_pitch + sample['delta_pitch'], base_pitch + pitch_pred, curve_name='pitch'
+                    batch_idx,
+                    gt_curve=base_pitch + delta_pitch,
+                    pred_curve=base_pitch + pitch_pred,
+                    base_curve=base_pitch,
+                    curve_name='pitch'
                 )
 
         return outputs, sample['size']
@@ -144,9 +149,8 @@ class VarianceTask(BaseTask):
         txt = self.phone_encoder.decode(txt[0].cpu().numpy()).split()
         self.logger.experiment.add_figure(name, dur_to_figure(gt_dur, pred_dur, txt), self.global_step)
 
-    def plot_curve(self, batch_idx, gt_curve, pred_curve, curve_name='curve'):
+    def plot_curve(self, batch_idx, gt_curve, pred_curve, base_curve=None, curve_name='curve'):
         name = f'{curve_name}_{batch_idx}'
         gt_curve = gt_curve[0].cpu().numpy()
         pred_curve = pred_curve[0].cpu().numpy()
-        # self.logger.experiment.add_figure(name, spec_to_figure(pred_curve, vmin=0, vmax=1), self.global_step)
-        self.logger.experiment.add_figure(name, curve_to_figure(gt_curve, pred_curve), self.global_step)
+        self.logger.experiment.add_figure(name, curve_to_figure(gt_curve, pred_curve, base_curve), self.global_step)
