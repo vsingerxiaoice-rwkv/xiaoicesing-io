@@ -339,9 +339,9 @@ class CurveDiffusion2d(GaussianDiffusion):
     def denorm_spec(self, probs):
         probs = super().denorm_spec(probs)  # [B, T, N]
         probs = probs.softmax(dim=2)
-        sequence = probs.cpu().numpy()
+        sequences = probs.transpose(1, 2).cpu().numpy()
         peaks = torch.from_numpy(
-            librosa.sequence.viterbi(sequence.transpose(1, 2), self.transition)
+            librosa.sequence.viterbi(sequences, self.transition)
         ).to(probs.device).long().unsqueeze(-1)
         start = torch.max(torch.tensor(0, device=probs.device), peaks - self.width)
         end = torch.min(torch.tensor(self.num_bins - 1, device=probs.device), peaks + self.width)
