@@ -326,6 +326,7 @@ class CurveDiffusion2d(GaussianDiffusion):
 
     def denorm_spec(self, probs):
         probs = super().denorm_spec(probs)  # [B, T, N]
+        probs *= probs > 0
         peaks = probs.argmax(dim=2, keepdim=True)  # [B, T, 1]
         start = torch.max(torch.tensor(0, device=probs.device), peaks - self.width)
         end = torch.min(torch.tensor(self.num_bins - 1, device=probs.device), peaks + self.width)
