@@ -8,10 +8,7 @@ import utils
 import utils.infer_utils
 from basics.base_dataset import BaseDataset
 from basics.base_task import BaseTask
-from modules.losses.curve_loss import CurveLoss2d
-from modules.losses.diff_loss import (
-    DiffusionNoiseLoss, DiffusionNoiseWithSmoothnessLoss, DiffusionNoiseWithSensitivityLoss
-)
+from modules.losses.diff_loss import DiffusionNoiseLoss
 from modules.losses.dur_loss import DurationLoss
 from modules.toplevel import DiffSingerVariance
 from utils.hparams import hparams
@@ -76,9 +73,8 @@ class VarianceTask(BaseTask):
             )
         if hparams['predict_pitch']:
             pitch_hparams = hparams['pitch_prediction_args']
-            self.pitch_loss = DiffusionNoiseWithSmoothnessLoss(
+            self.pitch_loss = DiffusionNoiseLoss(
                 loss_type=hparams['diff_loss_type'],
-                lambda_tv=pitch_hparams['lambda_tv_loss']
             )
             # self.pitch_loss = CurveLoss2d(
             #     vmin=pitch_hparams['pitch_delta_vmin'],
