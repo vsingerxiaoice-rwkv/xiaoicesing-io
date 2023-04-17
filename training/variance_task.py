@@ -73,9 +73,10 @@ class VarianceTask(BaseTask):
                 lambda_sdur=dur_hparams['lambda_sdur_loss']
             )
         if hparams['predict_pitch']:
+            pitch_hparams = hparams['pitch_prediction_args']
             self.pitch_loss = DiffusionNoiseLoss(
                 loss_type=hparams['diff_loss_type'],
-                lambda_tv=hparams['lambda_tv_loss']
+                lambda_tv=pitch_hparams['lambda_tv_loss']
             )
             # pitch_hparams = hparams['pitch_prediction_args']
             # self.pitch_loss = CurveLoss2d(
