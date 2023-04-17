@@ -1,4 +1,3 @@
-import inspect
 import pathlib
 import re
 import time
@@ -131,6 +130,8 @@ def unpack_dict_to_list(samples):
 
 
 def filter_kwargs(dict_to_filter, kwarg_obj):
+    import inspect
+
     sig = inspect.signature(kwarg_obj)
     filter_keys = [param.name for param in sig.parameters.values() if param.kind == param.POSITIONAL_OR_KEYWORD]
     filtered_dict = {filter_key: dict_to_filter[filter_key] for filter_key in filter_keys if filter_key in dict_to_filter}
@@ -236,3 +237,24 @@ def num_params(model, print_out=True, model_name="model"):
     if print_out:
         print(f'| {model_name} Trainable Parameters: %.3fM' % parameters)
     return parameters
+
+
+def build_object_from_config(cls_str, *args, **kwargs):
+    import importlib
+
+    pkg = ".".join(cls_str.split(".")[:-1])
+    cls_name = cls_str.split(".")[-1]
+    cls_type = getattr(importlib.import_module(pkg), cls_name)
+
+    return cls_type(*args, **filter_kwargs(kwargs, cls_type))
+
+
+def simulate_lr_scheduler(optimizer_args, scheduler_args, last_epoch=-1):
+    optimizer = build_object_from_config(optimizer_args['optimizer_cls'], [torch.nn.Parameter()], **optimizer_args)
+    optimizer.param_groups[0]['initial_lr'] = optimizer_args['lr']
+    scheduler = build_object_from_config(scheduler_args['scheduler_cls'], optimizer, last_epoch=last_epoch, **scheduler_args)
+
+    if hasattr(scheduler, '_get_closed_form_lr'):
+        return scheduler._get_closed_form_lr()
+    else:
+        return scheduler.get_lr()

@@ -51,11 +51,17 @@ use_spk_id: false
 ###########
 # optimization
 ###########
-lr: 2.0
-warmup_updates: 2000
-optimizer_adam_beta1: 0.9
-optimizer_adam_beta2: 0.98
-weight_decay: 0
+optimizer_args:
+  optimizer_cls: torch.optim.AdamW
+  lr: 2.0
+  beta1: 0.9
+  beta2: 0.98
+  weight_decay: 0
+lr_scheduler_args:
+  scheduler_cls: torch.optim.lr_scheduler.StepLR
+  warmup_steps: 2000
+  step_size: 50000
+  gamma: 0.5
 clip_grad_norm: 1
 dur_loss: mse # huber|mol
 
@@ -91,4 +97,4 @@ pl_trainer_devices: 'auto'
 pl_trainer_precision: '32-true'
 pl_trainer_num_nodes: 1
 pl_trainer_strategy: 'auto'
-ddp_backend: 'nccl' # choose from 'gloo', 'nccl', 'nccl_no_p2p'
+ddp_backend: 'nccl_no_p2p' # choose from 'gloo', 'nccl', 'nccl_no_p2p'
