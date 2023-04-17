@@ -341,8 +341,8 @@ class CurveDiffusion2d(GaussianDiffusion):
         probs = probs.softmax(dim=2)
         sequences = probs.transpose(1, 2).cpu().numpy()
         peaks = torch.from_numpy(
-            librosa.sequence.viterbi(sequences, self.transition)
-        ).to(probs.device).long().unsqueeze(-1)
+            librosa.sequence.viterbi(sequences, self.transition).astype(np.int64)
+        ).to(probs.device).unsqueeze(-1)
         start = torch.max(torch.tensor(0, device=probs.device), peaks - self.width)
         end = torch.min(torch.tensor(self.num_bins - 1, device=probs.device), peaks + self.width)
         probs[(self.x < start) | (self.x > end)] = 0.
