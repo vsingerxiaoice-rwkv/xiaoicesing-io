@@ -103,36 +103,34 @@ class VarianceBinarizer(BaseBinarizer):
             'mel2ph': mel2ph.cpu().numpy(),
         }
 
-        # Below: calculate frame-level MIDI pitch, which is a step function curve
+        # Below: calculate and interpolate frame-level MIDI pitch, which is a step function curve
         mel2dur = torch.gather(F.pad(ph_dur, [1, 0], value=1), 0, mel2ph)  # frame-level phone duration
         note_dur = torch.FloatTensor(meta_data['note_dur']).to(self.device)
         mel2note = get_mel2ph_torch(
             self.lr, note_dur, mel2ph.shape[0], self.timestep, device=self.device
         )
         note_pitch = torch.FloatTensor(
-            [(librosa.note_to_midi(n) if n != 'rest' else 0) for n in meta_data['note_seq']]
+            [(librosa.note_to_midi(n, round_midi=False) if n != 'rest' else -1) for n in meta_data['note_seq']]
         ).to(self.device)
         frame_midi_pitch = torch.gather(F.pad(note_pitch, [1, 0], value=0), 0, mel2note)  # => frame-level MIDI pitch
-
-        # Below: calculate phoneme-level mean MIDI pitch, eliminating rest frames
-        rest = frame_midi_pitch == 0
-        ph_dur_rest = mel2ph.new_zeros(t_txt + 1).scatter_add(0, mel2ph, rest.long())[1:]
-        mel2dur_rest = torch.gather(F.pad(ph_dur_rest, [1, 0], value=1), 0, mel2ph)  # frame-level rest phone duration
-        ph_midi = mel2ph.new_zeros(t_txt + 1).float().scatter_add(
-            0, mel2ph, frame_midi_pitch / ((mel2dur - mel2dur_rest) + (mel2dur == mel2dur_rest))  # avoid div by zero
-        )[1:]
-
-        processed_input['midi'] = ph_midi.long().cpu().numpy()
-
-        # Below: interpolate and smooth the pitch step curve as the base pitch curve
+        rest = (frame_midi_pitch < 0).cpu().numpy()
         frame_midi_pitch = frame_midi_pitch.cpu().numpy()
-        rest = rest.cpu().numpy()
         interp_func = interpolate.interp1d(
             np.where(~rest)[0], frame_midi_pitch[~rest],
             kind='nearest', fill_value='extrapolate'
         )
         frame_midi_pitch[rest] = interp_func(np.where(rest)[0])
-        smoothed_midi_pitch = self.smooth(torch.from_numpy(frame_midi_pitch).to(self.device)[None])[0]
+        frame_midi_pitch = torch.from_numpy(frame_midi_pitch).to(self.device)
+
+        # Below: calculate phoneme-level mean MIDI pitch
+        ph_midi = frame_midi_pitch.new_zeros(t_txt + 1).scatter_add(
+            0, mel2ph, frame_midi_pitch / mel2dur
+        )[1:]
+
+        processed_input['midi'] = ph_midi.long().cpu().numpy()
+
+        # Below: smoothen the pitch step curve as the base pitch curve
+        smoothed_midi_pitch = self.smooth(frame_midi_pitch[None])[0]
 
         processed_input['base_pitch'] = smoothed_midi_pitch.cpu().numpy()
 
