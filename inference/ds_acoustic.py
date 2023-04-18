@@ -46,8 +46,7 @@ class DiffSingerAcousticInfer(BaseSVSInfer):
             vocoder = VOCODERS[hparams['vocoder']]()
         else:
             vocoder = VOCODERS[hparams['vocoder'].split('.')[-1]]()
-        vocoder.model.eval()
-        vocoder.model.to(self.device)
+        vocoder.to_device(self.device)
         return vocoder
 
     def preprocess_input(self, param):
