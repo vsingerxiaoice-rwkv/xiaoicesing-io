@@ -8,6 +8,8 @@ head_list = ["C", "C#", "D", "D#", "E", "F", "F#", "G", "G#", "A", "A#", "B"]
 
 
 def merge_slurs(param):
+    if not param.get('is_slur_seq'):
+        return
     ph_seq = param['ph_seq'].split()
     note_seq = param['note_seq'].split()
     note_dur_seq = param['note_dur_seq'].split()
@@ -28,7 +30,7 @@ def merge_slurs(param):
     param['note_seq'] = ' '.join(note_seq)
     param['note_dur_seq'] = ' '.join(note_dur_seq)
     param['is_slur_seq'] = ' '.join([str(s) for s in is_slur_seq])
-    param['ph_dur'] = ' '.join([str(d) for d in ph_dur])
+    param['ph_dur'] = ' '.join([str(round(d, 4)) for d in ph_dur])
 
 
 def trans_f0_seq(feature_pit, transform):

@@ -30,10 +30,10 @@ class BaseSVSInfer:
     def build_model(self, ckpt_steps=None):
         raise NotImplementedError
 
-    def preprocess_input(self, inp):
+    def preprocess_input(self, param):
         raise NotImplementedError
 
-    def run_model(self, param, return_mel):
+    def run_model(self, sample):
         raise NotImplementedError
 
     def infer_once(self, param):
