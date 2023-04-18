@@ -127,7 +127,7 @@ class VarianceBinarizer(BaseBinarizer):
             0, mel2ph, frame_midi_pitch / mel2dur
         )[1:]
 
-        processed_input['midi'] = ph_midi.long().cpu().numpy()
+        processed_input['midi'] = ph_midi.round().long().cpu().numpy()
 
         # Below: smoothen the pitch step curve as the base pitch curve
         smoothed_midi_pitch = self.smooth(frame_midi_pitch[None])[0]
