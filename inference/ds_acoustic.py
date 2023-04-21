@@ -29,8 +29,6 @@ class DiffSingerAcousticInfer(BaseSVSInfer):
             self.lr = LengthRegulator().to(self.device)
         if load_vocoder:
             self.vocoder = self.build_vocoder()
-            self.vocoder.model.eval()
-            self.vocoder.model.to(self.device)
 
     def build_model(self, ckpt_steps=None):
         model = DiffSingerAcoustic(
