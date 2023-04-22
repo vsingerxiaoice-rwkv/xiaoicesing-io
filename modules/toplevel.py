@@ -73,7 +73,7 @@ class DiffSingerVariance(CategorizedModule):
                         pitch_hparams['residual_channels']
                     )
                 )
-            if diff_predictor_mode == '1d':
+            elif diff_predictor_mode == '1d':
                 self.pitch_predictor = CurveDiffusion1d(
                     vmin=pitch_hparams['pitch_delta_vmin'],
                     vmax=pitch_hparams['pitch_delta_vmax'],
