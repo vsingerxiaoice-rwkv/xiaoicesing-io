@@ -28,8 +28,9 @@ def load_model(model_path: pathlib.Path, device='cpu'):
     args = DotDict(args)
 
     # load model
-    print(' [Loading] ' + model_path)
+    print(' [Loading] ' + str(model_path))
     model = torch.jit.load(model_path, map_location=torch.device(device))
+    model.eval()
 
     return model, args
 
@@ -123,7 +124,7 @@ class DDSP(BaseVocoder):
         pass
 
     def get_device(self):
-        return 'cpu'
+        return self.device
 
     def spec2wav_torch(self, mel, f0):  # mel: [B, T, bins] f0: [B, T]
         if self.args.data.sampling_rate != hparams['audio_sample_rate']:
