@@ -357,5 +357,4 @@ class FastSpeech2Encoder(nn.Module):
             x = x.transpose(1, 2)  # [L, B, T, C]
         else:
             x = x.transpose(0, 1)  # [B, T, C]
-        x = x
         return x
