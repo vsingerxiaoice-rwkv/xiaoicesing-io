@@ -10,14 +10,30 @@ import utils
 
 
 class NormalInitEmbedding(torch.nn.Embedding):
-    def __init__(self, *args, **kwargs):
-        super().__init__(*args, **kwargs)
+    def __init__(
+            self,
+            num_embeddings: int,
+            embedding_dim: int,
+            padding_idx: int | None = None,
+            *args,
+            **kwargs
+    ):
+        super().__init__(num_embeddings, embedding_dim, *args, padding_idx=padding_idx, **kwargs)
         nn.init.normal_(self.weight, mean=0, std=self.embedding_dim ** -0.5)
+        if padding_idx is not None:
+            nn.init.constant_(self.weight[padding_idx], 0)
 
 
 class XavierUniformInitLinear(torch.nn.Linear):
-    def __init__(self, *args, bias=True, **kwargs):
-        super().__init__(*args, **kwargs)
+    def __init__(
+            self,
+            in_features: int,
+            out_features: int,
+            *args,
+            bias: bool = True,
+            **kwargs
+    ):
+        super().__init__(in_features, out_features, *args, bias=bias, **kwargs)
         nn.init.xavier_uniform_(self.weight)
         if bias:
             nn.init.constant_(self.bias, 0.)
