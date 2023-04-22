@@ -12,40 +12,12 @@ from utils.pitch_utils import f0_to_coarse
 from utils.text_encoder import PAD_INDEX
 
 
-class FastSpeech2AcousticEncoder(FastSpeech2Encoder):
-    def forward_embedding(self, txt_tokens, dur_embed):
-        # embed tokens and positions
-        x = self.embed_scale * self.embed_tokens(txt_tokens)
-        x = x + dur_embed
-        if hparams['use_pos_embed']:
-            if hparams['rel_pos']:
-                x = self.embed_positions(x)
-            else:
-                positions = self.embed_positions(txt_tokens)
-                x = x + positions
-        x = F.dropout(x, p=self.dropout, training=self.training)
-        return x
-
-    def forward(self, txt_tokens, dur_embed):
-        """
-        :param txt_tokens: [B, T]
-        :param dur_embed: [B, T, H]
-        :return: {
-            'encoder_out': [T x B x H]
-        }
-        """
-        encoder_padding_mask = txt_tokens.eq(self.padding_idx).detach()
-        x = self.forward_embedding(txt_tokens, dur_embed)  # [B, T, H]
-        x = super()._forward(x, encoder_padding_mask)
-        return x
-
-
 class FastSpeech2Acoustic(nn.Module):
     def __init__(self, vocab_size):
         super().__init__()
         self.txt_embed = Embedding(vocab_size, hparams['hidden_size'], PAD_INDEX)
         self.dur_embed = Linear(1, hparams['hidden_size'])
-        self.encoder = FastSpeech2AcousticEncoder(
+        self.encoder = FastSpeech2Encoder(
             self.txt_embed, hidden_size=hparams['hidden_size'], num_layers=hparams['enc_layers'],
             ffn_kernel_size=hparams['enc_ffn_kernel_size'], num_heads=hparams['num_heads']
         )
