@@ -265,14 +265,24 @@ class FastSpeech2Encoder(nn.Module):
                 hidden_size, self.padding_idx, init_size=DEFAULT_MAX_TARGET_POSITIONS,
             )
 
-    def _forward(self, x, padding_mask=None, attn_mask=None, return_hiddens=False):
-        """
-        :param x: [B, T, C]
-        :param padding_mask: [B, T]
-        :return: [B, T, C] or [L, B, T, C]
-        """
-        padding_mask = x.abs().sum(-1).eq(0).detach() if padding_mask is None else padding_mask
-        nonpadding_mask_TB = 1 - padding_mask.transpose(0, 1).float()[:, :, None]  # [T, B, 1]
+    def forward_embedding(self, txt_tokens, extra_embed=None):
+        # embed tokens and positions
+        x = self.embed_scale * self.embed_tokens(txt_tokens)
+        if extra_embed is not None:
+            x = x + extra_embed
+        if hparams['use_pos_embed']:
+            if hparams['rel_pos']:
+                x = self.embed_positions(x)
+            else:
+                positions = self.embed_positions(txt_tokens)
+                x = x + positions
+        x = F.dropout(x, p=self.dropout, training=self.training)
+        return x
+
+    def forward(self, txt_tokens, dur_embed, attn_mask=None, return_hiddens=False):
+        encoder_padding_mask = txt_tokens.eq(self.padding_idx).detach()
+        x = self.forward_embedding(txt_tokens, dur_embed)  # [B, T, H]
+        nonpadding_mask_TB = 1 - encoder_padding_mask.transpose(0, 1).float()[:, :, None]  # [T, B, 1]
         if self.use_pos_embed:
             positions = self.pos_embed_alpha * self.embed_positions(x[..., 0])
             x = x + positions
@@ -281,7 +291,7 @@ class FastSpeech2Encoder(nn.Module):
         x = x.transpose(0, 1) * nonpadding_mask_TB
         hiddens = []
         for layer in self.layers:
-            x = layer(x, encoder_padding_mask=padding_mask, attn_mask=attn_mask) * nonpadding_mask_TB
+            x = layer(x, encoder_padding_mask=encoder_padding_mask, attn_mask=attn_mask) * nonpadding_mask_TB
             hiddens.append(x)
         if self.use_last_norm:
             x = self.layer_norm(x) * nonpadding_mask_TB
@@ -290,4 +300,5 @@ class FastSpeech2Encoder(nn.Module):
             x = x.transpose(1, 2)  # [L, B, T, C]
         else:
             x = x.transpose(0, 1)  # [B, T, C]
+        x = x
         return x
