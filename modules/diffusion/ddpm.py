@@ -288,6 +288,27 @@ class GaussianDiffusion(nn.Module):
         return (x + 1) / 2 * (self.spec_max - self.spec_min) + self.spec_min
 
 
+class RepetitiveDiffusion(GaussianDiffusion):
+    def __init__(self, vmin, vmax, repeat_bins,
+                 timesteps=1000, k_step=1000,
+                 denoiser_type=None, denoiser_args=None,
+                 betas=None):
+        self.vmin = vmin
+        self.vmax = vmax
+        self.repeat_bins = repeat_bins
+        super().__init__(
+            repeat_bins, timesteps=timesteps, k_step=k_step,
+            denoiser_type=denoiser_type, denoiser_args=denoiser_args,
+            betas=betas, spec_min=[vmin], spec_max=[vmax]
+        )
+
+    def norm_spec(self, x):
+        return super().norm_spec(x.clamp(min=self.vmin, max=self.vmax).unsqueeze(-1).repeat([1, 1, self.repeat_bins]))
+
+    def denorm_spec(self, x):
+        return super().denorm_spec(x).mean(dim=-1).clamp(min=self.vmin, max=self.vmax)
+
+
 class CurveDiffusion1d(GaussianDiffusion):
     def __init__(self, vmin, vmax, timesteps=1000, k_step=1000,
                  denoiser_type=None, denoiser_args=None, betas=None):
