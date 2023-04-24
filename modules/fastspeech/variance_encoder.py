@@ -15,7 +15,7 @@ class FastSpeech2Variance(nn.Module):
     def __init__(self, vocab_size):
         super().__init__()
         self.txt_embed = Embedding(vocab_size, hparams['hidden_size'], PAD_INDEX)
-        self.midi_embed = Embedding(128, hparams['hidden_size'], PAD_INDEX)
+        self.midi_embed = Embedding(128, hparams['hidden_size'])
         self.onset_embed = Embedding(2, hparams['hidden_size'])
         self.word_dur_embed = Linear(1, hparams['hidden_size'])
 
