@@ -33,6 +33,8 @@ class DurationLoss(nn.Module):
         # pdur_loss
         pdur_loss = self.lambda_pdur * self.loss(self.linear2log(dur_pred), self.linear2log(dur_gt))
 
+        dur_pred = dur_pred.clamp(min=0.)  # clip to avoid NaN loss
+
         # wdur loss
         shape = dur_pred.shape[0], ph2word.max() + 1
         wdur_pred = dur_pred.new_zeros(*shape).scatter_add(
