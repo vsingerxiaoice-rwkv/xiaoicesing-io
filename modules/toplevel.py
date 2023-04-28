@@ -158,7 +158,7 @@ class DiffSingerVariance(CategorizedModule):
         condition = torch.gather(encoder_out, 1, mel2ph_)
 
         if hparams['predict_pitch']:
-            pitch_cond = condition + self.pitch_embed(base_pitch[:, :, None])
+            pitch_cond = condition + self.base_pitch_embed(base_pitch[:, :, None])
             pitch_pred_out = self.pitch_predictor(pitch_cond, delta_pitch, infer)
         else:
             pitch_pred_out = None
