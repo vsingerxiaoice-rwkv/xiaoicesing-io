@@ -87,9 +87,12 @@ class VarianceTask(BaseTask):
             # )
         if hparams['predict_energy']:
             energy_hparams = hparams['energy_prediction_args']
-            self.energy_loss = CurveLoss1d(
-                loss_type=energy_hparams['loss_type']
+            self.energy_loss = DiffusionNoiseLoss(
+                loss_type=hparams['diff_loss_type'],
             )
+            # self.energy_loss = CurveLoss1d(
+            #     loss_type=energy_hparams['loss_type']
+            # )
 
     def run_model(self, sample, infer=False):
         txt_tokens = sample['tokens']  # [B, T_ph]
@@ -119,8 +122,9 @@ class VarianceTask(BaseTask):
                     pitch_x_recon, pitch_noise, nonpadding=nonpadding.unsqueeze(-1)
                 )
             if energy_pred is not None:
+                (energy_x_recon, energy_noise) = energy_pred
                 losses['energy_loss'] = self.lambda_energy_loss * self.energy_loss(
-                    energy_pred, energy, mask=nonpadding
+                    energy_x_recon, energy_noise, nonpadding=nonpadding.unsqueeze(-1)
                 )
             return losses
 

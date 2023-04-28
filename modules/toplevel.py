@@ -114,14 +114,26 @@ class DiffSingerVariance(CategorizedModule):
         if hparams['predict_energy']:
             self.pitch_embed = Linear(1, hparams['hidden_size'])
             energy_hparams = hparams['energy_prediction_args']
-            self.energy_predictor = VariancePredictor(
-                in_dims=hparams['hidden_size'],
-                n_chans=energy_hparams['hidden_size'],
-                n_layers=energy_hparams['num_layers'],
-                dropout_rate=energy_hparams['dropout'],
-                padding=hparams['ffn_padding'],
-                kernel_size=energy_hparams['kernel_size']
+            self.energy_predictor = RepetitiveDiffusion(
+                vmin=10. ** (energy_hparams['db_vmin'] / 20.),
+                vmax=10. ** (energy_hparams['db_vmax'] / 20.),
+                repeat_bins=energy_hparams['num_repeat_bins'],
+                timesteps=hparams['timesteps'],
+                k_step=hparams['K_step'],
+                denoiser_type=hparams['diff_decoder_type'],
+                denoiser_args=(
+                    energy_hparams['residual_layers'],
+                    energy_hparams['residual_channels']
+                )
             )
+            # self.energy_predictor = VariancePredictor(
+            #     in_dims=hparams['hidden_size'],
+            #     n_chans=energy_hparams['hidden_size'],
+            #     n_layers=energy_hparams['num_layers'],
+            #     dropout_rate=energy_hparams['dropout'],
+            #     padding=hparams['ffn_padding'],
+            #     kernel_size=energy_hparams['kernel_size']
+            # )
 
     @property
     def category(self):
