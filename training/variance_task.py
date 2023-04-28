@@ -9,7 +9,7 @@ import utils.infer_utils
 from basics.base_dataset import BaseDataset
 from basics.base_task import BaseTask
 from modules.losses.diff_loss import DiffusionNoiseLoss
-from modules.losses.variance_loss import DurationLoss, CurveLoss1d
+from modules.losses.variance_loss import DurationLoss, CurveLoss1d, EnergyLoss
 from modules.toplevel import DiffSingerVariance
 from utils.hparams import hparams
 from utils.plot import dur_to_figure, curve_to_figure
@@ -87,9 +87,14 @@ class VarianceTask(BaseTask):
             # )
         if hparams['predict_energy']:
             energy_hparams = hparams['energy_prediction_args']
-            self.energy_loss = CurveLoss1d(
+            self.energy_loss = EnergyLoss(
+                db_min=energy_hparams['db_vmin'],
+                db_max=energy_hparams['db_vmax'],
                 loss_type=energy_hparams['loss_type']
             )
+            # self.energy_loss = CurveLoss1d(
+            #     loss_type=energy_hparams['loss_type']
+            # )
 
     def run_model(self, sample, infer=False):
         txt_tokens = sample['tokens']  # [B, T_ph]
