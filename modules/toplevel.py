@@ -140,7 +140,7 @@ class DiffSingerVariance(CategorizedModule):
         return 'variance'
 
     def forward(self, txt_tokens, midi, ph2word, ph_dur=None, word_dur=None,
-                mel2ph=None, base_pitch=None, delta_pitch=None, infer=True):
+                mel2ph=None, base_pitch=None, delta_pitch=None, energy=None, infer=True):
         encoder_out, dur_pred_out = self.fs2(
             txt_tokens, midi=midi, ph2word=ph2word,
             ph_dur=ph_dur, word_dur=word_dur, infer=infer
@@ -166,7 +166,7 @@ class DiffSingerVariance(CategorizedModule):
         if hparams['predict_energy']:
             pitch_embed = self.pitch_embed((base_pitch + delta_pitch)[:, :, None])
             energy_cond = condition + pitch_embed
-            energy_pred_out = self.energy_predictor(energy_cond)
+            energy_pred_out = self.energy_predictor(energy_cond, energy, infer)
         else:
             energy_pred_out = None
 

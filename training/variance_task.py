@@ -105,7 +105,7 @@ class VarianceTask(BaseTask):
         energy = sample.get('energy')  # [B, T_t]
 
         output = self.model(txt_tokens, midi=midi, ph2word=ph2word, ph_dur=ph_dur,
-                            mel2ph=mel2ph, base_pitch=base_pitch, delta_pitch=delta_pitch,
+                            mel2ph=mel2ph, base_pitch=base_pitch, delta_pitch=delta_pitch, energy=energy,
                             infer=infer)
 
         dur_pred, pitch_pred, energy_pred = output
