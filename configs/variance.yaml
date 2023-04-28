@@ -68,8 +68,6 @@ pitch_prediction_args:
 predict_energy: true
 lambda_energy_loss: 1.0
 energy_prediction_args:
-  db_vmin: -72.0
-  db_vmax: 0.0
   hidden_size: 512
   dropout: 0.1
   num_layers: 8

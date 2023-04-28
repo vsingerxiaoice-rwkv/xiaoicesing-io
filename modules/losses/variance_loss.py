@@ -1,4 +1,3 @@
-import librosa
 import torch
 import torch.nn as nn
 from torch import Tensor
@@ -110,19 +109,3 @@ class CurveLoss2d(nn.Module):
         """
         y_gt = self.curve_to_probs(c_gt)
         return self.loss(y_pred, y_gt * mask[:, :, None])
-
-
-class EnergyLoss(CurveLoss1d):
-    """
-    Loss module for energy prediction. Calculates in dB domain.
-    """
-
-    def __init__(self, db_min, db_max, loss_type):
-        super().__init__(loss_type=loss_type)
-        self.e_min = 10. ** (db_min / 20.)
-        self.e_max = 10. ** (db_max / 20.)
-
-    def forward(self, e_pred, e_gt, mask=None):
-        db_pred = e_pred.clamp(min=self.e_min, max=self.e_max).log10() * 20.
-        db_gt = e_gt.clamp(min=self.e_min, max=self.e_max).log10() * 20.
-        return super().forward(db_pred, db_gt, mask=mask)
