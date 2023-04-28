@@ -138,6 +138,51 @@ class DurationPredictor(torch.nn.Module):
         return dur_pred
 
 
+class VariancePredictor(torch.nn.Module):
+    def __init__(self, in_dims, n_layers=5, n_chans=512, kernel_size=5,
+                 dropout_rate=0.1, padding='SAME'):
+        """Initialize variance predictor module.
+        Args:
+            in_dims (int): Input dimension.
+            n_layers (int, optional): Number of convolutional layers.
+            n_chans (int, optional): Number of channels of convolutional layers.
+            kernel_size (int, optional): Kernel size of convolutional layers.
+            dropout_rate (float, optional): Dropout rate.
+        """
+        super(VariancePredictor, self).__init__()
+
+        self.conv = torch.nn.ModuleList()
+        self.kernel_size = kernel_size
+        self.padding = padding
+        for idx in range(n_layers):
+            in_chans = in_dims if idx == 0 else n_chans
+            self.conv += [torch.nn.Sequential(
+                torch.nn.ConstantPad1d(((kernel_size - 1) // 2, (kernel_size - 1) // 2)
+                                       if padding == 'SAME'
+                                       else (kernel_size - 1, 0), 0),
+                torch.nn.Conv1d(in_chans, n_chans, kernel_size, stride=1, padding=0),
+                torch.nn.ReLU(),
+                LayerNorm(n_chans, dim=1),
+                torch.nn.Dropout(dropout_rate)
+            )]
+        self.linear = torch.nn.Linear(n_chans, 1)
+        self.embed_positions = SinusoidalPositionalEmbedding(in_dims, 0, init_size=4096)
+        self.pos_embed_alpha = nn.Parameter(torch.Tensor([1]))
+
+    def forward(self, xs):
+        """
+        :param xs: [B, T, H]
+        :return: [B, T]
+        """
+        positions = self.pos_embed_alpha * self.embed_positions(xs[..., 0])
+        xs = xs + positions
+        xs = xs.transpose(1, -1)  # (B, idim, Tmax)
+        for f in self.conv:
+            xs = f(xs)  # (B, C, Tmax)
+        xs = self.linear(xs.transpose(1, -1)).squeeze(-1)  # (B, Tmax)
+        return xs
+
+
 class PitchPredictor(torch.nn.Module):
     def __init__(self, vmin, vmax, num_bins, deviation,
                  in_dims, n_layers=5, n_chans=384, kernel_size=5,

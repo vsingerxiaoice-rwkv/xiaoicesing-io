@@ -9,7 +9,7 @@ import utils.infer_utils
 from basics.base_dataset import BaseDataset
 from basics.base_task import BaseTask
 from modules.losses.diff_loss import DiffusionNoiseLoss
-from modules.losses.dur_loss import DurationLoss
+from modules.losses.variance_loss import DurationLoss, CurveLoss1d
 from modules.toplevel import DiffSingerVariance
 from utils.hparams import hparams
 from utils.plot import dur_to_figure, curve_to_figure
@@ -28,7 +28,6 @@ class VarianceDataset(BaseDataset):
         mel2ph = utils.collate_nd([s['mel2ph'] for s in samples], 0)
         base_pitch = utils.collate_nd([s['base_pitch'] for s in samples], 0)
         delta_pitch = utils.collate_nd([s['delta_pitch'] for s in samples], 0)
-        uv = utils.collate_nd([s['uv'] for s in samples], True)
         batch.update({
             'tokens': tokens,
             'ph_dur': ph_dur,
@@ -37,8 +36,10 @@ class VarianceDataset(BaseDataset):
             'mel2ph': mel2ph,
             'base_pitch': base_pitch,
             'delta_pitch': delta_pitch,
-            'uv': uv
         })
+        if hparams['predict_energy']:
+            energy = utils.collate_nd([s['energy'] for s in samples], 0)
+            batch['energy'] = energy
         if hparams['use_spk_id']:
             spk_ids = torch.LongTensor([s['spk_id'] for s in samples])
             batch['spk_ids'] = spk_ids
@@ -54,6 +55,8 @@ class VarianceTask(BaseTask):
             self.lambda_dur_loss = hparams['lambda_dur_loss']
         if hparams['predict_pitch']:
             self.lambda_pitch_loss = hparams['lambda_pitch_loss']
+        if hparams['predict_energy']:
+            self.lambda_energy_loss = hparams['lambda_energy_loss']
 
     def build_model(self):
         return DiffSingerVariance(
@@ -82,6 +85,11 @@ class VarianceTask(BaseTask):
             #     num_bins=pitch_hparams['num_pitch_bins'],
             #     deviation=pitch_hparams['deviation']
             # )
+        if hparams['predict_energy']:
+            energy_hparams = hparams['energy_prediction_args']
+            self.energy_loss = CurveLoss1d(
+                loss_type=energy_hparams['loss_type']
+            )
 
     def run_model(self, sample, infer=False):
         txt_tokens = sample['tokens']  # [B, T_ph]
@@ -91,22 +99,28 @@ class VarianceTask(BaseTask):
         mel2ph = sample['mel2ph']  # [B, T_t]
         base_pitch = sample['base_pitch']  # [B, T_t]
         delta_pitch = sample['delta_pitch']  # [B, T_t]
+        energy = sample.get('energy')  # [B, T_t]
 
         output = self.model(txt_tokens, midi=midi, ph2word=ph2word, ph_dur=ph_dur,
                             mel2ph=mel2ph, base_pitch=base_pitch, delta_pitch=delta_pitch,
                             infer=infer)
 
-        dur_pred, pitch_pred = output
+        dur_pred, pitch_pred, energy_pred = output
         if infer:
-            return dur_pred, pitch_pred
+            return dur_pred, pitch_pred, energy_pred
         else:
             losses = {}
             if dur_pred is not None:
                 losses['dur_loss'] = self.lambda_dur_loss * self.dur_loss(dur_pred, ph_dur, ph2word=ph2word)
+            nonpadding = (mel2ph > 0).float()
             if pitch_pred is not None:
                 (pitch_x_recon, pitch_noise) = pitch_pred
                 losses['pitch_loss'] = self.lambda_pitch_loss * self.pitch_loss(
-                    pitch_x_recon, pitch_noise, (mel2ph > 0).float().unsqueeze(-1)
+                    pitch_x_recon, pitch_noise, nonpadding=nonpadding.unsqueeze(-1)
+                )
+            if energy_pred is not None:
+                losses['energy_loss'] = self.lambda_energy_loss * self.energy_loss(
+                    energy_pred, energy, mask=nonpadding
                 )
             return losses
 
@@ -119,7 +133,7 @@ class VarianceTask(BaseTask):
 
         if batch_idx < hparams['num_valid_plots'] \
                 and (self.trainer.distributed_sampler_kwargs or {}).get('rank', 0) == 0:
-            dur_pred, pitch_pred = self.run_model(sample, infer=True)
+            dur_pred, pitch_pred, energy_pred = self.run_model(sample, infer=True)
             if dur_pred is not None:
                 self.plot_dur(batch_idx, sample['ph_dur'], dur_pred, txt=sample['tokens'])
             if pitch_pred is not None:
@@ -130,7 +144,16 @@ class VarianceTask(BaseTask):
                     gt_curve=base_pitch + delta_pitch,
                     pred_curve=base_pitch + pitch_pred,
                     base_curve=base_pitch,
-                    curve_name='pitch'
+                    curve_name='pitch',
+                    grid=1
+                )
+            if energy_pred is not None:
+                energy = sample['energy']
+                self.plot_curve(
+                    batch_idx,
+                    gt_curve=energy,
+                    pred_curve=energy_pred,
+                    curve_name='energy'
                 )
 
         return outputs, sample['size']
@@ -145,10 +168,12 @@ class VarianceTask(BaseTask):
         txt = self.phone_encoder.decode(txt[0].cpu().numpy()).split()
         self.logger.experiment.add_figure(name, dur_to_figure(gt_dur, pred_dur, txt), self.global_step)
 
-    def plot_curve(self, batch_idx, gt_curve, pred_curve, base_curve=None, curve_name='curve'):
+    def plot_curve(self, batch_idx, gt_curve, pred_curve, base_curve=None, grid=None, curve_name='curve'):
         name = f'{curve_name}_{batch_idx}'
         gt_curve = gt_curve[0].cpu().numpy()
         pred_curve = pred_curve[0].cpu().numpy()
         if base_curve is not None:
             base_curve = base_curve[0].cpu().numpy()
-        self.logger.experiment.add_figure(name, curve_to_figure(gt_curve, pred_curve, base_curve), self.global_step)
+        self.logger.experiment.add_figure(name, curve_to_figure(
+            gt_curve, pred_curve, base_curve, grid=grid
+        ), self.global_step)

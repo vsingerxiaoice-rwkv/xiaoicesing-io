@@ -56,7 +56,7 @@ def dur_to_figure(dur_gt, dur_pred, txt):
     return fig
 
 
-def curve_to_figure(curve_gt, curve_pred=None, curve_base=None):
+def curve_to_figure(curve_gt, curve_pred=None, curve_base=None, grid=None):
     if isinstance(curve_gt, torch.Tensor):
         curve_gt = curve_gt.cpu().numpy()
     if isinstance(curve_pred, torch.Tensor):
@@ -69,7 +69,8 @@ def curve_to_figure(curve_gt, curve_pred=None, curve_base=None):
     if curve_pred is not None:
         plt.plot(curve_pred, color='r', label='pred')
     plt.plot(curve_gt, color='b', label='gt')
-    plt.gca().yaxis.set_major_locator(MultipleLocator(1))
+    if grid is not None:
+        plt.gca().yaxis.set_major_locator(MultipleLocator(grid))
     plt.grid(axis='y')
     plt.legend()
     plt.tight_layout()

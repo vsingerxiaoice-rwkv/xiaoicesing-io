@@ -15,6 +15,7 @@ test_prefixes: [
 
 audio_sample_rate: 44100
 hop_size: 512            # Hop size.
+win_size: 2048           # FFT size.
 midi_smooth_width: 0.2  # in seconds
 
 binarization_args:
@@ -63,6 +64,15 @@ pitch_prediction_args:
   hidden_size: 512
   residual_layers: 20
   residual_channels: 256
+
+predict_energy: true
+lambda_energy_loss: 1.0
+energy_prediction_args:
+  hidden_size: 512
+  dropout: 0.1
+  num_layers: 8
+  kernel_size: 3
+  loss_type: mse
 
 residual_layers: 10
 residual_channels: 256

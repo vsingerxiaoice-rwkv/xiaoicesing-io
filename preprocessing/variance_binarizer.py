@@ -11,7 +11,11 @@ from scipy import interpolate
 
 from basics.base_binarizer import BaseBinarizer
 from modules.fastspeech.tts_modules import LengthRegulator
-from utils.binarizer_utils import get_mel2ph_torch, get_pitch_parselmouth
+from utils.binarizer_utils import (
+    get_mel2ph_torch,
+    get_pitch_parselmouth,
+    get_energy_librosa
+)
 from utils.hparams import hparams
 
 os.environ["OMP_NUM_THREADS"] = "1"
@@ -24,7 +28,7 @@ VARIANCE_ITEM_ATTRIBUTES = [
     'mel2ph',  # mel2ph format representing number of frames within each phone, int64[T_t,]
     'base_pitch',  # interpolated and smoothed frame-level MIDI pitch, float32[T_t,]
     'delta_pitch',  # delta_pitch = actual_pitch - base_pitch, in semitones, float32[T_t,]
-    'uv',  # flag of unvoiced frames where f0 == 0, bool[T_t,]
+    'energy',  # float32[T_t,]
 ]
 
 
@@ -142,7 +146,11 @@ class VarianceBinarizer(BaseBinarizer):
             return None
 
         processed_input['delta_pitch'] = librosa.hz_to_midi(f0.astype(np.float32)) - processed_input['base_pitch']
-        processed_input['uv'] = uv
+
+        # Below: extract energy
+        if hparams['predict_energy']:
+            energy = get_energy_librosa(waveform, length, hparams)
+            processed_input['energy'] = energy.astype(np.float32)
 
         return processed_input
 

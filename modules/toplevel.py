@@ -7,7 +7,7 @@ from modules.commons.common_layers import (
 )
 from modules.diffusion.ddpm import GaussianDiffusion, RepetitiveDiffusion, CurveDiffusion1d, CurveDiffusion2d
 from modules.fastspeech.acoustic_encoder import FastSpeech2Acoustic
-from modules.fastspeech.tts_modules import LengthRegulator
+from modules.fastspeech.tts_modules import LengthRegulator, VariancePredictor
 from modules.fastspeech.variance_encoder import FastSpeech2Variance
 from utils.hparams import hparams
 
@@ -111,6 +111,18 @@ class DiffSingerVariance(CategorizedModule):
             #     n_chans=pitch_hparams['hidden_size']
             # )
 
+        if hparams['predict_energy']:
+            self.pitch_embed = Linear(1, hparams['hidden_size'])
+            energy_hparams = hparams['energy_prediction_args']
+            self.energy_predictor = VariancePredictor(
+                in_dims=hparams['hidden_size'],
+                n_chans=energy_hparams['hidden_size'],
+                n_layers=energy_hparams['num_layers'],
+                dropout_rate=energy_hparams['dropout'],
+                padding=hparams['ffn_padding'],
+                kernel_size=energy_hparams['kernel_size']
+            )
+
     @property
     def category(self):
         return 'variance'
@@ -122,8 +134,8 @@ class DiffSingerVariance(CategorizedModule):
             ph_dur=ph_dur, word_dur=word_dur, infer=infer
         )
 
-        if not hparams['predict_pitch']:
-            return dur_pred_out, None
+        if not hparams['predict_pitch'] and not hparams['predict_energy']:
+            return dur_pred_out, None, None
 
         if mel2ph is None or hparams['dur_cascade']:
             # (extract mel2ph from dur_pred_out)
@@ -132,12 +144,18 @@ class DiffSingerVariance(CategorizedModule):
         encoder_out = F.pad(encoder_out, [0, 0, 1, 0])
         mel2ph_ = mel2ph[..., None].repeat([1, 1, hparams['hidden_size']])
         condition = torch.gather(encoder_out, 1, mel2ph_)
-        pitch_cond = condition + self.base_pitch_embed(base_pitch[:, :, None])
 
-        pitch_pred_out = self.pitch_predictor(pitch_cond, delta_pitch, infer)
-        return dur_pred_out, pitch_pred_out
-        # pitch_pred, pitch_probs = self.pitch_predictor(condition, base_pitch)
-        # if infer:
-        #     return dur_pred_out, pitch_pred
-        # else:
-        #     return dur_pred_out, pitch_probs
+        if hparams['predict_pitch']:
+            pitch_cond = condition + self.pitch_embed(base_pitch[:, :, None])
+            pitch_pred_out = self.pitch_predictor(pitch_cond, delta_pitch, infer)
+        else:
+            pitch_pred_out = None
+
+        if hparams['predict_energy']:
+            pitch_embed = self.pitch_embed((base_pitch + delta_pitch)[:, :, None])
+            energy_cond = condition + pitch_embed
+            energy_pred_out = self.energy_predictor(energy_cond)
+        else:
+            energy_pred_out = None
+
+        return dur_pred_out, pitch_pred_out, energy_pred_out
