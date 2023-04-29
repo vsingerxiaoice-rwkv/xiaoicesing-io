@@ -130,13 +130,13 @@ class DiffSingerVarianceInfer(BaseSVSInfer):
         if param.get('f0_seq'):
             f0 = resample_align_curve(
                 np.array(param['f0_seq'].split(), np.float32),
-                original_timestep=float(hparams['f0_timestep']),
+                original_timestep=float(param['f0_timestep']),
                 target_timestep=self.timestep,
                 align_length=T_t
             )
             batch['delta_pitch'] = torch.from_numpy(
-                librosa.hz_to_midi(interp_f0(f0)).astype(np.float32)
-            ).to(self.device)[None]
+                librosa.hz_to_midi(interp_f0(f0)[0]).astype(np.float32)
+            ).to(self.device)[None] - base_pitch
 
         return batch
 
@@ -147,7 +147,7 @@ class DiffSingerVarianceInfer(BaseSVSInfer):
         dur_pred, pitch_pred, energy_pred = self.model(
             txt_tokens, midi=sample['midi'], ph2word=sample['ph2word'],
             word_dur=sample['word_dur'],
-            mel2ph=sample['mel2ph'], base_pitch=base_pitch
+            mel2ph=sample['mel2ph'], base_pitch=base_pitch, delta_pitch=sample.get('delta_pitch')
         )
         if pitch_pred is not None:
             pitch_pred = base_pitch + pitch_pred
