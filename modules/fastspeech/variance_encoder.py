@@ -28,7 +28,6 @@ class FastSpeech2Variance(nn.Module):
         )
 
         dur_hparams = hparams['dur_prediction_args']
-        self.wdur_log_offset = dur_hparams['log_offset']
         if hparams['predict_dur']:
             self.dur_predictor = DurationPredictor(
                 in_dims=hparams['hidden_size'],

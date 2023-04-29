@@ -9,7 +9,7 @@ import utils.infer_utils
 from basics.base_dataset import BaseDataset
 from basics.base_task import BaseTask
 from modules.losses.diff_loss import DiffusionNoiseLoss
-from modules.losses.variance_loss import DurationLoss, CurveLoss1d
+from modules.losses.variance_loss import DurationLoss
 from modules.toplevel import DiffSingerVariance
 from utils.hparams import hparams
 from utils.plot import dur_to_figure, curve_to_figure
@@ -77,22 +77,13 @@ class VarianceTask(BaseTask):
         if hparams['predict_pitch']:
             pitch_hparams = hparams['pitch_prediction_args']
             self.pitch_loss = DiffusionNoiseLoss(
-                loss_type=hparams['diff_loss_type'],
+                loss_type=pitch_hparams['diff_loss_type'],
             )
-            # self.pitch_loss = CurveLoss2d(
-            #     vmin=pitch_hparams['pitch_delta_vmin'],
-            #     vmax=pitch_hparams['pitch_delta_vmax'],
-            #     num_bins=pitch_hparams['num_pitch_bins'],
-            #     deviation=pitch_hparams['deviation']
-            # )
         if hparams['predict_energy']:
             energy_hparams = hparams['energy_prediction_args']
             self.energy_loss = DiffusionNoiseLoss(
-                loss_type=hparams['diff_loss_type'],
+                loss_type=energy_hparams['diff_loss_type'],
             )
-            # self.energy_loss = CurveLoss1d(
-            #     loss_type=energy_hparams['loss_type']
-            # )
 
     def run_model(self, sample, infer=False):
         txt_tokens = sample['tokens']  # [B, T_ph]

@@ -10,7 +10,7 @@ from modules.diffusion.ddpm import (
     CurveDiffusion1d, CurveDiffusion2d
 )
 from modules.fastspeech.acoustic_encoder import FastSpeech2Acoustic
-from modules.fastspeech.tts_modules import LengthRegulator, VariancePredictor
+from modules.fastspeech.tts_modules import LengthRegulator
 from modules.fastspeech.variance_encoder import FastSpeech2Variance
 from utils.hparams import hparams
 

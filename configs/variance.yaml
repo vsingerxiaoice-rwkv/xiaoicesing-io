@@ -64,6 +64,7 @@ pitch_prediction_args:
   hidden_size: 512
   residual_layers: 20
   residual_channels: 256
+  diff_loss_type: l2
 
 predict_energy: true
 lambda_energy_loss: 1.0
@@ -78,6 +79,7 @@ energy_prediction_args:
   num_repeat_bins: 64
   residual_layers: 20
   residual_channels: 256
+  diff_loss_type: l2
 
 residual_layers: 10
 residual_channels: 256
