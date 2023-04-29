@@ -38,9 +38,9 @@ class DiffSingerAcoustic(CategorizedModule):
     def category(self):
         return 'acoustic'
 
-    def forward(self, txt_tokens, mel2ph, f0, key_shift=None, speed=None,
+    def forward(self, txt_tokens, mel2ph, f0, energy=None, key_shift=None, speed=None,
                 spk_embed_id=None, gt_mel=None, infer=True, **kwargs):
-        condition = self.fs2(txt_tokens, mel2ph, f0, key_shift=key_shift, speed=speed,
+        condition = self.fs2(txt_tokens, mel2ph, f0, energy=energy, key_shift=key_shift, speed=speed,
                              spk_embed_id=spk_embed_id, **kwargs)
         if infer:
             mel = self.diffusion(condition, infer=True)

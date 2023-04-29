@@ -51,6 +51,7 @@ save_f0: true
 
 use_spk_id: false
 f0_embed_type: continuous
+use_energy_embed: false
 use_key_shift_embed: false
 use_speed_embed: false
 

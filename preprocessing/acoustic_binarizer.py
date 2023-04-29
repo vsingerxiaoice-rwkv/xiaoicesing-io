@@ -20,12 +20,23 @@ import torch
 from basics.base_binarizer import BaseBinarizer, BinarizationError
 from modules.fastspeech.tts_modules import LengthRegulator
 from modules.vocoders.registry import VOCODERS
-from utils.binarizer_utils import get_pitch_parselmouth, get_mel2ph_torch
+from utils.binarizer_utils import (
+    get_mel2ph_torch, get_pitch_parselmouth, get_energy_librosa
+)
 from utils.hparams import hparams
 from utils.phoneme_utils import build_phoneme_list
 
 os.environ["OMP_NUM_THREADS"] = "1"
-ACOUSTIC_ITEM_ATTRIBUTES = ['spk_id', 'mel', 'tokens', 'mel2ph', 'f0', 'key_shift', 'speed']
+ACOUSTIC_ITEM_ATTRIBUTES = [
+    'spk_id',
+    'mel',
+    'tokens',
+    'mel2ph',
+    'f0',
+    'energy',
+    'key_shift',
+    'speed'
+]
 
 
 class AcousticBinarizer(BaseBinarizer):
@@ -149,6 +160,11 @@ class AcousticBinarizer(BaseBinarizer):
             'ph_dur': np.array(meta_data['ph_dur']).astype(np.float32),
         }
 
+        # get ground truth dur
+        processed_input['mel2ph'] = get_mel2ph_torch(
+            self.lr, torch.from_numpy(processed_input['ph_dur']), length, self.timestep, device=self.device
+        ).cpu().numpy()
+
         # get ground truth f0
         gt_f0, uv = get_pitch_parselmouth(
             wav, length, hparams, interp_uv=hparams['interp_uv']
@@ -158,10 +174,10 @@ class AcousticBinarizer(BaseBinarizer):
             return None
         processed_input['f0'] = gt_f0.astype(np.float32)
 
-        # get ground truth dur
-        processed_input['mel2ph'] = get_mel2ph_torch(
-            self.lr, torch.from_numpy(processed_input['ph_dur']), length, self.timestep, device=self.device
-        ).cpu().numpy()
+        if hparams.get('use_energy_embed', False):
+            # get ground truth energy
+            energy = get_energy_librosa(wav, length, hparams)
+            processed_input['energy'] = energy
 
         if hparams.get('use_key_shift_embed', False):
             processed_input['key_shift'] = 0.

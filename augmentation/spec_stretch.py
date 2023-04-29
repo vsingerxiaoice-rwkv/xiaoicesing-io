@@ -14,6 +14,7 @@ class SpectrogramStretchAugmentation(BaseAugmentation):
     """
     This class contains methods for frequency-domain and time-domain stretching augmentation.
     """
+
     def __init__(self, data_dirs: list, augmentation_args: dict):
         super().__init__(data_dirs, augmentation_args)
         self.device = 'cuda' if torch.cuda.is_available() else 'cpu'
@@ -21,6 +22,9 @@ class SpectrogramStretchAugmentation(BaseAugmentation):
 
     @require_same_keys
     def process_item(self, item: dict, key_shift=0., speed=1., replace_spk_id=None) -> dict:
+        if 'energy' in item:
+            raise NotImplementedError('Energy has not been supported in augmentation.')
+
         aug_item = deepcopy(item)
         if hparams['vocoder'] in VOCODERS:
             wav, mel = VOCODERS[hparams['vocoder']].wav2spec(
