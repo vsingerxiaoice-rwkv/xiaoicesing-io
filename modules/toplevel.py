@@ -5,7 +5,10 @@ from basics.base_module import CategorizedModule
 from modules.commons.common_layers import (
     XavierUniformInitLinear as Linear,
 )
-from modules.diffusion.ddpm import GaussianDiffusion, RepetitiveDiffusion, CurveDiffusion1d, CurveDiffusion2d
+from modules.diffusion.ddpm import (
+    GaussianDiffusion, PitchDiffusion, EnergyDiffusion,
+    CurveDiffusion1d, CurveDiffusion2d
+)
 from modules.fastspeech.acoustic_encoder import FastSpeech2Acoustic
 from modules.fastspeech.tts_modules import LengthRegulator, VariancePredictor
 from modules.fastspeech.variance_encoder import FastSpeech2Variance
@@ -61,7 +64,7 @@ class DiffSingerVariance(CategorizedModule):
             self.base_pitch_embed = Linear(1, hparams['hidden_size'])
             diff_predictor_mode = pitch_hparams['diff_predictor_mode']
             if diff_predictor_mode == 'repeat':
-                self.pitch_predictor = RepetitiveDiffusion(
+                self.pitch_predictor = PitchDiffusion(
                     vmin=pitch_hparams['pitch_delta_vmin'],
                     vmax=pitch_hparams['pitch_delta_vmax'],
                     repeat_bins=pitch_hparams['num_pitch_bins'],
@@ -114,7 +117,7 @@ class DiffSingerVariance(CategorizedModule):
         if hparams['predict_energy']:
             self.pitch_embed = Linear(1, hparams['hidden_size'])
             energy_hparams = hparams['energy_prediction_args']
-            self.energy_predictor = RepetitiveDiffusion(
+            self.energy_predictor = EnergyDiffusion(
                 vmin=10. ** (energy_hparams['db_vmin'] / 20.),
                 vmax=10. ** (energy_hparams['db_vmax'] / 20.),
                 repeat_bins=energy_hparams['num_repeat_bins'],

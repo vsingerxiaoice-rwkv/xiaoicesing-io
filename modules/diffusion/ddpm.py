@@ -303,10 +303,26 @@ class RepetitiveDiffusion(GaussianDiffusion):
         )
 
     def norm_spec(self, x):
-        return super().norm_spec(x.clamp(min=self.vmin, max=self.vmax).unsqueeze(-1).repeat([1, 1, self.repeat_bins]))
+        return super().norm_spec(x.unsqueeze(-1).repeat([1, 1, self.repeat_bins]))
 
     def denorm_spec(self, x):
-        return super().denorm_spec(x).mean(dim=-1).clamp(min=self.vmin, max=self.vmax)
+        return super().denorm_spec(x).mean(dim=-1)
+
+
+class PitchDiffusion(RepetitiveDiffusion):
+    def norm_spec(self, x):
+        return super().norm_spec(x.clamp(min=self.vmin, max=self.vmax))
+
+    def denorm_spec(self, x):
+        return super().denorm_spec(x).clamp(min=self.vmin, max=self.vmax)
+
+
+class EnergyDiffusion(RepetitiveDiffusion):
+    def norm_spec(self, x):
+        return super().norm_spec(x.clamp(min=0., max=1.))
+
+    def denorm_spec(self, x):
+        return super().denorm_spec(x).clamp(min=0., max=1.)
 
 
 class CurveDiffusion1d(GaussianDiffusion):
