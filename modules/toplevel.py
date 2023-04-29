@@ -167,7 +167,11 @@ class DiffSingerVariance(CategorizedModule):
             pitch_pred_out = None
 
         if hparams['predict_energy']:
-            pitch_embed = self.pitch_embed((base_pitch + delta_pitch)[:, :, None])
+            if delta_pitch is None:
+                pitch = base_pitch + pitch_pred_out
+            else:
+                pitch = base_pitch + delta_pitch
+            pitch_embed = self.pitch_embed(pitch[:, :, None])
             energy_cond = condition + pitch_embed
             energy_pred_out = self.energy_predictor(energy_cond, energy, infer)
         else:

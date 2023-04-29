@@ -8,9 +8,11 @@ from scipy import interpolate
 from basics.base_svs_infer import BaseSVSInfer
 from modules.fastspeech.tts_modules import LengthRegulator, mel2ph_to_dur
 from modules.toplevel import DiffSingerVariance
-from utils.hparams import hparams
-from utils.phoneme_utils import build_phoneme_list
 from utils import load_ckpt
+from utils.hparams import hparams
+from utils.infer_utils import resample_align_curve
+from utils.phoneme_utils import build_phoneme_list
+from utils.pitch_utils import interp_f0
 from utils.text_encoder import TokenTextEncoder
 
 
@@ -125,24 +127,35 @@ class DiffSingerVarianceInfer(BaseSVSInfer):
         ph_midi = ph_midi.round().long()
         batch['midi'] = ph_midi
 
+        if param.get('f0_seq'):
+            f0 = resample_align_curve(
+                np.array(param['f0_seq'].split(), np.float32),
+                original_timestep=float(hparams['f0_timestep']),
+                target_timestep=self.timestep,
+                align_length=T_t
+            )
+            batch['delta_pitch'] = torch.from_numpy(
+                librosa.hz_to_midi(interp_f0(f0)).astype(np.float32)
+            ).to(self.device)[None]
+
         return batch
 
     @torch.no_grad()
     def run_model(self, sample):
         txt_tokens = sample['tokens']
         base_pitch = sample['base_pitch']
-        dur_pred, pitch_pred = self.model(
+        dur_pred, pitch_pred, energy_pred = self.model(
             txt_tokens, midi=sample['midi'], ph2word=sample['ph2word'],
             word_dur=sample['word_dur'],
             mel2ph=sample['mel2ph'], base_pitch=base_pitch
         )
         if pitch_pred is not None:
             pitch_pred = base_pitch + pitch_pred
-        return dur_pred, pitch_pred
+        return dur_pred, pitch_pred, energy_pred
 
     def infer_once(self, param):
         batch = self.preprocess_input(param)
-        dur_pred, pitch_pred = self.run_model(batch)
+        dur_pred, pitch_pred, energy_pred = self.run_model(batch)
         if dur_pred is not None:
             dur_pred = dur_pred[0].cpu().numpy()
         if pitch_pred is not None:
@@ -150,4 +163,6 @@ class DiffSingerVarianceInfer(BaseSVSInfer):
             f0_pred = librosa.midi_to_hz(pitch_pred)
         else:
             f0_pred = None
-        return dur_pred, f0_pred
+        if energy_pred is not None:
+            energy_pred = energy_pred[0].cpu().numpy()
+        return dur_pred, f0_pred, energy_pred

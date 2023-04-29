@@ -48,7 +48,7 @@ class FastSpeech2Variance(nn.Module):
         :param ph_dur: (train) [B, T_ph]
         :param word_dur: (infer) [B, T_w]
         :param infer: whether inference
-        :return: (train) encoder_out, ph_dur_xs; (infer) encoder_out, ph_dur
+        :return: encoder_out, ph_dur_pred
         """
         b = txt_tokens.shape[0]
         onset = torch.diff(ph2word, dim=1, prepend=ph2word.new_zeros(b, 1)) > 0

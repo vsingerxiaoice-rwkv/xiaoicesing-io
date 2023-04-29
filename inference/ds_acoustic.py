@@ -106,7 +106,7 @@ class DiffSingerAcousticInfer(BaseSVSInfer):
                     else:
                         # this speaker has a constant proportion
                         assert values >= 0., f'Speaker mix checks failed.\n' \
-                                            f'Proportion of speaker \'{name}\' is negative.'
+                                             f'Proportion of speaker \'{name}\' is negative.'
                         cur_spk_mix_value = torch.full(
                             (1, length), fill_value=values,
                             dtype=torch.float32, device=self.device
@@ -141,6 +141,14 @@ class DiffSingerAcousticInfer(BaseSVSInfer):
             target_timestep=self.timestep,
             align_length=length
         )).to(self.device)[None]
+
+        if hparams.get('use_energy_embed', False):
+            batch['energy'] = torch.from_numpy(resample_align_curve(
+                np.array(param['energy'].split(), np.float32),
+                original_timestep=float(param['energy_timestep']),
+                target_timestep=self.timestep,
+                align_length=length
+            )).to(self.device)[None]
 
         if hparams.get('use_key_shift_embed', False):
             shift_min, shift_max = hparams['augmentation_args']['random_pitch_shifting']['range']
@@ -188,14 +196,16 @@ class DiffSingerAcousticInfer(BaseSVSInfer):
     def run_model(self, sample, return_mel=False):
         txt_tokens = sample['tokens']
         if hparams['use_spk_id']:
+            spk_mix_id = sample['spk_mix_id']
+            spk_mix_value = sample['spk_mix_value']
             # perform mixing on spk embed
             spk_mix_embed = torch.sum(
-                self.model.fs2.spk_embed(sample['spk_mix_id']) * sample['spk_mix_value'].unsqueeze(3),  # => [B, T, N, H]
+                self.model.fs2.spk_embed(spk_mix_id) * spk_mix_value.unsqueeze(3),  # => [B, T, N, H]
                 dim=2, keepdim=False
             )  # => [B, T, H]
         else:
             spk_mix_embed = None
-        mel_pred = self.model(txt_tokens, mel2ph=sample['mel2ph'], f0=sample['f0'],
+        mel_pred = self.model(txt_tokens, mel2ph=sample['mel2ph'], f0=sample['f0'], energy=sample.get('energy'),
                               key_shift=sample.get('key_shift'), speed=sample.get('speed'),
                               spk_mix_embed=spk_mix_embed, infer=True)
         return mel_pred
