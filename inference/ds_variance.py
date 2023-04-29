@@ -57,7 +57,7 @@ class DiffSingerVarianceInfer(BaseSVSInfer):
         batch['tokens'] = txt_tokens
         ph_num = torch.from_numpy(np.array([param['ph_num'].split()], np.int64)).to(self.device)  # [B=1, T_w]
         ph2word = self.lr(ph_num)  # => [B=1, T_ph]
-        T_w = ph2word.max()
+        T_w = int(ph2word.max())
         batch['ph2word'] = ph2word
 
         note_seq = torch.FloatTensor(
@@ -74,6 +74,9 @@ class DiffSingerVarianceInfer(BaseSVSInfer):
             1, note2word, note_dur
         )[:, 1:]  # => [B=1, T_w]
         mel2word = self.lr(word_dur)  # [B=1, T_t]
+
+        print(f'Length: {T_w} word(s), {note_seq.shape[1]} note(s), {T_ph} token(s), '
+              f'{T_t} frame(s), {T_t * self.timestep:.2f} second(s)')
 
         if mel2word.shape[1] != T_t:  # Align words with notes
             mel2word = F.pad(mel2word, [0, T_t - mel2word.shape[1]], value=mel2word[0, -1])
