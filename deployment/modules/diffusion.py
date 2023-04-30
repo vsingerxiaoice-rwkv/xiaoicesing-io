@@ -70,7 +70,7 @@ class GaussianDiffusionONNX(GaussianDiffusion):
         n_frames = condition.shape[2]
 
         step_range = torch.arange(0, self.k_step, speedup, dtype=torch.long, device=device).flip(0)[:, None]
-        x = torch.randn((1, 1, self.out_dims, n_frames), device=device)
+        x = torch.randn((1, self.num_feats, self.out_dims, n_frames), device=device)
 
         if speedup > 1:
             plms_noise_stage: int = 0
@@ -93,6 +93,6 @@ class GaussianDiffusionONNX(GaussianDiffusion):
             for t in step_range:
                 x = self.p_sample(x, t, cond=condition)
 
-        x = x.squeeze(1).permute(0, 2, 1)  # [B, T, M]
+        x = x.transpose(2, 3).squeeze(1)  # [B, T, M] or [B, F, T, M]
         x = self.denorm_spec(x)
         return x

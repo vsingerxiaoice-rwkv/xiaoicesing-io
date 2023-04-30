@@ -66,12 +66,13 @@ beta_schedule = {
 
 
 class GaussianDiffusion(nn.Module):
-    def __init__(self, out_dims, timesteps=1000, k_step=1000,
+    def __init__(self, out_dims, num_feats=1, timesteps=1000, k_step=1000,
                  denoiser_type=None, denoiser_args=None, betas=None,
                  spec_min=None, spec_max=None):
         super().__init__()
-        self.denoise_fn: nn.Module = DIFF_DENOISERS[denoiser_type]((out_dims, *denoiser_args))
+        self.denoise_fn: nn.Module = DIFF_DENOISERS[denoiser_type]((out_dims, num_feats, *denoiser_args))
         self.out_dims = out_dims
+        self.num_feats = num_feats
 
         if exists(betas):
             betas = betas.detach().cpu().numpy() if isinstance(betas, torch.Tensor) else betas
@@ -82,10 +83,7 @@ class GaussianDiffusion(nn.Module):
         alphas_cumprod = np.cumprod(alphas, axis=0)
         alphas_cumprod_prev = np.append(1., alphas_cumprod[:-1])
 
-        timesteps, = betas.shape
-        self.num_timesteps = int(timesteps)
         self.k_step = k_step
-
         self.noise_list = deque(maxlen=4)
 
         to_torch = partial(torch.tensor, dtype=torch.float32)
@@ -112,8 +110,10 @@ class GaussianDiffusion(nn.Module):
         self.register_buffer('posterior_mean_coef2', to_torch(
             (1. - alphas_cumprod_prev) * np.sqrt(alphas) / (1. - alphas_cumprod)))
 
-        self.register_buffer('spec_min', torch.FloatTensor(spec_min)[None, None, :out_dims])
-        self.register_buffer('spec_max', torch.FloatTensor(spec_max)[None, None, :out_dims])
+        # spec: [B, T, M] or [B, F, T, M]
+        # spec_min and spec_max: [1, 1, M] or [1, 1, F, M] => transpose(-3, -2) => [1, 1, M] or [1, F, 1, M]
+        self.register_buffer('spec_min', torch.FloatTensor(spec_min)[None, None, :out_dims].transpose(-3, -2))
+        self.register_buffer('spec_max', torch.FloatTensor(spec_max)[None, None, :out_dims].transpose(-3, -2))
 
     def q_mean_variance(self, x_start, t):
         mean = extract(self.sqrt_alphas_cumprod, t, x_start.shape) * x_start
@@ -213,13 +213,15 @@ class GaussianDiffusion(nn.Module):
         b, device = condition.shape[0], condition.device
 
         if not infer:
-            spec = self.norm_spec(gt_spec)
+            # gt_spec: [B, T, M] or [B, F, T, M]
+            spec = self.norm_spec(gt_spec).transpose(1, 2)  # [B, M, T] or [B, F, M, T]
+            if self.num_feats == 1:
+                spec = spec[:, None, :, :]  # [B, F=1, M, T]
             t = torch.randint(0, self.k_step, (b,), device=device).long()
-            norm_spec = spec.transpose(1, 2)[:, None, :, :]  # [B, 1, M, T]
-            return self.p_losses(norm_spec, t, cond=cond)
+            return self.p_losses(spec, t, cond=cond)
         else:
             t = self.k_step
-            shape = (cond.shape[0], 1, self.out_dims, cond.shape[2])
+            shape = (cond.shape[0], self.num_feats, self.out_dims, cond.shape[2])
             x = torch.randn(shape, device=device)
             if hparams.get('pndm_speedup') and hparams['pndm_speedup'] > 1:
                 algorithm = hparams.get('diff_accelerator', 'dpm-solver')
@@ -278,7 +280,7 @@ class GaussianDiffusion(nn.Module):
             else:
                 for i in tqdm(reversed(range(0, t)), desc='sample time step', total=t, disable=not hparams['infer']):
                     x = self.p_sample(x, torch.full((b,), i, device=device, dtype=torch.long), cond)
-            x = x.squeeze(1).transpose(1, 2)  # [B, T, M]
+            x = x.transpose(2, 3).squeeze(1)  # [B, F, M, T] => [B, T, M] or [B, F, T, M]
             return self.denorm_spec(x)
 
     def norm_spec(self, x):
@@ -289,27 +291,56 @@ class GaussianDiffusion(nn.Module):
 
 
 class RepetitiveDiffusion(GaussianDiffusion):
-    def __init__(self, vmin, vmax, repeat_bins,
+    def __init__(self, vmin: float | list, vmax: float | list, repeat_bins: int,
                  timesteps=1000, k_step=1000,
                  denoiser_type=None, denoiser_args=None,
                  betas=None):
+        assert (isinstance(vmin, float) and isinstance(vmin, float)) or len(vmin) == len(vmax)
+        num_feats = 1 if isinstance(vmin, int) else len(vmin)
         self.vmin = vmin
         self.vmax = vmax
         self.repeat_bins = repeat_bins
         super().__init__(
-            repeat_bins, timesteps=timesteps, k_step=k_step,
+            out_dims=repeat_bins, num_feats=num_feats,
+            timesteps=timesteps, k_step=k_step,
             denoiser_type=denoiser_type, denoiser_args=denoiser_args,
-            betas=betas, spec_min=[vmin], spec_max=[vmax]
+            betas=betas, spec_min=[[v] for v in vmin], spec_max=[[v] for v in vmax]
         )
 
     def norm_spec(self, x):
-        return super().norm_spec(x.unsqueeze(-1).repeat([1, 1, self.repeat_bins]))
+        """
+
+        :param x: [B, T] or [B, F, T]
+        :return [B, T, R] or [B, F, T, R]
+        """
+        if self.num_feats == 1:
+            repeats = [1, 1, self.repeat_bins]
+        else:
+            repeats = [1, 1, 1, self.repeat_bins]
+        return super().norm_spec(x.unsqueeze(-1).repeat(repeats))
 
     def denorm_spec(self, x):
+        """
+
+        :param x: [B, T, R] or [B, F, T, R]
+        :return [B, T] or [B, F, T]
+        """
         return super().denorm_spec(x).mean(dim=-1)
 
 
 class PitchDiffusion(RepetitiveDiffusion):
+    def __init__(self, vmin: float, vmax: float, repeat_bins,
+                 timesteps=1000, k_step=1000,
+                 denoiser_type=None, denoiser_args=None,
+                 betas=None):
+        assert isinstance(vmin, float) and isinstance(vmin, float)
+        super().__init__(
+            vmin=vmin, vmax=vmax, repeat_bins=repeat_bins,
+            timesteps=timesteps, k_step=k_step,
+            denoiser_type=denoiser_type, denoiser_args=denoiser_args,
+            betas=betas
+        )
+
     def norm_spec(self, x):
         return super().norm_spec(x.clamp(min=self.vmin, max=self.vmax))
 
@@ -318,6 +349,18 @@ class PitchDiffusion(RepetitiveDiffusion):
 
 
 class EnergyDiffusion(RepetitiveDiffusion):
+    def __init__(self, vmin: float, vmax: float, repeat_bins,
+                 timesteps=1000, k_step=1000,
+                 denoiser_type=None, denoiser_args=None,
+                 betas=None):
+        assert isinstance(vmin, float) and isinstance(vmin, float)
+        super().__init__(
+            vmin=vmin, vmax=vmax, repeat_bins=repeat_bins,
+            timesteps=timesteps, k_step=k_step,
+            denoiser_type=denoiser_type, denoiser_args=denoiser_args,
+            betas=betas
+        )
+
     def norm_spec(self, x):
         return super().norm_spec(x.clamp(min=0., max=1.))
 

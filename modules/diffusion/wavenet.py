@@ -4,7 +4,6 @@ from math import sqrt
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
-from torch.nn import Mish
 
 from utils.hparams import hparams
 
@@ -64,13 +63,14 @@ class ResidualBlock(nn.Module):
 
 
 class WaveNet(nn.Module):
-    def __init__(self, in_dims, n_layers, n_chans):
+    def __init__(self, in_dims, n_feats, n_layers, n_chans):
         super().__init__()
+        self.n_feats = n_feats
         self.input_projection = Conv1d(in_dims, n_chans, 1)
         self.diffusion_embedding = SinusoidalPosEmb(n_chans)
         self.mlp = nn.Sequential(
             nn.Linear(n_chans, n_chans * 4),
-            Mish(),
+            nn.Mish(),
             nn.Linear(n_chans * 4, n_chans)
         )
         self.residual_layers = nn.ModuleList([
@@ -87,12 +87,12 @@ class WaveNet(nn.Module):
 
     def forward(self, spec, diffusion_step, cond):
         """
-        :param spec: [B, 1, M, T]
+        :param spec: [B, F, M, T]
         :param diffusion_step: [B, 1]
         :param cond: [B, M, T]
         :return:
         """
-        x = spec.squeeze(1)
+        x = spec.flatten(start_dim=1, end_dim=2)  # [B, F x M, T]
         x = self.input_projection(x)  # [B, residual_channel, T]
 
         x = F.relu(x)
@@ -107,4 +107,4 @@ class WaveNet(nn.Module):
         x = self.skip_projection(x)
         x = F.relu(x)
         x = self.output_projection(x)  # [B, mel_bins, T]
-        return x[:, None, :, :]
+        return x.unflatten(dim=1, sizes=(self.n_feats, -1))

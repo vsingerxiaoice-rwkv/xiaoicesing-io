@@ -23,6 +23,7 @@ class DiffSingerAcoustic(CategorizedModule):
         )
         self.diffusion = GaussianDiffusion(
             out_dims=out_dims,
+            num_feats=1,
             timesteps=hparams['timesteps'],
             k_step=hparams['K_step'],
             denoiser_type=hparams['diff_decoder_type'],
@@ -152,35 +153,38 @@ class DiffSingerVariance(CategorizedModule):
 
         if self.predict_breathiness:
             breathiness_hparams = hparams['breathiness_prediction_args']
-            # self.breathiness_predictor = EnergyDiffusion(
-            #     vmin=10. ** (breathiness_hparams['db_vmin'] / 20.),
-            #     vmax=10. ** (breathiness_hparams['db_vmax'] / 20.),
-            #     repeat_bins=breathiness_hparams['num_repeat_bins'],
-            #     timesteps=hparams['timesteps'],
-            #     k_step=hparams['K_step'],
-            #     denoiser_type=hparams['diff_decoder_type'],
-            #     denoiser_args=(
-            #         breathiness_hparams['residual_layers'],
-            #         breathiness_hparams['residual_channels']
-            #     )
-            # )
-            self.breathiness_predictor = VariancePredictor(
+            self.breathiness_predictor = EnergyDiffusion(
                 vmin=10. ** (breathiness_hparams['db_vmin'] / 20.),
                 vmax=10. ** (breathiness_hparams['db_vmax'] / 20.),
-                in_dims=hparams['hidden_size'],
-                n_chans=breathiness_hparams['hidden_size'],
-                n_layers=breathiness_hparams['num_layers'],
-                dropout_rate=breathiness_hparams['dropout'],
-                padding=hparams['ffn_padding'],
-                kernel_size=breathiness_hparams['kernel_size']
+                repeat_bins=breathiness_hparams['num_repeat_bins'],
+                timesteps=hparams['timesteps'],
+                k_step=hparams['K_step'],
+                denoiser_type=hparams['diff_decoder_type'],
+                denoiser_args=(
+                    breathiness_hparams['residual_layers'],
+                    breathiness_hparams['residual_channels']
+                )
             )
+            # self.breathiness_predictor = VariancePredictor(
+            #     vmin=10. ** (breathiness_hparams['db_vmin'] / 20.),
+            #     vmax=10. ** (breathiness_hparams['db_vmax'] / 20.),
+            #     in_dims=hparams['hidden_size'],
+            #     n_chans=breathiness_hparams['hidden_size'],
+            #     n_layers=breathiness_hparams['num_layers'],
+            #     dropout_rate=breathiness_hparams['dropout'],
+            #     padding=hparams['ffn_padding'],
+            #     kernel_size=breathiness_hparams['kernel_size']
+            # )
 
     @property
     def category(self):
         return 'variance'
 
-    def forward(self, txt_tokens, midi, ph2word, ph_dur=None, word_dur=None,
-                mel2ph=None, base_pitch=None, delta_pitch=None, energy=None, infer=True):
+    def forward(
+            self, txt_tokens, midi, ph2word, ph_dur=None, word_dur=None, mel2ph=None,
+            base_pitch=None, delta_pitch=None, energy=None, breathiness=None,
+            infer=True
+    ):
         encoder_out, dur_pred_out = self.fs2(
             txt_tokens, midi=midi, ph2word=ph2word,
             ph_dur=ph_dur, word_dur=word_dur, infer=infer
