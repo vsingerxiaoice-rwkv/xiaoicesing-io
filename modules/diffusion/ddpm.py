@@ -115,9 +115,6 @@ class GaussianDiffusion(nn.Module):
         # spec_min and spec_max: [1, 1, M] or [1, 1, F, M] => transpose(-3, -2) => [1, 1, M] or [1, F, 1, M]
         spec_min = torch.FloatTensor(spec_min)[None, None, :out_dims].transpose(-3, -2)
         spec_max = torch.FloatTensor(spec_max)[None, None, :out_dims].transpose(-3, -2)
-        if self.num_feats == 1:
-            spec_min = spec_min.squeeze(1)
-            spec_max = spec_max.squeeze(1)
         self.register_buffer('spec_min', spec_min)
         self.register_buffer('spec_max', spec_max)
 
@@ -302,13 +299,15 @@ class RepetitiveDiffusion(GaussianDiffusion):
                  denoiser_type=None, denoiser_args=None,
                  betas=None):
         assert (isinstance(vmin, float) and isinstance(vmin, float)) or len(vmin) == len(vmax)
-        num_feats = 1 if isinstance(vmin, int) else len(vmin)
+        num_feats = 1 if isinstance(vmin, float) else len(vmin)
+        spec_min = [vmin] if num_feats == 1 else [[v] for v in vmin]
+        spec_max = [vmax] if num_feats == 1 else [[v] for v in vmax]
         self.repeat_bins = repeat_bins
         super().__init__(
             out_dims=repeat_bins, num_feats=num_feats,
             timesteps=timesteps, k_step=k_step,
             denoiser_type=denoiser_type, denoiser_args=denoiser_args,
-            betas=betas, spec_min=[[v] for v in vmin], spec_max=[[v] for v in vmax]
+            betas=betas, spec_min=spec_min, spec_max=spec_max
         )
 
     def norm_spec(self, x):
