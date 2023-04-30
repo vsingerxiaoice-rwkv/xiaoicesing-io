@@ -412,25 +412,6 @@ class MultiVarianceDiffusion(RepetitiveDiffusion):
         return self.clamp_spec(xs)
 
 
-class EnergyDiffusion(RepetitiveDiffusion):
-    def __init__(self, v_range: Tuple[float, float], repeat_bins,
-                 timesteps=1000, k_step=1000,
-                 denoiser_type=None, denoiser_args=None,
-                 betas=None):
-        super().__init__(
-            vmin=v_range[0], vmax=v_range[1], repeat_bins=repeat_bins,
-            timesteps=timesteps, k_step=k_step,
-            denoiser_type=denoiser_type, denoiser_args=denoiser_args,
-            betas=betas
-        )
-
-    def norm_spec(self, x):
-        return super().norm_spec(x.clamp(min=0., max=1.))
-
-    def denorm_spec(self, x):
-        return super().denorm_spec(x).clamp(min=0., max=1.)
-
-
 class CurveDiffusion1d(GaussianDiffusion):
     def __init__(self, vmin, vmax, timesteps=1000, k_step=1000,
                  denoiser_type=None, denoiser_args=None, betas=None):
