@@ -181,12 +181,12 @@ class AcousticBinarizer(BaseBinarizer):
         if hparams.get('use_energy_embed', False):
             # get ground truth energy
             energy = get_energy_librosa(wav, length, hparams)
-            processed_input['energy'] = energy
+            processed_input['energy'] = energy.astype(np.float32)
 
         if hparams.get('use_breathiness_embed', False):
             # get ground truth energy
             breathiness = get_breathiness_pyworld(wav, gt_f0 * ~uv, length, hparams)
-            processed_input['breathiness'] = breathiness
+            processed_input['breathiness'] = breathiness.astype(np.float32)
 
         if hparams.get('use_key_shift_embed', False):
             processed_input['key_shift'] = 0.
