@@ -217,7 +217,7 @@ class DiffSingerVariance(CategorizedModule):
             energy_pred_out = None
 
         if self.predict_breathiness:
-            breathiness_pred_out = self.breathiness_predictor(condition)
+            breathiness_pred_out = self.breathiness_predictor(condition, infer)
         else:
             breathiness_pred_out = None
 

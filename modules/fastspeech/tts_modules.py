@@ -175,9 +175,10 @@ class VariancePredictor(torch.nn.Module):
     def out2value(self, xs):
         return (xs + 1) / 2 * (self.vmax - self.vmin) + self.vmin
 
-    def forward(self, xs):
+    def forward(self, xs, infer=True):
         """
         :param xs: [B, T, H]
+        :param infer: whether inference
         :return: [B, T]
         """
         positions = self.pos_embed_alpha * self.embed_positions(xs[..., 0])
@@ -186,6 +187,8 @@ class VariancePredictor(torch.nn.Module):
         for f in self.conv:
             xs = f(xs)  # (B, C, Tmax)
         xs = self.linear(xs.transpose(1, -1)).squeeze(-1)  # (B, Tmax)
+        if infer:
+            xs = self.out2value(xs)
         return xs
 
 
