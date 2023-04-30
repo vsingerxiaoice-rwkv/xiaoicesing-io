@@ -9,7 +9,7 @@ import utils.infer_utils
 from basics.base_dataset import BaseDataset
 from basics.base_task import BaseTask
 from modules.losses.diff_loss import DiffusionNoiseLoss
-from modules.losses.variance_loss import DurationLoss, CurveLoss1d
+from modules.losses.variance_loss import DurationLoss
 from modules.toplevel import DiffSingerVariance
 from utils.hparams import hparams
 from utils.plot import dur_to_figure, curve_to_figure
@@ -58,10 +58,16 @@ class VarianceTask(BaseTask):
             self.lambda_dur_loss = hparams['lambda_dur_loss']
         if hparams['predict_pitch']:
             self.lambda_pitch_loss = hparams['lambda_pitch_loss']
-        if hparams['predict_energy']:
-            self.lambda_energy_loss = hparams['lambda_energy_loss']
-        if hparams['predict_breathiness']:
-            self.lambda_breathiness_loss = hparams['lambda_breathiness_loss']
+
+        predict_energy = hparams['predict_energy']
+        predict_breathiness = hparams['predict_breathiness']
+        self.variance_prediction_list = []
+        if predict_energy:
+            self.variance_prediction_list.append('energy')
+        if predict_breathiness:
+            self.variance_prediction_list.append('breathiness')
+        self.predict_variances = len(self.variance_prediction_list) > 0
+        self.lambda_variances_loss = hparams['lambda_variances_loss']
 
     def build_model(self):
         return DiffSingerVariance(
@@ -83,16 +89,9 @@ class VarianceTask(BaseTask):
             self.pitch_loss = DiffusionNoiseLoss(
                 loss_type=hparams['diff_loss_type'],
             )
-        if hparams['predict_energy']:
-            self.energy_loss = DiffusionNoiseLoss(
+        if self.predict_variances:
+            self.variances_loss = DiffusionNoiseLoss(
                 loss_type=hparams['diff_loss_type'],
-            )
-        if hparams['predict_breathiness']:
-            breathiness_hparams = hparams['breathiness_prediction_args']
-            self.breathiness_loss = CurveLoss1d(
-                vmin=10. ** (breathiness_hparams['db_vmin'] / 20.),
-                vmax=10. ** (breathiness_hparams['db_vmax'] / 20.),
-                loss_type=breathiness_hparams['loss_type'],
             )
 
     def run_model(self, sample, infer=False):
@@ -106,31 +105,30 @@ class VarianceTask(BaseTask):
         energy = sample.get('energy')  # [B, T_t]
         breathiness = sample.get('breathiness')  # [B, T_t]
 
-        output = self.model(txt_tokens, midi=midi, ph2word=ph2word, ph_dur=ph_dur,
-                            mel2ph=mel2ph, base_pitch=base_pitch, delta_pitch=delta_pitch, energy=energy,
-                            infer=infer)
+        output = self.model(
+            txt_tokens, midi=midi, ph2word=ph2word, ph_dur=ph_dur, mel2ph=mel2ph,
+            base_pitch=base_pitch, delta_pitch=delta_pitch,
+            energy=energy, breathiness=breathiness,
+            infer=infer
+        )
 
-        dur_pred, pitch_pred, energy_pred, breathiness_pred = output
+        dur_pred, pitch_pred, variances_pred = output
         if infer:
-            return dur_pred, pitch_pred, energy_pred, breathiness_pred
+            return dur_pred, pitch_pred, variances_pred  # Tensor, Tensor, Dict[Tensor]
         else:
             losses = {}
             if dur_pred is not None:
                 losses['dur_loss'] = self.lambda_dur_loss * self.dur_loss(dur_pred, ph_dur, ph2word=ph2word)
-            nonpadding = (mel2ph > 0).float()
+            nonpadding = (mel2ph > 0).unsqueeze(-1).float()
             if pitch_pred is not None:
                 (pitch_x_recon, pitch_noise) = pitch_pred
                 losses['pitch_loss'] = self.lambda_pitch_loss * self.pitch_loss(
-                    pitch_x_recon, pitch_noise, nonpadding=nonpadding.unsqueeze(-1)
+                    pitch_x_recon, pitch_noise, nonpadding=nonpadding
                 )
-            if energy_pred is not None:
-                (energy_x_recon, energy_noise) = energy_pred
-                losses['energy_loss'] = self.lambda_energy_loss * self.energy_loss(
-                    energy_x_recon, energy_noise, nonpadding=nonpadding.unsqueeze(-1)
-                )
-            if breathiness_pred is not None:
-                losses['breathiness_loss'] = self.lambda_breathiness_loss * self.breathiness_loss(
-                    breathiness_pred, breathiness, mask=nonpadding
+            if variances_pred is not None:
+                (variance_x_recon, variance_noise) = variances_pred
+                losses['variances_loss'] = self.lambda_variances_loss * self.variances_loss(
+                    variance_x_recon, variance_noise, nonpadding=nonpadding
                 )
             return losses
 
@@ -143,7 +141,7 @@ class VarianceTask(BaseTask):
 
         if batch_idx < hparams['num_valid_plots'] \
                 and (self.trainer.distributed_sampler_kwargs or {}).get('rank', 0) == 0:
-            dur_pred, pitch_pred, energy_pred, breathiness_pred = self.run_model(sample, infer=True)
+            dur_pred, pitch_pred, variances_pred = self.run_model(sample, infer=True)
             if dur_pred is not None:
                 self.plot_dur(batch_idx, sample['ph_dur'], dur_pred, txt=sample['tokens'])
             if pitch_pred is not None:
@@ -157,21 +155,14 @@ class VarianceTask(BaseTask):
                     curve_name='pitch',
                     grid=1
                 )
-            if energy_pred is not None:
-                energy = sample['energy']
+            for name in self.variance_prediction_list:
+                variance = sample[name]
+                variance_pred = variances_pred[name]
                 self.plot_curve(
                     batch_idx,
-                    gt_curve=energy,
-                    pred_curve=energy_pred,
-                    curve_name='energy'
-                )
-            if breathiness_pred is not None:
-                breathiness = sample['breathiness']
-                self.plot_curve(
-                    batch_idx,
-                    gt_curve=breathiness,
-                    pred_curve=breathiness_pred,
-                    curve_name='breathiness'
+                    gt_curve=variance,
+                    pred_curve=variance_pred,
+                    curve_name=name
                 )
 
         return outputs, sample['size']

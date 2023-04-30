@@ -6,11 +6,10 @@ from modules.commons.common_layers import (
     XavierUniformInitLinear as Linear,
 )
 from modules.diffusion.ddpm import (
-    GaussianDiffusion, PitchDiffusion, EnergyDiffusion,
-    CurveDiffusion1d, CurveDiffusion2d
+    GaussianDiffusion, PitchDiffusion, MultiVarianceDiffusion
 )
 from modules.fastspeech.acoustic_encoder import FastSpeech2Acoustic
-from modules.fastspeech.tts_modules import LengthRegulator, VariancePredictor
+from modules.fastspeech.tts_modules import LengthRegulator
 from modules.fastspeech.variance_encoder import FastSpeech2Variance
 from utils.hparams import hparams
 
@@ -63,8 +62,16 @@ class DiffSingerVariance(CategorizedModule):
         super().__init__()
         self.predict_dur = hparams['predict_dur']
         self.predict_pitch = hparams['predict_pitch']
-        self.predict_energy = hparams['predict_energy']
-        self.predict_breathiness = hparams['predict_breathiness']
+
+        predict_energy = hparams['predict_energy']
+        predict_breathiness = hparams['predict_breathiness']
+        self.variance_prediction_list = []
+        if predict_energy:
+            self.variance_prediction_list.append('energy')
+        if predict_breathiness:
+            self.variance_prediction_list.append('breathiness')
+        self.predict_variances = len(self.variance_prediction_list) > 0
+
         self.fs2 = FastSpeech2Variance(
             vocab_size=vocab_size
         )
@@ -73,125 +80,77 @@ class DiffSingerVariance(CategorizedModule):
         if self.predict_pitch:
             pitch_hparams = hparams['pitch_prediction_args']
             self.base_pitch_embed = Linear(1, hparams['hidden_size'])
-            diff_predictor_mode = pitch_hparams['diff_predictor_mode']
-            if diff_predictor_mode == 'repeat':
-                self.pitch_predictor = PitchDiffusion(
-                    vmin=pitch_hparams['pitch_delta_vmin'],
-                    vmax=pitch_hparams['pitch_delta_vmax'],
-                    repeat_bins=pitch_hparams['num_pitch_bins'],
-                    timesteps=hparams['timesteps'],
-                    k_step=hparams['K_step'],
-                    denoiser_type=hparams['diff_decoder_type'],
-                    denoiser_args=(
-                        pitch_hparams['residual_layers'],
-                        pitch_hparams['residual_channels']
-                    )
+            self.pitch_predictor = PitchDiffusion(
+                vmin=pitch_hparams['pitch_delta_vmin'],
+                vmax=pitch_hparams['pitch_delta_vmax'],
+                repeat_bins=pitch_hparams['num_pitch_bins'],
+                timesteps=hparams['timesteps'],
+                k_step=hparams['K_step'],
+                denoiser_type=hparams['diff_decoder_type'],
+                denoiser_args=(
+                    pitch_hparams['residual_layers'],
+                    pitch_hparams['residual_channels']
                 )
-            elif diff_predictor_mode == '1d':
-                self.pitch_predictor = CurveDiffusion1d(
-                    vmin=pitch_hparams['pitch_delta_vmin'],
-                    vmax=pitch_hparams['pitch_delta_vmax'],
-                    timesteps=hparams['timesteps'],
-                    k_step=hparams['K_step'],
-                    denoiser_type=hparams['diff_decoder_type'],
-                    denoiser_args=(
-                        pitch_hparams['residual_layers'],
-                        pitch_hparams['residual_channels']
-                    )
-                )
-            elif diff_predictor_mode == '2d':
-                self.pitch_predictor = CurveDiffusion2d(
-                    vmin=pitch_hparams['pitch_delta_vmin'],
-                    vmax=pitch_hparams['pitch_delta_vmax'],
-                    num_bins=pitch_hparams['num_pitch_bins'],
-                    deviation=pitch_hparams['deviation'],
-                    timesteps=hparams['timesteps'],
-                    k_step=hparams['K_step'],
-                    denoiser_type=hparams['diff_decoder_type'],
-                    denoiser_args=(
-                        pitch_hparams['residual_layers'],
-                        pitch_hparams['residual_channels']
-                    )
-                )
-            else:
-                raise NotImplementedError()
-            # from modules.fastspeech.tts_modules import PitchPredictor
-            # self.pitch_predictor = PitchPredictor(
-            #     vmin=pitch_hparams['pitch_delta_vmin'],
-            #     vmax=pitch_hparams['pitch_delta_vmax'],
-            #     num_bins=pitch_hparams['num_pitch_bins'],
-            #     deviation=pitch_hparams['deviation'],
-            #     in_dims=hparams['hidden_size'],
-            #     n_chans=pitch_hparams['hidden_size']
-            # )
+            )
 
-        if self.predict_energy or self.predict_breathiness:
+        if self.predict_variances:
             self.pitch_embed = Linear(1, hparams['hidden_size'])
 
-        if self.predict_energy:
-            energy_hparams = hparams['energy_prediction_args']
-            self.energy_predictor = EnergyDiffusion(
-                vmin=10. ** (energy_hparams['db_vmin'] / 20.),
-                vmax=10. ** (energy_hparams['db_vmax'] / 20.),
-                repeat_bins=energy_hparams['num_repeat_bins'],
-                timesteps=hparams['timesteps'],
-                k_step=hparams['K_step'],
-                denoiser_type=hparams['diff_decoder_type'],
-                denoiser_args=(
-                    energy_hparams['residual_layers'],
-                    energy_hparams['residual_channels']
-                )
-            )
-            # self.energy_predictor = VariancePredictor(
-            #     in_dims=hparams['hidden_size'],
-            #     n_chans=energy_hparams['hidden_size'],
-            #     n_layers=energy_hparams['num_layers'],
-            #     dropout_rate=energy_hparams['dropout'],
-            #     padding=hparams['ffn_padding'],
-            #     kernel_size=energy_hparams['kernel_size']
-            # )
+            ranges = []
+            clamps = []
 
-        if self.predict_breathiness:
-            breathiness_hparams = hparams['breathiness_prediction_args']
-            self.breathiness_predictor = EnergyDiffusion(
-                vmin=10. ** (breathiness_hparams['db_vmin'] / 20.),
-                vmax=10. ** (breathiness_hparams['db_vmax'] / 20.),
-                repeat_bins=breathiness_hparams['num_repeat_bins'],
+            if predict_energy:
+                ranges.append((
+                    10. ** (hparams['energy_db_min'] / 20.),
+                    10. ** (hparams['energy_db_max'] / 20.)
+                ))
+                clamps.append((0., 1.))
+
+            if predict_breathiness:
+                ranges.append((
+                    10. ** (hparams['breathiness_db_min'] / 20.),
+                    10. ** (hparams['breathiness_db_max'] / 20.)
+                ))
+                clamps.append((0., 1.))
+
+            variances_hparams = hparams['variances_prediction_args']
+            self.variance_predictor = MultiVarianceDiffusion(
+                ranges=ranges,
+                clamps=clamps,
+                repeat_bins=variances_hparams['repeat_bins'],
                 timesteps=hparams['timesteps'],
                 k_step=hparams['K_step'],
                 denoiser_type=hparams['diff_decoder_type'],
                 denoiser_args=(
-                    breathiness_hparams['residual_layers'],
-                    breathiness_hparams['residual_channels']
+                    variances_hparams['residual_layers'],
+                    variances_hparams['residual_channels']
                 )
             )
-            # self.breathiness_predictor = VariancePredictor(
-            #     vmin=10. ** (breathiness_hparams['db_vmin'] / 20.),
-            #     vmax=10. ** (breathiness_hparams['db_vmax'] / 20.),
-            #     in_dims=hparams['hidden_size'],
-            #     n_chans=breathiness_hparams['hidden_size'],
-            #     n_layers=breathiness_hparams['num_layers'],
-            #     dropout_rate=breathiness_hparams['dropout'],
-            #     padding=hparams['ffn_padding'],
-            #     kernel_size=breathiness_hparams['kernel_size']
-            # )
 
     @property
     def category(self):
         return 'variance'
 
+    def collect_variance_inputs(self, **kwargs):
+        return [kwargs.get(name) for name in self.variance_prediction_list]
+
+    def collect_variance_outputs(self, variances: list | tuple) -> dict:
+        return {
+            name: pred
+            for name, pred in zip(self.variance_prediction_list, variances)
+        }
+
     def forward(
             self, txt_tokens, midi, ph2word, ph_dur=None, word_dur=None, mel2ph=None,
-            base_pitch=None, delta_pitch=None, energy=None, breathiness=None,
-            infer=True
+            base_pitch=None, delta_pitch=None, infer=True, **kwargs
     ):
         encoder_out, dur_pred_out = self.fs2(
             txt_tokens, midi=midi, ph2word=ph2word,
             ph_dur=ph_dur, word_dur=word_dur, infer=infer
         )
 
-        if not self.predict_pitch and not self.predict_energy and not self.predict_breathiness:
-            return dur_pred_out, None, None, None
+        if not self.predict_pitch and not self.predict_variances:
+            return dur_pred_out, None, None, ({} if infer else None)
 
         if mel2ph is None or hparams['dur_cascade']:
             # (extract mel2ph from dur_pred_out)
@@ -207,22 +166,21 @@ class DiffSingerVariance(CategorizedModule):
         else:
             pitch_pred_out = None
 
-        if self.predict_energy or self.predict_breathiness:
-            if delta_pitch is None:
-                pitch = base_pitch + pitch_pred_out
-            else:
-                pitch = base_pitch + delta_pitch
-            pitch_embed = self.pitch_embed(pitch[:, :, None])
-            condition += pitch_embed
+        if not self.predict_variances:
+            return dur_pred_out, pitch_pred_out, ({} if infer else None)
 
-        if self.predict_energy:
-            energy_pred_out = self.energy_predictor(condition, energy, infer)
+        if delta_pitch is None:
+            pitch = base_pitch + pitch_pred_out
         else:
-            energy_pred_out = None
+            pitch = base_pitch + delta_pitch
+        pitch_embed = self.pitch_embed(pitch[:, :, None])
+        condition += pitch_embed
 
-        if self.predict_breathiness:
-            breathiness_pred_out = self.breathiness_predictor(condition, infer)
+        variance_inputs = self.collect_variance_inputs(**kwargs)
+        variance_outputs = self.variance_predictor(condition, variance_inputs, infer)
+        if infer:
+            variances_pred_out = self.collect_variance_outputs(variance_outputs)
         else:
-            breathiness_pred_out = None
+            variances_pred_out = variance_outputs
 
-        return dur_pred_out, pitch_pred_out, energy_pred_out, breathiness_pred_out
+        return dur_pred_out, pitch_pred_out, variances_pred_out

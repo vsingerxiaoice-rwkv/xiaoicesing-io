@@ -1,6 +1,7 @@
 from collections import deque
 from functools import partial
 from inspect import isfunction
+from typing import List, Tuple
 
 import librosa.sequence
 import numpy as np
@@ -112,8 +113,13 @@ class GaussianDiffusion(nn.Module):
 
         # spec: [B, T, M] or [B, F, T, M]
         # spec_min and spec_max: [1, 1, M] or [1, 1, F, M] => transpose(-3, -2) => [1, 1, M] or [1, F, 1, M]
-        self.register_buffer('spec_min', torch.FloatTensor(spec_min)[None, None, :out_dims].transpose(-3, -2))
-        self.register_buffer('spec_max', torch.FloatTensor(spec_max)[None, None, :out_dims].transpose(-3, -2))
+        spec_min = torch.FloatTensor(spec_min)[None, None, :out_dims].transpose(-3, -2)
+        spec_max = torch.FloatTensor(spec_max)[None, None, :out_dims].transpose(-3, -2)
+        if self.num_feats == 1:
+            spec_min = spec_min.squeeze(1)
+            spec_max = spec_max.squeeze(1)
+        self.register_buffer('spec_min', spec_min)
+        self.register_buffer('spec_max', spec_max)
 
     def q_mean_variance(self, x_start, t):
         mean = extract(self.sqrt_alphas_cumprod, t, x_start.shape) * x_start
@@ -214,7 +220,7 @@ class GaussianDiffusion(nn.Module):
 
         if not infer:
             # gt_spec: [B, T, M] or [B, F, T, M]
-            spec = self.norm_spec(gt_spec).transpose(1, 2)  # [B, M, T] or [B, F, M, T]
+            spec = self.norm_spec(gt_spec).transpose(-2, -1)  # [B, M, T] or [B, F, M, T]
             if self.num_feats == 1:
                 spec = spec[:, None, :, :]  # [B, F=1, M, T]
             t = torch.randint(0, self.k_step, (b,), device=device).long()
@@ -297,8 +303,6 @@ class RepetitiveDiffusion(GaussianDiffusion):
                  betas=None):
         assert (isinstance(vmin, float) and isinstance(vmin, float)) or len(vmin) == len(vmax)
         num_feats = 1 if isinstance(vmin, int) else len(vmin)
-        self.vmin = vmin
-        self.vmax = vmax
         self.repeat_bins = repeat_bins
         super().__init__(
             out_dims=repeat_bins, num_feats=num_feats,
@@ -333,7 +337,8 @@ class PitchDiffusion(RepetitiveDiffusion):
                  timesteps=1000, k_step=1000,
                  denoiser_type=None, denoiser_args=None,
                  betas=None):
-        assert isinstance(vmin, float) and isinstance(vmin, float)
+        self.vmin = vmin
+        self.vmax = vmax
         super().__init__(
             vmin=vmin, vmax=vmax, repeat_bins=repeat_bins,
             timesteps=timesteps, k_step=k_step,
@@ -348,14 +353,67 @@ class PitchDiffusion(RepetitiveDiffusion):
         return super().denorm_spec(x).clamp(min=self.vmin, max=self.vmax)
 
 
+class MultiVarianceDiffusion(RepetitiveDiffusion):
+    def __init__(
+            self, ranges: List[Tuple[float, float]],
+            clamps: List[Tuple[float | None, float | None] | None],
+            repeat_bins, timesteps=1000, k_step=1000,
+            denoiser_type=None, denoiser_args=None,
+            betas=None
+    ):
+        assert len(ranges) == len(clamps)
+        self.clamps = clamps
+        super().__init__(
+            vmin=[r[0] for r in ranges], vmax=[r[1] for r in ranges], repeat_bins=repeat_bins,
+            timesteps=timesteps, k_step=k_step,
+            denoiser_type=denoiser_type, denoiser_args=denoiser_args,
+            betas=betas
+        )
+
+    def clamp_spec(self, xs: list | tuple):
+        clamped = []
+        for x, c in zip(xs, self.clamps):
+            if c is None:
+                clamped.append(x)
+                continue
+            clamped.append(x.clamp(min=c[0], max=c[1]))
+        return clamped
+
+    def norm_spec(self, xs: list | tuple):
+        """
+
+        :param xs: sequence of [B, T]
+        :return: [B, F, T] => super().norm_spec(xs) => [B, F, T, R]
+        """
+        assert len(xs) == self.num_feats
+        clamped = self.clamp_spec(xs)
+        xs = torch.stack(clamped, dim=1)  # [B, F, T]
+        if self.num_feats == 1:
+            xs = xs.squeeze(1)  # [B, T]
+        return super().norm_spec(xs)
+
+    def denorm_spec(self, xs):
+        """
+
+        :param xs: [B, T, R] or [B, F, T, R] => super().denorm_spec(xs) => [B, T] or [B, F, T]
+        :return: sequence of [B, T]
+        """
+        xs = super().denorm_spec(xs)
+        if self.num_feats == 1:
+            xs = [xs]
+        else:
+            xs = xs.unbind(dim=1)
+        assert len(xs) == self.num_feats
+        return self.clamp_spec(xs)
+
+
 class EnergyDiffusion(RepetitiveDiffusion):
-    def __init__(self, vmin: float, vmax: float, repeat_bins,
+    def __init__(self, v_range: Tuple[float, float], repeat_bins,
                  timesteps=1000, k_step=1000,
                  denoiser_type=None, denoiser_args=None,
                  betas=None):
-        assert isinstance(vmin, float) and isinstance(vmin, float)
         super().__init__(
-            vmin=vmin, vmax=vmax, repeat_bins=repeat_bins,
+            vmin=v_range[0], vmax=v_range[1], repeat_bins=repeat_bins,
             timesteps=timesteps, k_step=k_step,
             denoiser_type=denoiser_type, denoiser_args=denoiser_args,
             betas=betas

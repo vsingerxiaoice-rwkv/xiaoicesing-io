@@ -30,20 +30,17 @@ dictionary: dictionaries/opencpop-extension.txt
 
 use_spk_id: false
 
-K_step: 1000
-timesteps: 1000
-max_beta: 0.02
 rel_pos: true
-diff_accelerator: dpm-solver
-pndm_speedup: 10
-
 hidden_size: 256
 
 predict_dur: true
+predict_pitch: true
+predict_energy: false
+predict_breathiness: true
+
 dur_cascade: false
-lambda_dur_loss: 1.0
 dur_prediction_args:
-  hidden_size: 384
+  hidden_size: 512
   dropout: 0.1
   num_layers: 5
   kernel_size: 3
@@ -53,53 +50,37 @@ dur_prediction_args:
   lambda_wdur_loss: 1.0
   lambda_sdur_loss: 3.0
 
-predict_pitch: true
-pitch_cascade: true
-lambda_pitch_loss: 1.0
 pitch_prediction_args:
-  diff_predictor_mode: repeat
-  pitch_delta_vmin: -12  # -12.75
-  pitch_delta_vmax: 12  # 12.75
+  pitch_delta_vmin: -12.0  # -12.75
+  pitch_delta_vmax: 12.0  # 12.75
   num_pitch_bins: 64
   deviation: 0.25
-  hidden_size: 512
   residual_layers: 20
   residual_channels: 256
 
-predict_energy: false
-lambda_energy_loss: 1.0
-energy_prediction_args:
-  hidden_size: 512
-  dropout: 0.1
-  num_layers: 5
-  kernel_size: 3
-  loss_type: mse
-  db_vmin: -72.0
-  db_vmax: -20.0
-  num_repeat_bins: 64
+energy_db_min: -72.0
+energy_db_max: -12.0
+breathiness_db_min: -72.0
+breathiness_db_max: -20.0
+
+variances_prediction_args:
+  repeat_bins: 64
   residual_layers: 20
   residual_channels: 256
 
-predict_breathiness: false
-lambda_breathiness_loss: 1.0
-breathiness_prediction_args:
-  hidden_size: 512
-  dropout: 0.1
-  num_layers: 5
-  kernel_size: 3
-  loss_type: mse
-  db_vmin: -72.0
-  db_vmax: -20.0
-  num_repeat_bins: 64
-  residual_layers: 20
-  residual_channels: 256
+lambda_dur_loss: 1.0
+lambda_pitch_loss: 1.0
+lambda_variances_loss: 1.0
 
-residual_layers: 10
-residual_channels: 256
 dilation_cycle_length: 5  # *
+schedule_type: 'linear'
+K_step: 1000
+timesteps: 1000
+max_beta: 0.02
 diff_decoder_type: 'wavenet'
 diff_loss_type: l2
-schedule_type: 'linear'
+diff_accelerator: dpm-solver
+pndm_speedup: 10
 
 # train and eval
 num_sanity_val_steps: 1
