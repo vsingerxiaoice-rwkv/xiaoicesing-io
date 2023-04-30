@@ -61,8 +61,10 @@ class CurveLoss1d(nn.Module):
     Loss module for 1d parameter curve with non-padding masks.
     """
 
-    def __init__(self, loss_type):
+    def __init__(self, vmin, vmax, loss_type):
         super().__init__()
+        self.vmin = vmin
+        self.vmax = vmax
         self.loss_type = loss_type
         if self.loss_type == 'mse':
             self.loss = nn.MSELoss(reduction='none')
@@ -71,8 +73,11 @@ class CurveLoss1d(nn.Module):
         else:
             raise NotImplementedError()
 
+    def norm_target(self, c_gt):
+        return (c_gt - self.vmin) / (self.vmax - self.vmin) * 2 - 1
+
     def forward(self, c_pred, c_gt, mask=None):
-        loss = self.loss(c_pred, c_gt)
+        loss = self.loss(c_pred, self.norm_target(c_gt))
         if mask is not None:
             loss *= mask
         return loss.mean()

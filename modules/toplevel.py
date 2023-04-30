@@ -165,6 +165,8 @@ class DiffSingerVariance(CategorizedModule):
             #     )
             # )
             self.breathiness_predictor = VariancePredictor(
+                vmin=10. ** (breathiness_hparams['db_vmin'] / 20.),
+                vmax=10. ** (breathiness_hparams['db_vmax'] / 20.),
                 in_dims=hparams['hidden_size'],
                 n_chans=breathiness_hparams['hidden_size'],
                 n_layers=breathiness_hparams['num_layers'],

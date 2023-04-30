@@ -139,7 +139,8 @@ class DurationPredictor(torch.nn.Module):
 
 
 class VariancePredictor(torch.nn.Module):
-    def __init__(self, in_dims, n_layers=5, n_chans=512, kernel_size=5,
+    def __init__(self, vmin, vmax, in_dims,
+                 n_layers=5, n_chans=512, kernel_size=5,
                  dropout_rate=0.1, padding='SAME'):
         """Initialize variance predictor module.
         Args:
@@ -151,6 +152,8 @@ class VariancePredictor(torch.nn.Module):
         """
         super(VariancePredictor, self).__init__()
 
+        self.vmin = vmin
+        self.vmax = vmax
         self.conv = torch.nn.ModuleList()
         self.kernel_size = kernel_size
         self.padding = padding
@@ -168,6 +171,9 @@ class VariancePredictor(torch.nn.Module):
         self.linear = torch.nn.Linear(n_chans, 1)
         self.embed_positions = SinusoidalPositionalEmbedding(in_dims, 0, init_size=4096)
         self.pos_embed_alpha = nn.Parameter(torch.Tensor([1]))
+
+    def out2value(self, xs):
+        return (xs + 1) / 2 * (self.vmax - self.vmin) + self.vmin
 
     def forward(self, xs):
         """

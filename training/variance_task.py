@@ -90,6 +90,8 @@ class VarianceTask(BaseTask):
         if hparams['predict_breathiness']:
             breathiness_hparams = hparams['breathiness_prediction_args']
             self.breathiness_loss = CurveLoss1d(
+                vmin=10. ** (breathiness_hparams['db_vmin'] / 20.),
+                vmax=10. ** (breathiness_hparams['db_vmax'] / 20.),
                 loss_type=breathiness_hparams['loss_type'],
             )
 
