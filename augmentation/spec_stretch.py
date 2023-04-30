@@ -25,6 +25,9 @@ class SpectrogramStretchAugmentation(BaseAugmentation):
         if 'energy' in item:
             raise NotImplementedError('Energy has not been supported in augmentation.')
 
+        if 'breathiness' in item:
+            raise NotImplementedError('Breathiness has not been supported in augmentation.')
+
         aug_item = deepcopy(item)
         if hparams['vocoder'] in VOCODERS:
             wav, mel = VOCODERS[hparams['vocoder']].wav2spec(

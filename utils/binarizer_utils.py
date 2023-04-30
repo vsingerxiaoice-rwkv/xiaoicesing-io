@@ -2,12 +2,13 @@ import warnings
 
 import librosa
 import torch
+import numpy as np
+import pyworld as pw
 
 warnings.filterwarnings("ignore")
 
 import parselmouth
 from utils.pitch_utils import interp_f0
-import numpy as np
 
 
 @torch.no_grad()
@@ -77,3 +78,36 @@ def get_energy_librosa(wav_data, length, hparams):
     energy = librosa.feature.rms(y=wav_data, frame_length=win_size, hop_length=hop_size)[0]
     energy = pad_frames(energy, hop_size, wav_data.shape[0], length)
     return energy
+
+
+def get_breathiness_pyworld(wav_data, f0, length, hparams):
+    """
+
+    :param wav_data: [T]
+    :param f0: reference f0
+    :param length: Expected number of frames
+    :param hparams:
+    :return: breathiness
+    """
+    sample_rate = hparams['audio_sample_rate']
+    hop_size = hparams['hop_size']
+    fft_size = hparams['fft_size']
+
+    x = wav_data.astype(np.double)
+    wav_frames = (x.shape[0] + hop_size - 1) // hop_size
+    f0_frames = f0.shape[0]
+    if f0_frames < wav_frames:
+        f0 = np.pad(f0, [[0, wav_frames - f0_frames]], mode='constant')
+    elif f0_frames > wav_frames:
+        f0 = f0[:wav_frames]
+
+    time_step = hop_size / sample_rate
+    t = np.arange(0, wav_frames) * time_step
+    sp = pw.cheaptrick(x, f0, t, sample_rate, fft_size=fft_size)  # extract smoothed spectrogram
+    ap = pw.d4c(x, f0, t, sample_rate, fft_size=fft_size)  # extract aperiodicity
+    y = pw.synthesize(
+        f0, sp * ap * ap, np.ones_like(ap), sample_rate,
+        frame_period=time_step * 1000
+    )  # synthesize the aperiodic part using the parameters
+    breathiness = get_energy_librosa(y, length, hparams)
+    return breathiness

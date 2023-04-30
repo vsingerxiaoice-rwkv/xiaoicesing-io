@@ -9,7 +9,7 @@ import utils.infer_utils
 from basics.base_dataset import BaseDataset
 from basics.base_task import BaseTask
 from modules.losses.diff_loss import DiffusionNoiseLoss
-from modules.losses.variance_loss import DurationLoss
+from modules.losses.variance_loss import DurationLoss, CurveLoss1d
 from modules.toplevel import DiffSingerVariance
 from utils.hparams import hparams
 from utils.plot import dur_to_figure, curve_to_figure
@@ -40,6 +40,9 @@ class VarianceDataset(BaseDataset):
         if hparams['predict_energy']:
             energy = utils.collate_nd([s['energy'] for s in samples], 0)
             batch['energy'] = energy
+        if hparams['predict_breathiness']:
+            breathiness = utils.collate_nd([s['breathiness'] for s in samples], 0)
+            batch['breathiness'] = breathiness
         if hparams['use_spk_id']:
             spk_ids = torch.LongTensor([s['spk_id'] for s in samples])
             batch['spk_ids'] = spk_ids
@@ -57,6 +60,8 @@ class VarianceTask(BaseTask):
             self.lambda_pitch_loss = hparams['lambda_pitch_loss']
         if hparams['predict_energy']:
             self.lambda_energy_loss = hparams['lambda_energy_loss']
+        if hparams['predict_breathiness']:
+            self.lambda_breathiness_loss = hparams['lambda_breathiness_loss']
 
     def build_model(self):
         return DiffSingerVariance(
@@ -75,14 +80,17 @@ class VarianceTask(BaseTask):
                 lambda_sdur=dur_hparams['lambda_sdur_loss']
             )
         if hparams['predict_pitch']:
-            pitch_hparams = hparams['pitch_prediction_args']
             self.pitch_loss = DiffusionNoiseLoss(
-                loss_type=pitch_hparams['diff_loss_type'],
+                loss_type=hparams['diff_loss_type'],
             )
         if hparams['predict_energy']:
-            energy_hparams = hparams['energy_prediction_args']
             self.energy_loss = DiffusionNoiseLoss(
-                loss_type=energy_hparams['diff_loss_type'],
+                loss_type=hparams['diff_loss_type'],
+            )
+        if hparams['predict_breathiness']:
+            breathiness_hparams = hparams['breathiness_prediction_args']
+            self.breathiness_loss = CurveLoss1d(
+                loss_type=breathiness_hparams['loss_type'],
             )
 
     def run_model(self, sample, infer=False):
@@ -94,14 +102,15 @@ class VarianceTask(BaseTask):
         base_pitch = sample['base_pitch']  # [B, T_t]
         delta_pitch = sample['delta_pitch']  # [B, T_t]
         energy = sample.get('energy')  # [B, T_t]
+        breathiness = sample.get('breathiness')  # [B, T_t]
 
         output = self.model(txt_tokens, midi=midi, ph2word=ph2word, ph_dur=ph_dur,
                             mel2ph=mel2ph, base_pitch=base_pitch, delta_pitch=delta_pitch, energy=energy,
                             infer=infer)
 
-        dur_pred, pitch_pred, energy_pred = output
+        dur_pred, pitch_pred, energy_pred, breathiness_pred = output
         if infer:
-            return dur_pred, pitch_pred, energy_pred
+            return dur_pred, pitch_pred, energy_pred, breathiness_pred
         else:
             losses = {}
             if dur_pred is not None:
@@ -117,6 +126,10 @@ class VarianceTask(BaseTask):
                 losses['energy_loss'] = self.lambda_energy_loss * self.energy_loss(
                     energy_x_recon, energy_noise, nonpadding=nonpadding.unsqueeze(-1)
                 )
+            if breathiness_pred is not None:
+                losses['breathiness_loss'] = self.lambda_breathiness_loss * self.breathiness_loss(
+                    breathiness_pred, breathiness, mask=nonpadding
+                )
             return losses
 
     def _validation_step(self, sample, batch_idx):
@@ -128,7 +141,7 @@ class VarianceTask(BaseTask):
 
         if batch_idx < hparams['num_valid_plots'] \
                 and (self.trainer.distributed_sampler_kwargs or {}).get('rank', 0) == 0:
-            dur_pred, pitch_pred, energy_pred = self.run_model(sample, infer=True)
+            dur_pred, pitch_pred, energy_pred, breathiness_pred = self.run_model(sample, infer=True)
             if dur_pred is not None:
                 self.plot_dur(batch_idx, sample['ph_dur'], dur_pred, txt=sample['tokens'])
             if pitch_pred is not None:
@@ -149,6 +162,14 @@ class VarianceTask(BaseTask):
                     gt_curve=energy,
                     pred_curve=energy_pred,
                     curve_name='energy'
+                )
+            if breathiness_pred is not None:
+                breathiness = sample['breathiness']
+                self.plot_curve(
+                    batch_idx,
+                    gt_curve=breathiness,
+                    pred_curve=breathiness_pred,
+                    curve_name='breathiness'
                 )
 
         return outputs, sample['size']

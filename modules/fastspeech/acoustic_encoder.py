@@ -33,6 +33,9 @@ class FastSpeech2Acoustic(nn.Module):
         if hparams.get('use_energy_embed', False):
             self.energy_embed = Linear(1, hparams['hidden_size'])
 
+        if hparams.get('use_breathiness_embed', False):
+            self.breathiness_embed = Linear(1, hparams['hidden_size'])
+
         if hparams.get('use_key_shift_embed', False):
             self.key_shift_embed = Linear(1, hparams['hidden_size'])
 
@@ -42,7 +45,11 @@ class FastSpeech2Acoustic(nn.Module):
         if hparams['use_spk_id']:
             self.spk_embed = Embedding(hparams['num_spk'], hparams['hidden_size'])
 
-    def forward(self, txt_tokens, mel2ph, f0, energy=None, key_shift=None, speed=None, spk_embed_id=None, **kwargs):
+    def forward(
+            self, txt_tokens, mel2ph, f0, energy=None, breathiness=None,
+            key_shift=None, speed=None, spk_embed_id=None,
+            **kwargs
+    ):
         dur = mel2ph_to_dur(mel2ph, txt_tokens.shape[1]).float()
         dur_embed = self.dur_embed(dur[:, :, None])
         encoder_out = self.encoder(txt_tokens, dur_embed)
@@ -51,11 +58,13 @@ class FastSpeech2Acoustic(nn.Module):
         mel2ph_ = mel2ph[..., None].repeat([1, 1, encoder_out.shape[-1]])
         condition = torch.gather(encoder_out, 1, mel2ph_)
         return self.forward_variance_embedding(
-            condition, f0=f0, energy=energy, key_shift=key_shift, speed=speed, spk_embed_id=spk_embed_id, **kwargs
+            condition, f0=f0, energy=energy, breathiness=breathiness,
+            key_shift=key_shift, speed=speed, spk_embed_id=spk_embed_id,
+            **kwargs
         )
 
     def forward_variance_embedding(
-            self, condition, f0, energy=None,
+            self, condition, f0, energy=None, breathiness=None,
             key_shift=None, speed=None, spk_embed_id=None,
             **kwargs
     ):
@@ -70,6 +79,10 @@ class FastSpeech2Acoustic(nn.Module):
         if hparams.get('use_energy_embed', False):
             energy_embed = self.energy_embed(energy[:, :, None])
             condition += energy_embed
+
+        if hparams.get('use_breathiness_embed', False):
+            breathiness_embed = self.breathiness_embed(breathiness[:, :, None])
+            condition += breathiness_embed
 
         if hparams.get('use_key_shift_embed', False):
             key_shift_embed = self.key_shift_embed(key_shift[:, :, None])

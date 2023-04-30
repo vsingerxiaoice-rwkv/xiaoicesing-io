@@ -14,7 +14,8 @@ from modules.fastspeech.tts_modules import LengthRegulator
 from utils.binarizer_utils import (
     get_mel2ph_torch,
     get_pitch_parselmouth,
-    get_energy_librosa
+    get_energy_librosa,
+    get_breathiness_pyworld
 )
 from utils.hparams import hparams
 
@@ -29,6 +30,7 @@ VARIANCE_ITEM_ATTRIBUTES = [
     'base_pitch',  # interpolated and smoothed frame-level MIDI pitch, float32[T_t,]
     'delta_pitch',  # delta_pitch = actual_pitch - base_pitch, in semitones, float32[T_t,]
     'energy',  # float32[T_t,]
+    'breathiness',  # float32[T_t,]
 ]
 
 
@@ -151,6 +153,11 @@ class VarianceBinarizer(BaseBinarizer):
         if hparams['predict_energy']:
             energy = get_energy_librosa(waveform, length, hparams)
             processed_input['energy'] = energy.astype(np.float32)
+
+        # Below: extract breathiness
+        if hparams['predict_breathiness']:
+            breathiness = get_breathiness_pyworld(waveform, f0 * uv, length, hparams)
+            processed_input['breathiness'] = breathiness.astype(np.float32)
 
         return processed_input
 

@@ -66,12 +66,27 @@ pitch_prediction_args:
   residual_channels: 256
   diff_loss_type: l2
 
-predict_energy: true
+predict_energy: false
 lambda_energy_loss: 1.0
 energy_prediction_args:
   hidden_size: 512
   dropout: 0.1
-  num_layers: 8
+  num_layers: 5
+  kernel_size: 3
+  loss_type: mse
+  db_vmin: -72.0
+  db_vmax: -20.0
+  num_repeat_bins: 64
+  residual_layers: 20
+  residual_channels: 256
+  diff_loss_type: l2
+
+predict_breathiness: false
+lambda_breathiness_loss: 1.0
+breathiness_prediction_args:
+  hidden_size: 512
+  dropout: 0.1
+  num_layers: 5
   kernel_size: 3
   loss_type: mse
   db_vmin: -72.0

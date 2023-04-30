@@ -21,7 +21,10 @@ from basics.base_binarizer import BaseBinarizer, BinarizationError
 from modules.fastspeech.tts_modules import LengthRegulator
 from modules.vocoders.registry import VOCODERS
 from utils.binarizer_utils import (
-    get_mel2ph_torch, get_pitch_parselmouth, get_energy_librosa
+    get_mel2ph_torch,
+    get_pitch_parselmouth,
+    get_energy_librosa,
+    get_breathiness_pyworld
 )
 from utils.hparams import hparams
 from utils.phoneme_utils import build_phoneme_list
@@ -34,6 +37,7 @@ ACOUSTIC_ITEM_ATTRIBUTES = [
     'mel2ph',
     'f0',
     'energy',
+    'breathiness',
     'key_shift',
     'speed'
 ]
@@ -178,6 +182,11 @@ class AcousticBinarizer(BaseBinarizer):
             # get ground truth energy
             energy = get_energy_librosa(wav, length, hparams)
             processed_input['energy'] = energy
+
+        if hparams.get('use_breathiness_embed', False):
+            # get ground truth energy
+            breathiness = get_breathiness_pyworld(wav, gt_f0 * uv, length, hparams)
+            processed_input['breathiness'] = breathiness
 
         if hparams.get('use_key_shift_embed', False):
             processed_input['key_shift'] = 0.
