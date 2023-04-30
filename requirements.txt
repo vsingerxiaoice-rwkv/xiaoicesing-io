@@ -5,7 +5,7 @@
 click
 h5py
 librosa<0.10.0
-lightning==2.0.2
+lightning>=2.0.0
 matplotlib
 MonkeyType==23.3.0
 numpy==1.23.5
@@ -13,6 +13,7 @@ onnx==1.13.1
 onnxsim==0.4.17
 praat-parselmouth==0.4.3
 protobuf==3.20.3
+pyworld==0.3.3
 PyYAML
 resampy
 scipy
