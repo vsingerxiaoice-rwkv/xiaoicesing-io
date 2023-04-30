@@ -36,7 +36,7 @@ hidden_size: 256
 predict_dur: true
 predict_pitch: true
 predict_energy: false
-predict_breathiness: true
+predict_breathiness: false
 
 dur_cascade: false
 dur_prediction_args:
@@ -70,7 +70,7 @@ variances_prediction_args:
 
 lambda_dur_loss: 1.0
 lambda_pitch_loss: 1.0
-lambda_variances_loss: 1.0
+lambda_var_loss: 1.0
 
 dilation_cycle_length: 5  # *
 schedule_type: 'linear'

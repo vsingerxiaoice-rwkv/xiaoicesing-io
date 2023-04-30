@@ -67,7 +67,7 @@ class VarianceTask(BaseTask):
         if predict_breathiness:
             self.variance_prediction_list.append('breathiness')
         self.predict_variances = len(self.variance_prediction_list) > 0
-        self.lambda_variances_loss = hparams['lambda_variances_loss']
+        self.lambda_var_loss = hparams['lambda_var_loss']
 
     def build_model(self):
         return DiffSingerVariance(
@@ -90,7 +90,7 @@ class VarianceTask(BaseTask):
                 loss_type=hparams['diff_loss_type'],
             )
         if self.predict_variances:
-            self.variances_loss = DiffusionNoiseLoss(
+            self.var_loss = DiffusionNoiseLoss(
                 loss_type=hparams['diff_loss_type'],
             )
 
@@ -127,7 +127,7 @@ class VarianceTask(BaseTask):
                 )
             if variances_pred is not None:
                 (variance_x_recon, variance_noise) = variances_pred
-                losses['variances_loss'] = self.lambda_variances_loss * self.variances_loss(
+                losses['var_loss'] = self.lambda_var_loss * self.var_loss(
                     variance_x_recon, variance_noise, nonpadding=nonpadding
                 )
             return losses
