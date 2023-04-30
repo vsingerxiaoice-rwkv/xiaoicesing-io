@@ -362,8 +362,14 @@ class MultiVarianceDiffusion(RepetitiveDiffusion):
     ):
         assert len(ranges) == len(clamps)
         self.clamps = clamps
+        vmin = [r[0] for r in ranges]
+        vmax = [r[1] for r in ranges]
+        if len(vmin) == 1:
+            vmin = vmin[0]
+        if len(vmin) == 1:
+            vmax = vmax[0]
         super().__init__(
-            vmin=[r[0] for r in ranges], vmax=[r[1] for r in ranges], repeat_bins=repeat_bins,
+            vmin=vmin, vmax=vmax, repeat_bins=repeat_bins,
             timesteps=timesteps, k_step=k_step,
             denoiser_type=denoiser_type, denoiser_args=denoiser_args,
             betas=betas
