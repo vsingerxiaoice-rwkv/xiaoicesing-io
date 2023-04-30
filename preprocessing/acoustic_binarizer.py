@@ -185,7 +185,7 @@ class AcousticBinarizer(BaseBinarizer):
 
         if hparams.get('use_breathiness_embed', False):
             # get ground truth energy
-            breathiness = get_breathiness_pyworld(wav, gt_f0 * uv, length, hparams)
+            breathiness = get_breathiness_pyworld(wav, gt_f0 * ~uv, length, hparams)
             processed_input['breathiness'] = breathiness
 
         if hparams.get('use_key_shift_embed', False):

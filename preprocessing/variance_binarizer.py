@@ -156,7 +156,7 @@ class VarianceBinarizer(BaseBinarizer):
 
         # Below: extract breathiness
         if hparams['predict_breathiness']:
-            breathiness = get_breathiness_pyworld(waveform, f0 * uv, length, hparams)
+            breathiness = get_breathiness_pyworld(waveform, f0 * ~uv, length, hparams)
             processed_input['breathiness'] = breathiness.astype(np.float32)
 
         return processed_input
