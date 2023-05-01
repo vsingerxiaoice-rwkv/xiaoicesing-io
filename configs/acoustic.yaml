@@ -56,6 +56,20 @@ use_breathiness_embed: false
 use_key_shift_embed: false
 use_speed_embed: false
 
+predict_energy: false
+predict_breathiness: false
+
+energy_db_min: -72.0
+energy_db_max: -12.0
+breathiness_db_min: -72.0
+breathiness_db_max: -20.0
+
+variances_prediction_args:
+  repeat_bins: 64
+  residual_layers: 20
+  residual_channels: 256
+lambda_var_loss: 1.0
+
 K_step: 1000
 timesteps: 1000
 max_beta: 0.02

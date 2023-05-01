@@ -30,24 +30,33 @@ class FastSpeech2Acoustic(nn.Module):
         else:
             raise ValueError('f0_embed_type must be \'discrete\' or \'continuous\'.')
 
-        if hparams.get('use_energy_embed', False):
+        self.use_energy_embed = hparams.get('use_energy_embed', False) and not hparams.get('predict_energy', False)
+        if self.use_energy_embed:
+            # energy is embedded but not predicted
             self.energy_embed = Linear(1, hparams['hidden_size'])
 
-        if hparams.get('use_breathiness_embed', False):
+        self.use_breathiness_embed = (
+                hparams.get('use_breathiness_embed', False) and not hparams.get('predict_breathiness', False)
+        )
+        if self.use_breathiness_embed:
+            # breathiness is embedded but not predicted
             self.breathiness_embed = Linear(1, hparams['hidden_size'])
 
-        if hparams.get('use_key_shift_embed', False):
+        self.use_key_shift_embed = hparams.get('use_key_shift_embed', False)
+        if self.use_key_shift_embed:
             self.key_shift_embed = Linear(1, hparams['hidden_size'])
 
-        if hparams.get('use_speed_embed', False):
+        self.use_speed_embed = hparams.get('use_speed_embed', False)
+        if self.use_speed_embed:
             self.speed_embed = Linear(1, hparams['hidden_size'])
 
-        if hparams['use_spk_id']:
+        self.use_spk_id = hparams['use_spk_id']
+        if self.use_spk_id:
             self.spk_embed = Embedding(hparams['num_spk'], hparams['hidden_size'])
 
     def forward(
             self, txt_tokens, mel2ph, f0, energy=None, breathiness=None,
-            key_shift=None, speed=None, spk_embed_id=None,
+            key_shift=None, speed=None, spk_embed_id=None, infer=True,
             **kwargs
     ):
         dur = mel2ph_to_dur(mel2ph, txt_tokens.shape[1]).float()
@@ -57,47 +66,66 @@ class FastSpeech2Acoustic(nn.Module):
         encoder_out = F.pad(encoder_out, [0, 0, 1, 0])
         mel2ph_ = mel2ph[..., None].repeat([1, 1, encoder_out.shape[-1]])
         condition = torch.gather(encoder_out, 1, mel2ph_)
-        return self.forward_variance_embedding(
-            condition, f0=f0, energy=energy, breathiness=breathiness,
-            key_shift=key_shift, speed=speed, spk_embed_id=spk_embed_id,
-            **kwargs
-        )
 
-    def forward_variance_embedding(
-            self, condition, f0, energy=None, breathiness=None,
-            key_shift=None, speed=None, spk_embed_id=None,
-            **kwargs
-    ):
-        if self.f0_embed_type == 'discrete':
-            pitch = f0_to_coarse(f0)
-            pitch_embed = self.pitch_embed(pitch)
-        else:
-            f0_mel = (1 + f0 / 700).log()
-            pitch_embed = self.pitch_embed(f0_mel[:, :, None])
-        condition += pitch_embed
-
-        if hparams.get('use_energy_embed', False):
-            energy_embed = self.energy_embed(energy[:, :, None])
-            condition += energy_embed
-
-        if hparams.get('use_breathiness_embed', False):
-            breathiness_embed = self.breathiness_embed(breathiness[:, :, None])
-            condition += breathiness_embed
-
-        if hparams.get('use_key_shift_embed', False):
-            key_shift_embed = self.key_shift_embed(key_shift[:, :, None])
-            condition += key_shift_embed
-
-        if hparams.get('use_speed_embed', False):
-            speed_embed = self.speed_embed(speed[:, :, None])
-            condition += speed_embed
-
-        if hparams['use_spk_id']:
+        if self.use_spk_id:
             spk_mix_embed = kwargs.get('spk_mix_embed')
             if spk_mix_embed is not None:
                 spk_embed = spk_mix_embed
             else:
                 spk_embed = self.spk_embed(spk_embed_id)[:, None, :]
             condition += spk_embed
+
+        if self.f0_embed_type == 'discrete':
+            pitch = f0_to_coarse(f0)
+            pitch_embed = self.pitch_embed(pitch)
+        else:
+            f0_mel = (1 + f0 / 700).log()
+            pitch_embed = self.pitch_embed(f0_mel[:, :, None])
+
+        adaptor_cond = condition + pitch_embed
+        mel_cond = self.forward_variance_embedding(
+            adaptor_cond, energy=energy, breathiness=breathiness,
+            key_shift=key_shift, speed=speed
+        )
+
+        # During training, the data augmentation parameters (GEN and VEL)
+        # are seen to the variance adaptor; but during inference,
+        # we will always send the DEFAULT parameters (GEN = 0 and VEL = 1)
+        # to the variance adaptor so that the prediction outputs will NOT
+        # be influenced by these parameters, which is more reasonable for
+        # most users of singing voice synthesis systems.
+        if self.use_key_shift_embed:
+            if infer:
+                key_shift = torch.zeros_like(key_shift)
+            key_shift_embed = self.key_shift_embed(key_shift[:, :, None])
+            adaptor_cond += key_shift_embed
+
+        if self.use_speed_embed:
+            if infer:
+                speed = torch.ones_like(speed)
+            speed_embed = self.speed_embed(speed[:, :, None])
+            adaptor_cond += speed_embed
+
+        return adaptor_cond, mel_cond
+
+    def forward_variance_embedding(
+            self, condition, energy=None, breathiness=None,
+            key_shift=None, speed=None
+    ):
+        if self.use_energy_embed:
+            energy_embed = self.energy_embed(energy[:, :, None])
+            condition += energy_embed
+
+        if self.use_breathiness_embed:
+            breathiness_embed = self.breathiness_embed(breathiness[:, :, None])
+            condition += breathiness_embed
+
+        if self.use_key_shift_embed:
+            key_shift_embed = self.key_shift_embed(key_shift[:, :, None])
+            condition += key_shift_embed
+
+        if self.use_speed_embed:
+            speed_embed = self.speed_embed(speed[:, :, None])
+            condition += speed_embed
 
         return condition

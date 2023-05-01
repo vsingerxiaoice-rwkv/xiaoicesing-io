@@ -21,7 +21,7 @@ from modules.toplevel import DiffSingerAcoustic
 from modules.vocoders.registry import get_vocoder_cls
 from utils.binarizer_utils import get_pitch_parselmouth
 from utils.hparams import hparams
-from utils.plot import spec_to_figure
+from utils.plot import spec_to_figure, curve_to_figure
 
 matplotlib.use('Agg')
 
@@ -66,6 +66,16 @@ class AcousticTask(BaseTask):
         self.stats = {}
         self.logged_gt_wav = set()
 
+        predict_energy = hparams['predict_energy']
+        predict_breathiness = hparams['predict_breathiness']
+        self.variance_prediction_list = []
+        if predict_energy:
+            self.variance_prediction_list.append('energy')
+        if predict_breathiness:
+            self.variance_prediction_list.append('breathiness')
+        self.predict_variances = len(self.variance_prediction_list) > 0
+        self.lambda_var_loss = hparams['lambda_var_loss']
+
     def build_model(self):
         return DiffSingerAcoustic(
             vocab_size=len(self.phone_encoder),
@@ -75,6 +85,10 @@ class AcousticTask(BaseTask):
     # noinspection PyAttributeOutsideInit
     def build_losses(self):
         self.mel_loss = DiffusionNoiseLoss(loss_type=hparams['diff_loss_type'])
+        if self.predict_variances:
+            self.var_loss = DiffusionNoiseLoss(
+                loss_type=hparams['diff_loss_type'],
+            )
 
     def run_model(self, sample, infer=False):
         txt_tokens = sample['tokens']  # [B, T_t]
@@ -99,14 +113,19 @@ class AcousticTask(BaseTask):
         )
 
         if infer:
-            mel_pred = output
-            return mel_pred
+            mel_pred, var_pred = output
+            return mel_pred, var_pred
         else:
-            x_recon, noise = output
-            mel_loss = self.mel_loss(x_recon, noise)
+            (x_recon, x_noise), var_pred_out = output
+            mel_loss = self.mel_loss(x_recon, x_noise)
             losses = {
                 'mel_loss': mel_loss
             }
+
+            if self.predict_variances:
+                (v_recon, v_noise) = var_pred_out
+                losses['var_loss'] = self.lambda_var_loss * self.var_loss(v_recon, v_noise)
+
             return losses
 
     def on_train_start(self):
@@ -126,10 +145,21 @@ class AcousticTask(BaseTask):
 
         if batch_idx < hparams['num_valid_plots'] \
                 and (self.trainer.distributed_sampler_kwargs or {}).get('rank', 0) == 0:
-            mel_pred = self.run_model(sample, infer=True)
+            mel_pred, var_pred = self.run_model(sample, infer=True)
+
             if self.use_vocoder:
                 self.plot_wav(batch_idx, sample['mel'], mel_pred, f0=sample['f0'])
             self.plot_mel(batch_idx, sample['mel'], mel_pred, name=f'diffmel_{batch_idx}')
+
+            for name in self.variance_prediction_list:
+                variance = sample[name]
+                variance_pred = var_pred[name]
+                self.plot_curve(
+                    batch_idx,
+                    gt_curve=variance,
+                    pred_curve=variance_pred,
+                    curve_name=name
+                )
 
         return outputs, sample['size']
 
@@ -155,6 +185,12 @@ class AcousticTask(BaseTask):
         vmax = hparams['mel_vmax']
         spec_cat = torch.cat([(spec_out - spec).abs() + vmin, spec, spec_out], -1)
         self.logger.experiment.add_figure(name, spec_to_figure(spec_cat[0], vmin, vmax), self.global_step)
+
+    def plot_curve(self, batch_idx, gt_curve, pred_curve, curve_name='curve'):
+        name = f'{curve_name}_{batch_idx}'
+        gt_curve = gt_curve[0].cpu().numpy()
+        pred_curve = pred_curve[0].cpu().numpy()
+        self.logger.experiment.add_figure(name, curve_to_figure(gt_curve, pred_curve), self.global_step)
 
     ############
     # infer

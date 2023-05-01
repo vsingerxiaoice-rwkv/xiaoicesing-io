@@ -17,12 +17,8 @@ DIFF_DENOISERS = {
 }
 
 
-def exists(x):
-    return x is not None
-
-
 def default(val, d):
-    if exists(val):
+    if val is not None:
         return val
     return d() if isfunction(d) else d
 
@@ -75,7 +71,7 @@ class GaussianDiffusion(nn.Module):
         self.out_dims = out_dims
         self.num_feats = num_feats
 
-        if exists(betas):
+        if betas is not None:
             betas = betas.detach().cpu().numpy() if isinstance(betas, torch.Tensor) else betas
         else:
             betas = beta_schedule[hparams['schedule_type']](timesteps)

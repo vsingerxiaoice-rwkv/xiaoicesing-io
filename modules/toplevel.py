@@ -1,4 +1,5 @@
 import torch
+import torch.nn as nn
 import torch.nn.functional as F
 
 from basics.base_module import CategorizedModule
@@ -6,20 +7,33 @@ from modules.commons.common_layers import (
     XavierUniformInitLinear as Linear,
 )
 from modules.diffusion.ddpm import (
-    GaussianDiffusion, PitchDiffusion, MultiVarianceDiffusion
+    GaussianDiffusion, PitchDiffusion
 )
 from modules.fastspeech.acoustic_encoder import FastSpeech2Acoustic
+from modules.fastspeech.param_adaptor import ParameterAdaptorModule
 from modules.fastspeech.tts_modules import LengthRegulator
 from modules.fastspeech.variance_encoder import FastSpeech2Variance
 from utils.hparams import hparams
 
 
-class DiffSingerAcoustic(CategorizedModule):
+class DiffSingerAcoustic(ParameterAdaptorModule, CategorizedModule):
+    @property
+    def category(self):
+        return 'acoustic'
+
     def __init__(self, vocab_size, out_dims):
         super().__init__()
         self.fs2 = FastSpeech2Acoustic(
             vocab_size=vocab_size
         )
+
+        if self.predict_variances:
+            self.variance_adaptor = self.build_adaptor()
+            self.variance_embeds = nn.ModuleDict({
+                name: Linear(1, hparams['hidden_size'])
+                for name in self.variance_prediction_list
+            })
+
         self.diffusion = GaussianDiffusion(
             out_dims=out_dims,
             num_feats=1,
@@ -34,33 +48,70 @@ class DiffSingerAcoustic(CategorizedModule):
             spec_max=hparams['spec_max']
         )
 
-    @property
-    def category(self):
-        return 'acoustic'
-
     def forward(
-            self, txt_tokens, mel2ph, f0, energy=None, breathiness=None,
-            key_shift=None, speed=None,
+            self, txt_tokens, mel2ph, f0, key_shift=None, speed=None,
             spk_embed_id=None, gt_mel=None, infer=True, **kwargs
     ):
-        condition = self.fs2(
-            txt_tokens, mel2ph, f0, energy=energy, breathiness=breathiness,
-            key_shift=key_shift, speed=speed,
-            spk_embed_id=spk_embed_id, **kwargs
+        adaptor_cond, mel_cond = self.fs2(
+            txt_tokens, mel2ph, f0, key_shift=key_shift, speed=speed,
+            spk_embed_id=spk_embed_id, infer=infer, **kwargs
         )
+
+        variance_inputs = self.collect_variance_inputs(**kwargs)
         if infer:
-            mel = self.diffusion(condition, infer=True)
-            mel *= ((mel2ph > 0).float()[:, :, None])
-            return mel
+            if not self.predict_variances:
+                variance_pred_out = {}
+            elif not all([v is not None for v in variance_inputs]):
+                variance_outputs = self.variance_adaptor(adaptor_cond, variance_inputs, infer)
+                variance_choices = [
+                    v_in if v_in is not None else v_pred
+                    for v_in, v_pred in zip(variance_inputs, variance_outputs)
+                ]
+                variance_embeds = torch.stack([
+                    self.variance_embeds[v_name](v_choice[:, :, None])  # [B, T] => [B, T, H]
+                    for v_name, v_choice in zip(self.variance_prediction_list, variance_choices)
+                ], dim=-1).sum(-1)
+                mel_cond += variance_embeds
+                variance_pred_out = self.collect_variance_outputs(variance_choices)
+            else:
+                variance_pred_out = {
+                    name: kwargs[name]
+                    for name in self.variance_prediction_list
+                }
+
+            mel_pred_out = self.diffusion(mel_cond, infer=True)
+            mel_pred_out *= ((mel2ph > 0).float()[:, :, None])
+
         else:
-            loss = self.diffusion(condition, gt_spec=gt_mel, infer=False)
-            return loss
+            if self.predict_variances:
+                variance_pred_out = self.variance_adaptor(adaptor_cond, variance_inputs, infer)
+
+                variance_embeds = torch.stack([
+                    self.variance_embeds[v_name](v_choice[:, :, None])  # [B, T] => [B, T, H]
+                    for v_name, v_choice in zip(self.variance_prediction_list, variance_inputs)
+                ], dim=-1).sum(-1)
+                mel_cond += variance_embeds
+            else:
+                variance_pred_out = None
+
+            mel_pred_out = self.diffusion(mel_cond, gt_spec=gt_mel, infer=False)
+
+        return mel_pred_out, variance_pred_out
 
 
-class DiffSingerVariance(CategorizedModule):
+class DiffSingerVariance(ParameterAdaptorModule, CategorizedModule):
+    @property
+    def category(self):
+        return 'variance'
+
     def __init__(self, vocab_size):
         super().__init__()
         self.predict_dur = hparams['predict_dur']
+        self.fs2 = FastSpeech2Variance(
+            vocab_size=vocab_size
+        )
+        self.lr = LengthRegulator()
+
         self.predict_pitch = hparams['predict_pitch']
 
         predict_energy = hparams['predict_energy']
@@ -71,11 +122,6 @@ class DiffSingerVariance(CategorizedModule):
         if predict_breathiness:
             self.variance_prediction_list.append('breathiness')
         self.predict_variances = len(self.variance_prediction_list) > 0
-
-        self.fs2 = FastSpeech2Variance(
-            vocab_size=vocab_size
-        )
-        self.lr = LengthRegulator()
 
         if self.predict_pitch:
             pitch_hparams = hparams['pitch_prediction_args']
@@ -95,50 +141,7 @@ class DiffSingerVariance(CategorizedModule):
 
         if self.predict_variances:
             self.pitch_embed = Linear(1, hparams['hidden_size'])
-
-            ranges = []
-            clamps = []
-
-            if predict_energy:
-                ranges.append((
-                    10. ** (hparams['energy_db_min'] / 20.),
-                    10. ** (hparams['energy_db_max'] / 20.)
-                ))
-                clamps.append((0., 1.))
-
-            if predict_breathiness:
-                ranges.append((
-                    10. ** (hparams['breathiness_db_min'] / 20.),
-                    10. ** (hparams['breathiness_db_max'] / 20.)
-                ))
-                clamps.append((0., 1.))
-
-            variances_hparams = hparams['variances_prediction_args']
-            self.variance_predictor = MultiVarianceDiffusion(
-                ranges=ranges,
-                clamps=clamps,
-                repeat_bins=variances_hparams['repeat_bins'],
-                timesteps=hparams['timesteps'],
-                k_step=hparams['K_step'],
-                denoiser_type=hparams['diff_decoder_type'],
-                denoiser_args=(
-                    variances_hparams['residual_layers'],
-                    variances_hparams['residual_channels']
-                )
-            )
-
-    @property
-    def category(self):
-        return 'variance'
-
-    def collect_variance_inputs(self, **kwargs):
-        return [kwargs.get(name) for name in self.variance_prediction_list]
-
-    def collect_variance_outputs(self, variances: list | tuple) -> dict:
-        return {
-            name: pred
-            for name, pred in zip(self.variance_prediction_list, variances)
-        }
+            self.variance_predictor = self.build_adaptor()
 
     def forward(
             self, txt_tokens, midi, ph2word, ph_dur=None, word_dur=None, mel2ph=None,

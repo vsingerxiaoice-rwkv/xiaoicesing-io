@@ -47,6 +47,10 @@ class AcousticBinarizer(BaseBinarizer):
     def __init__(self):
         super().__init__(data_attrs=ACOUSTIC_ITEM_ATTRIBUTES)
         self.lr = LengthRegulator()
+        self.need_energy = hparams.get('use_energy_embed', False) or hparams.get('predict_energy', False)
+        self.need_breathiness = (
+                hparams.get('use_breathiness_embed', False) or hparams.get('predict_breathiness', False)
+        )
 
     def load_meta_data(self, raw_data_dir: pathlib.Path, ds_id):
         meta_info = {
@@ -178,12 +182,12 @@ class AcousticBinarizer(BaseBinarizer):
             return None
         processed_input['f0'] = gt_f0.astype(np.float32)
 
-        if hparams.get('use_energy_embed', False):
+        if self.need_energy:
             # get ground truth energy
             energy = get_energy_librosa(wav, length, hparams)
             processed_input['energy'] = energy.astype(np.float32)
 
-        if hparams.get('use_breathiness_embed', False):
+        if self.need_breathiness:
             # get ground truth energy
             breathiness = get_breathiness_pyworld(wav, gt_f0 * ~uv, length, hparams)
             processed_input['breathiness'] = breathiness.astype(np.float32)
