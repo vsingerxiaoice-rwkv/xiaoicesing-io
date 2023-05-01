@@ -93,6 +93,9 @@ class GaussianDiffusionONNX(GaussianDiffusion):
             for t in step_range:
                 x = self.p_sample(x, t, cond=condition)
 
-        x = x.transpose(2, 3).squeeze(1)  # [B, T, M] or [B, F, T, M]
+        if self.num_feats == 1:
+            x = x.squeeze(1).permute(0, 2, 1)  # [B, 1, M, T] => [B, T, M]
+        else:
+            x = x.permute(0, 1, 3, 2)  # [B, F, M, T] => [B, F, T, M]
         x = self.denorm_spec(x)
         return x

@@ -65,6 +65,7 @@ class ResidualBlock(nn.Module):
 class WaveNet(nn.Module):
     def __init__(self, in_dims, n_feats, n_layers, n_chans):
         super().__init__()
+        self.in_dims = in_dims
         self.n_feats = n_feats
         self.input_projection = Conv1d(in_dims * n_feats, n_chans, 1)
         self.diffusion_embedding = SinusoidalPosEmb(n_chans)
@@ -89,11 +90,14 @@ class WaveNet(nn.Module):
         """
         :param spec: [B, F, M, T]
         :param diffusion_step: [B, 1]
-        :param cond: [B, M, T]
+        :param cond: [B, H, T]
         :return:
         """
-        x = spec.flatten(start_dim=1, end_dim=2)  # [B, F x M, T]
-        x = self.input_projection(x)  # [B, residual_channel, T]
+        if self.n_feats == 1:
+            x = spec.squeeze(1)  # [B, M, T]
+        else:
+            x = spec.flatten(start_dim=1, end_dim=2)  # [B, F x M, T]
+        x = self.input_projection(x)  # [B, C, T]
 
         x = F.relu(x)
         diffusion_step = self.diffusion_embedding(diffusion_step)
@@ -106,5 +110,12 @@ class WaveNet(nn.Module):
         x = torch.sum(torch.stack(skip), dim=0) / sqrt(len(self.residual_layers))
         x = self.skip_projection(x)
         x = F.relu(x)
-        x = self.output_projection(x)  # [B, mel_bins, T]
-        return x.unflatten(dim=1, sizes=(self.n_feats, -1))
+        x = self.output_projection(x)  # [B, M, T]
+        if self.n_feats == 1:
+            x = x[:, None, :, :]
+        else:
+            # This is the temporary solution since PyTorch 1.13
+            # does not support exporting aten::unflatten to ONNX
+            # x = x.unflatten(dim=1, sizes=(self.n_feats, self.in_dims))
+            x = x.reshape(x.shape[0], self.n_feats, self.in_dims, x.shape[3])
+        return x
