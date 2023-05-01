@@ -66,7 +66,7 @@ class WaveNet(nn.Module):
     def __init__(self, in_dims, n_feats, n_layers, n_chans):
         super().__init__()
         self.n_feats = n_feats
-        self.input_projection = Conv1d(in_dims, n_chans, 1)
+        self.input_projection = Conv1d(in_dims * n_feats, n_chans, 1)
         self.diffusion_embedding = SinusoidalPosEmb(n_chans)
         self.mlp = nn.Sequential(
             nn.Linear(n_chans, n_chans * 4),
@@ -82,7 +82,7 @@ class WaveNet(nn.Module):
             for i in range(n_layers)
         ])
         self.skip_projection = Conv1d(n_chans, n_chans, 1)
-        self.output_projection = Conv1d(n_chans, in_dims, 1)
+        self.output_projection = Conv1d(n_chans, in_dims * n_feats, 1)
         nn.init.zeros_(self.output_projection.weight)
 
     def forward(self, spec, diffusion_step, cond):
