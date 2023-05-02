@@ -76,12 +76,12 @@ class AcousticTask(BaseTask):
         self.stats = {}
         self.logged_gt_wav = set()
 
-        predict_energy = hparams['predict_energy']
-        predict_breathiness = hparams['predict_breathiness']
+        self.predict_energy = hparams['predict_energy']
+        self.predict_breathiness = hparams['predict_breathiness']
         self.variance_prediction_list = []
-        if predict_energy:
+        if self.predict_energy:
             self.variance_prediction_list.append('energy')
-        if predict_breathiness:
+        if self.predict_breathiness:
             self.variance_prediction_list.append('breathiness')
         self.predict_variances = len(self.variance_prediction_list) > 0
         self.lambda_var_loss = hparams['lambda_var_loss']
@@ -105,10 +105,11 @@ class AcousticTask(BaseTask):
         target = sample['mel']  # [B, T_s, M]
         mel2ph = sample['mel2ph']  # [B, T_s]
         f0 = sample['f0']
-        energy = sample.get('energy')
-        breathiness = sample.get('breathiness')
         key_shift = sample.get('key_shift')
         speed = sample.get('speed')
+
+        energy = None if self.predict_energy else sample.get('energy')
+        breathiness = None if self.predict_breathiness else sample.get('breathiness')
 
         if hparams['use_spk_id']:
             spk_embed_id = sample['spk_ids']
