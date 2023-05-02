@@ -108,8 +108,8 @@ class AcousticTask(BaseTask):
         key_shift = sample.get('key_shift')
         speed = sample.get('speed')
 
-        energy = None if self.predict_energy else sample.get('energy')
-        breathiness = None if self.predict_breathiness else sample.get('breathiness')
+        energy = None if self.predict_energy and infer else sample.get('energy')
+        breathiness = None if self.predict_breathiness and infer else sample.get('breathiness')
 
         if hparams['use_spk_id']:
             spk_embed_id = sample['spk_ids']
