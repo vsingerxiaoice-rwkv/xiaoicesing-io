@@ -29,13 +29,13 @@ matplotlib.use('Agg')
 class AcousticDataset(BaseDataset):
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
-        self.use_energy_embed = hparams.get('use_energy_embed', False) and not hparams.get('predict_energy', False)
-        self.use_breathiness_embed = (
-                hparams.get('use_breathiness_embed', False) and not hparams.get('predict_breathiness', False)
+        self.need_energy = hparams.get('use_energy_embed', False) or hparams.get('predict_energy', False)
+        self.need_breathiness = (
+                hparams.get('use_breathiness_embed', False) or hparams.get('predict_breathiness', False)
         )
-        self.use_key_shift_embed = hparams.get('use_key_shift_embed', False)
-        self.use_speed_embed = hparams.get('use_speed_embed', False)
-        self.use_spk_id = hparams['use_spk_id']
+        self.need_key_shift = hparams.get('use_key_shift_embed', False)
+        self.need_speed = hparams.get('use_speed_embed', False)
+        self.need_spk_id = hparams['use_spk_id']
 
     def collater(self, samples):
         batch = super().collater(samples)
@@ -50,15 +50,15 @@ class AcousticDataset(BaseDataset):
             'mel': mel,
             'f0': f0,
         })
-        if self.use_energy_embed:
+        if self.need_energy:
             batch['energy'] = utils.collate_nd([s['energy'] for s in samples], 0.0)
-        if self.use_breathiness_embed:
+        if self.need_breathiness:
             batch['breathiness'] = utils.collate_nd([s['breathiness'] for s in samples], 0.0)
-        if self.use_key_shift_embed:
+        if self.need_key_shift:
             batch['key_shift'] = torch.FloatTensor([s['key_shift'] for s in samples])[:, None]
-        if self.use_speed_embed:
+        if self.need_speed:
             batch['speed'] = torch.FloatTensor([s['speed'] for s in samples])[:, None]
-        if self.use_spk_id:
+        if self.need_spk_id:
             spk_ids = torch.LongTensor([s['spk_id'] for s in samples])
             batch['spk_ids'] = spk_ids
         return batch
