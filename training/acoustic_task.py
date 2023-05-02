@@ -27,6 +27,16 @@ matplotlib.use('Agg')
 
 
 class AcousticDataset(BaseDataset):
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        self.use_energy_embed = hparams.get('use_energy_embed', False) and not hparams.get('predict_energy', False)
+        self.use_breathiness_embed = (
+                hparams.get('use_breathiness_embed', False) and not hparams.get('predict_breathiness', False)
+        )
+        self.use_key_shift_embed = hparams.get('use_key_shift_embed', False)
+        self.use_speed_embed = hparams.get('use_speed_embed', False)
+        self.use_spk_id = hparams['use_spk_id']
+
     def collater(self, samples):
         batch = super().collater(samples)
 
@@ -40,15 +50,15 @@ class AcousticDataset(BaseDataset):
             'mel': mel,
             'f0': f0,
         })
-        if hparams.get('use_energy_embed', False):
+        if self.use_energy_embed:
             batch['energy'] = utils.collate_nd([s['energy'] for s in samples], 0.0)
-        if hparams.get('use_breathiness_embed', False):
+        if self.use_breathiness_embed:
             batch['breathiness'] = utils.collate_nd([s['breathiness'] for s in samples], 0.0)
-        if hparams.get('use_key_shift_embed', False):
+        if self.use_key_shift_embed:
             batch['key_shift'] = torch.FloatTensor([s['key_shift'] for s in samples])[:, None]
-        if hparams.get('use_speed_embed', False):
+        if self.use_speed_embed:
             batch['speed'] = torch.FloatTensor([s['speed'] for s in samples])[:, None]
-        if hparams['use_spk_id']:
+        if self.use_spk_id:
             spk_ids = torch.LongTensor([s['spk_id'] for s in samples])
             batch['spk_ids'] = spk_ids
         return batch
