@@ -98,13 +98,13 @@ class FastSpeech2Acoustic(nn.Module):
             if infer:
                 key_shift = torch.zeros_like(key_shift)
             key_shift_embed = self.key_shift_embed(key_shift[:, :, None])
-            adaptor_cond += key_shift_embed
+            adaptor_cond = adaptor_cond + key_shift_embed
 
         if self.use_speed_embed:
             if infer:
                 speed = torch.ones_like(speed)
             speed_embed = self.speed_embed(speed[:, :, None])
-            adaptor_cond += speed_embed
+            adaptor_cond = adaptor_cond + speed_embed
 
         return adaptor_cond, mel_cond
 
