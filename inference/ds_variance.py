@@ -147,18 +147,18 @@ class DiffSingerVarianceInfer(BaseSVSInfer):
     def run_model(self, sample):
         txt_tokens = sample['tokens']
         base_pitch = sample['base_pitch']
-        dur_pred, pitch_pred, energy_pred = self.model(
+        dur_pred, pitch_pred, variance_pred = self.model(
             txt_tokens, midi=sample['midi'], ph2word=sample['ph2word'],
             word_dur=sample['word_dur'],
             mel2ph=sample['mel2ph'], base_pitch=base_pitch, delta_pitch=sample.get('delta_pitch')
         )
         if pitch_pred is not None:
             pitch_pred = base_pitch + pitch_pred
-        return dur_pred, pitch_pred, energy_pred
+        return dur_pred, pitch_pred, variance_pred
 
     def infer_once(self, param):
         batch = self.preprocess_input(param)
-        dur_pred, pitch_pred, energy_pred = self.run_model(batch)
+        dur_pred, pitch_pred, variance_pred = self.run_model(batch)
         if dur_pred is not None:
             dur_pred = dur_pred[0].cpu().numpy()
         if pitch_pred is not None:
@@ -166,6 +166,8 @@ class DiffSingerVarianceInfer(BaseSVSInfer):
             f0_pred = librosa.midi_to_hz(pitch_pred)
         else:
             f0_pred = None
-        if energy_pred is not None:
-            energy_pred = energy_pred[0].cpu().numpy()
-        return dur_pred, f0_pred, energy_pred
+        variance_pred = {
+            k: v[0].cpu().numpy()
+            for k, v in variance_pred.items()
+        }
+        return dur_pred, f0_pred, variance_pred
