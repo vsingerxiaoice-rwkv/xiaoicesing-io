@@ -290,12 +290,12 @@ class GaussianDiffusion(nn.Module):
 
 
 class RepetitiveDiffusion(GaussianDiffusion):
-    def __init__(self, vmin: float | list, vmax: float | list, repeat_bins: int,
+    def __init__(self, vmin: float | int | list, vmax: float | int | list, repeat_bins: int,
                  timesteps=1000, k_step=1000,
                  denoiser_type=None, denoiser_args=None,
                  betas=None):
-        assert (isinstance(vmin, float) and isinstance(vmin, float)) or len(vmin) == len(vmax)
-        num_feats = 1 if isinstance(vmin, float) else len(vmin)
+        assert (isinstance(vmin, float | int) and isinstance(vmin, float | int)) or len(vmin) == len(vmax)
+        num_feats = 1 if isinstance(vmin, float | int) else len(vmin)
         spec_min = [vmin] if num_feats == 1 else [[v] for v in vmin]
         spec_max = [vmax] if num_feats == 1 else [[v] for v in vmax]
         self.repeat_bins = repeat_bins

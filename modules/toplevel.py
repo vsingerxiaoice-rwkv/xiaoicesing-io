@@ -114,8 +114,8 @@ class DiffSingerVariance(ParameterAdaptorModule, CategorizedModule):
 
         self.predict_pitch = hparams['predict_pitch']
 
-        predict_energy = hparams['predict_energy']
-        predict_breathiness = hparams['predict_breathiness']
+        predict_energy = hparams.get('predict_energy', False)
+        predict_breathiness = hparams.get('predict_breathiness', False)
         self.variance_prediction_list = []
         if predict_energy:
             self.variance_prediction_list.append('energy')
