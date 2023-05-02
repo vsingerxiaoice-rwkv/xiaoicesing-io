@@ -114,18 +114,18 @@ class FastSpeech2Acoustic(nn.Module):
     ):
         if self.use_energy_embed:
             energy_embed = self.energy_embed(energy[:, :, None])
-            condition += energy_embed
+            condition = condition + energy_embed
 
         if self.use_breathiness_embed:
             breathiness_embed = self.breathiness_embed(breathiness[:, :, None])
-            condition += breathiness_embed
+            condition = condition + breathiness_embed
 
         if self.use_key_shift_embed:
             key_shift_embed = self.key_shift_embed(key_shift[:, :, None])
-            condition += key_shift_embed
+            condition = condition + key_shift_embed
 
         if self.use_speed_embed:
             speed_embed = self.speed_embed(speed[:, :, None])
-            condition += speed_embed
+            condition = condition + speed_embed
 
         return condition

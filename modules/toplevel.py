@@ -90,7 +90,7 @@ class DiffSingerAcoustic(ParameterAdaptorModule, CategorizedModule):
                     self.variance_embeds[v_name](v_choice[:, :, None])  # [B, T] => [B, T, H]
                     for v_name, v_choice in zip(self.variance_prediction_list, variance_inputs)
                 ], dim=-1).sum(-1)
-                mel_cond += variance_embeds
+                mel_cond = mel_cond + variance_embeds
             else:
                 variance_pred_out = None
 
