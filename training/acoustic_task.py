@@ -29,10 +29,12 @@ matplotlib.use('Agg')
 class AcousticDataset(BaseDataset):
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
-        self.need_energy = hparams.get('use_energy_embed', False) or hparams.get('predict_energy', False)
-        self.need_breathiness = (
-                hparams.get('use_breathiness_embed', False) or hparams.get('predict_breathiness', False)
-        )
+        self.required_variances = {}  # key: variance name, value: padding value
+        if hparams.get('use_energy_embed', False) or hparams.get('predict_energy', False):
+            self.required_variances['energy'] = 0.0
+        if hparams.get('use_breathiness_embed', False) or hparams.get('predict_breathiness', False):
+            self.required_variances['breathiness'] = 0.0
+
         self.need_key_shift = hparams.get('use_key_shift_embed', False)
         self.need_speed = hparams.get('use_speed_embed', False)
         self.need_spk_id = hparams['use_spk_id']
@@ -50,10 +52,8 @@ class AcousticDataset(BaseDataset):
             'mel': mel,
             'f0': f0,
         })
-        if self.need_energy:
-            batch['energy'] = utils.collate_nd([s['energy'] for s in samples], 0.0)
-        if self.need_breathiness:
-            batch['breathiness'] = utils.collate_nd([s['breathiness'] for s in samples], 0.0)
+        for v_name, v_pad in self.required_variances.items():
+            batch[v_name] = utils.collate_nd([s[v_name] for s in samples], v_pad)
         if self.need_key_shift:
             batch['key_shift'] = torch.FloatTensor([s['key_shift'] for s in samples])[:, None]
         if self.need_speed:
@@ -76,14 +76,12 @@ class AcousticTask(BaseTask):
         self.stats = {}
         self.logged_gt_wav = set()
 
-        self.predict_energy = hparams['predict_energy']
-        self.predict_breathiness = hparams['predict_breathiness']
-        self.variance_prediction_list = []
-        if self.predict_energy:
-            self.variance_prediction_list.append('energy')
-        if self.predict_breathiness:
-            self.variance_prediction_list.append('breathiness')
-        self.predict_variances = len(self.variance_prediction_list) > 0
+        self.variances_to_predict = set()
+        if hparams['predict_energy']:
+            self.variances_to_predict.add('energy')
+        if hparams['predict_breathiness']:
+            self.variances_to_predict.add('breathiness')
+        self.predict_variances = len(self.variances_to_predict) > 0
         self.lambda_var_loss = hparams['lambda_var_loss']
 
     def build_model(self):
@@ -105,21 +103,20 @@ class AcousticTask(BaseTask):
         target = sample['mel']  # [B, T_s, M]
         mel2ph = sample['mel2ph']  # [B, T_s]
         f0 = sample['f0']
+        variances = {
+            v_name: None if infer else sample[v_name]
+            for v_name in self.variances_to_predict
+        }
         key_shift = sample.get('key_shift')
         speed = sample.get('speed')
-
-        energy = None if self.predict_energy and infer else sample.get('energy')
-        breathiness = None if self.predict_breathiness and infer else sample.get('breathiness')
 
         if hparams['use_spk_id']:
             spk_embed_id = sample['spk_ids']
         else:
             spk_embed_id = None
         output = self.model(
-            txt_tokens, mel2ph=mel2ph,
-            f0=f0, energy=energy, breathiness=breathiness,
-            key_shift=key_shift, speed=speed,
-            spk_embed_id=spk_embed_id,
+            txt_tokens, mel2ph=mel2ph, f0=f0, **variances,
+            key_shift=key_shift, speed=speed, spk_embed_id=spk_embed_id,
             gt_mel=target, infer=infer
         )
 
@@ -162,7 +159,7 @@ class AcousticTask(BaseTask):
                 self.plot_wav(batch_idx, sample['mel'], mel_pred, f0=sample['f0'])
             self.plot_mel(batch_idx, sample['mel'], mel_pred, name=f'diffmel_{batch_idx}')
 
-            for name in self.variance_prediction_list:
+            for name in self.variances_to_predict:
                 variance = sample[name]
                 variance_pred = var_pred[name]
                 self.plot_curve(

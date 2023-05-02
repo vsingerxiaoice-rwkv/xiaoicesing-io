@@ -14,24 +14,27 @@ from utils.infer_utils import resample_align_curve
 from utils.phoneme_utils import build_phoneme_list
 from utils.text_encoder import TokenTextEncoder
 
+VARIANCE_CHECKLIST = ['energy', 'breathiness']
+
 
 class DiffSingerAcousticInfer(BaseSVSInfer):
     def __init__(self, device=None, load_model=True, load_vocoder=True, ckpt_steps=None):
         super().__init__(device=device)
         if load_model:
-            self.variance_needed_list = []
+            self.variance_checklist = []
 
-            self.use_energy_embed = hparams.get('use_energy_embed', False) and not hparams.get('predict_energy', False)
-            self.predict_energy = hparams.get('predict_energy', False)
-            if self.use_energy_embed or self.predict_energy:
-                self.variance_needed_list.append('energy')
+            self.variances_to_embed = set()
+            self.variances_to_predict = set()
 
-            self.use_breathiness_embed = (
-                    hparams.get('use_breathiness_embed', False) and not hparams.get('predict_breathiness', False)
-            )
-            self.predict_breathiness = hparams.get('predict_breathiness', False)
-            if self.use_breathiness_embed or self.predict_breathiness:
-                self.variance_needed_list.append('breathiness')
+            if hparams.get('predict_energy', False):
+                self.variances_to_predict.add('energy')
+            elif hparams.get('use_energy_embed', False):
+                self.variances_to_embed.add('energy')
+
+            if hparams.get('predict_breathiness', False):
+                self.variances_to_predict.add('breathiness')
+            elif hparams.get('use_breathiness_embed', False):
+                self.variances_to_embed.add('breathiness')
 
             self.ph_encoder = TokenTextEncoder(vocab_list=build_phoneme_list())
             if hparams['use_spk_id']:
@@ -156,27 +159,17 @@ class DiffSingerAcousticInfer(BaseSVSInfer):
             align_length=length
         )).to(self.device)[None]
 
-        if self.use_energy_embed or (self.predict_energy and param.get('energy')):
-            batch['energy'] = torch.from_numpy(resample_align_curve(
-                np.array(param['energy'].split(), np.float32),
-                original_timestep=float(param['energy_timestep']),
-                target_timestep=self.timestep,
-                align_length=length
-            )).to(self.device)[None]
-            print('Using manual energy curve')
-        else:
-            print('Using predicted energy curve')
-
-        if self.use_breathiness_embed or (self.predict_breathiness and param.get('breathiness')):
-            batch['breathiness'] = torch.from_numpy(resample_align_curve(
-                np.array(param['breathiness'].split(), np.float32),
-                original_timestep=float(param['breathiness_timestep']),
-                target_timestep=self.timestep,
-                align_length=length
-            )).to(self.device)[None]
-            print('Using manual breathiness curve')
-        else:
-            print('Using predicted breathiness curve')
+        for v_name in VARIANCE_CHECKLIST:
+            if v_name in self.variances_to_embed or (v_name in self.variances_to_predict and param.get(v_name)):
+                batch[v_name] = torch.from_numpy(resample_align_curve(
+                    np.array(param[v_name].split(), np.float32),
+                    original_timestep=float(param[f'{v_name}_timestep']),
+                    target_timestep=self.timestep,
+                    align_length=length
+                )).to(self.device)[None]
+                print(f'Using manual {v_name} curve')
+            else:
+                print(f'Using predicted {v_name} curve')
 
         if hparams.get('use_key_shift_embed', False):
             shift_min, shift_max = hparams['augmentation_args']['random_pitch_shifting']['range']
@@ -223,9 +216,9 @@ class DiffSingerAcousticInfer(BaseSVSInfer):
     @torch.no_grad()
     def run_model(self, sample, return_mel=False):
         txt_tokens = sample['tokens']
-        variance_kwargs = {
+        variances = {
             v_name: sample.get(v_name)
-            for v_name in self.variance_needed_list
+            for v_name in self.variances_to_embed | self.variances_to_predict
         }
         if hparams['use_spk_id']:
             spk_mix_id = sample['spk_mix_id']
@@ -238,9 +231,9 @@ class DiffSingerAcousticInfer(BaseSVSInfer):
         else:
             spk_mix_embed = None
         mel_pred, _ = self.model(
-            txt_tokens, mel2ph=sample['mel2ph'], f0=sample['f0'],
+            txt_tokens, mel2ph=sample['mel2ph'], f0=sample['f0'], **variances,
             key_shift=sample.get('key_shift'), speed=sample.get('speed'),
-            spk_mix_embed=spk_mix_embed, infer=True, **variance_kwargs
+            spk_mix_embed=spk_mix_embed, infer=True
         )  # var_pred ignored for now
         return mel_pred
 
