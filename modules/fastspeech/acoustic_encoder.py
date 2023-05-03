@@ -30,17 +30,19 @@ class FastSpeech2Acoustic(nn.Module):
         else:
             raise ValueError('f0_embed_type must be \'discrete\' or \'continuous\'.')
 
-        self.use_energy_embed = hparams.get('use_energy_embed', False) and not hparams.get('predict_energy', False)
-        if self.use_energy_embed:
+        self.variance_embed_list = []
+        if hparams.get('use_energy_embed', False) and not hparams.get('predict_energy', False):
             # energy is embedded but not predicted
-            self.energy_embed = Linear(1, hparams['hidden_size'])
-
-        self.use_breathiness_embed = (
-                hparams.get('use_breathiness_embed', False) and not hparams.get('predict_breathiness', False)
-        )
-        if self.use_breathiness_embed:
+            self.variance_embed_list.append('energy')
+        if hparams.get('use_breathiness_embed', False) and not hparams.get('predict_breathiness', False):
             # breathiness is embedded but not predicted
-            self.breathiness_embed = Linear(1, hparams['hidden_size'])
+            self.variance_embed_list.append('breathiness')
+        self.embed_variances = len(self.variance_embed_list) > 0
+        if self.embed_variances:
+            self.variance_embeds = nn.ModuleDict({
+                v_name: Linear(1, hparams['hidden_size'])
+                for v_name in self.variance_embed_list
+            })
 
         self.use_key_shift_embed = hparams.get('use_key_shift_embed', False)
         if self.use_key_shift_embed:
@@ -84,8 +86,7 @@ class FastSpeech2Acoustic(nn.Module):
 
         adaptor_cond = condition + pitch_embed
         mel_cond = self.forward_variance_embedding(
-            adaptor_cond, energy=energy, breathiness=breathiness,
-            key_shift=key_shift, speed=speed
+            adaptor_cond, key_shift=key_shift, speed=speed, **kwargs
         )
 
         # During training, the data augmentation parameters (GEN and VEL)
@@ -108,17 +109,13 @@ class FastSpeech2Acoustic(nn.Module):
 
         return adaptor_cond, mel_cond
 
-    def forward_variance_embedding(
-            self, condition, energy=None, breathiness=None,
-            key_shift=None, speed=None
-    ):
-        if self.use_energy_embed:
-            energy_embed = self.energy_embed(energy[:, :, None])
-            condition = condition + energy_embed
-
-        if self.use_breathiness_embed:
-            breathiness_embed = self.breathiness_embed(breathiness[:, :, None])
-            condition = condition + breathiness_embed
+    def forward_variance_embedding(self, condition, key_shift=None, speed=None, **variances):
+        if self.embed_variances:
+            variance_embeds = torch.stack([
+                self.variance_embeds[v_name](variances[v_name][:, :, None])  # [B, T] => [B, T, H]
+                for v_name in self.variance_embed_list
+            ], dim=-1).sum(-1)
+            condition = condition + variance_embeds
 
         if self.use_key_shift_embed:
             key_shift_embed = self.key_shift_embed(key_shift[:, :, None])
