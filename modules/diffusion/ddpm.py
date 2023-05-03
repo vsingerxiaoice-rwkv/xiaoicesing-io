@@ -204,6 +204,70 @@ class GaussianDiffusion(nn.Module):
 
         return x_recon, noise
 
+    def inference(self, cond, b=1, device=None):
+        t = self.k_step
+        shape = (b, self.num_feats, self.out_dims, cond.shape[2])
+        x = torch.randn(shape, device=device)
+        if hparams.get('pndm_speedup') and hparams['pndm_speedup'] > 1:
+            algorithm = hparams.get('diff_accelerator', 'dpm-solver')
+            if algorithm == 'dpm-solver':
+                from inference.dpm_solver_pytorch import NoiseScheduleVP, model_wrapper, DPM_Solver
+                # 1. Define the noise schedule.
+                noise_schedule = NoiseScheduleVP(schedule='discrete', betas=self.betas)
+
+                # 2. Convert your discrete-time `model` to the continuous-time
+                # noise prediction model. Here is an example for a diffusion model
+                # `model` with the noise prediction type ("noise") .
+                def my_wrapper(fn):
+                    def wrapped(x, t, **kwargs):
+                        ret = fn(x, t, **kwargs)
+                        self.bar.update(1)
+                        return ret
+
+                    return wrapped
+
+                model_fn = model_wrapper(
+                    my_wrapper(self.denoise_fn),
+                    noise_schedule,
+                    model_type="noise",  # or "x_start" or "v" or "score"
+                    model_kwargs={"cond": cond}
+                )
+
+                # 3. Define dpm-solver and sample by singlestep DPM-Solver.
+                # (We recommend singlestep DPM-Solver for unconditional sampling)
+                # You can adjust the `steps` to balance the computation
+                # costs and the sample quality.
+                dpm_solver = DPM_Solver(model_fn, noise_schedule)
+
+                steps = t // hparams["pndm_speedup"]
+                self.bar = tqdm(desc="sample time step", total=steps, disable=not hparams['infer'])
+                x = dpm_solver.sample(
+                    x,
+                    steps=steps,
+                    order=3,
+                    skip_type="time_uniform",
+                    method="singlestep",
+                )
+                self.bar.close()
+            elif algorithm == 'pndm':
+                self.noise_list = deque(maxlen=4)
+                iteration_interval = hparams['pndm_speedup']
+                for i in tqdm(
+                        reversed(range(0, t, iteration_interval)), desc='sample time step',
+                        total=t // iteration_interval, disable=not hparams['infer']
+                ):
+                    x = self.p_sample_plms(
+                        x, torch.full((b,), i, device=device, dtype=torch.long),
+                        iteration_interval, cond=cond
+                    )
+            else:
+                raise NotImplementedError(algorithm)
+        else:
+            for i in tqdm(reversed(range(0, t)), desc='sample time step', total=t, disable=not hparams['infer']):
+                x = self.p_sample(x, torch.full((b,), i, device=device, dtype=torch.long), cond)
+        x = x.transpose(2, 3).squeeze(1)  # [B, F, M, T] => [B, T, M] or [B, F, T, M]
+        return x
+
     def forward(self, condition, gt_spec=None, infer=True):
         """
             conditioning diffusion, use fastspeech2 encoder output as the condition
@@ -219,67 +283,7 @@ class GaussianDiffusion(nn.Module):
             t = torch.randint(0, self.k_step, (b,), device=device).long()
             return self.p_losses(spec, t, cond=cond)
         else:
-            t = self.k_step
-            shape = (cond.shape[0], self.num_feats, self.out_dims, cond.shape[2])
-            x = torch.randn(shape, device=device)
-            if hparams.get('pndm_speedup') and hparams['pndm_speedup'] > 1:
-                algorithm = hparams.get('diff_accelerator', 'dpm-solver')
-                if algorithm == 'dpm-solver':
-                    from inference.dpm_solver_pytorch import NoiseScheduleVP, model_wrapper, DPM_Solver
-                    # 1. Define the noise schedule.
-                    noise_schedule = NoiseScheduleVP(schedule='discrete', betas=self.betas)
-
-                    # 2. Convert your discrete-time `model` to the continuous-time
-                    # noise prediction model. Here is an example for a diffusion model
-                    # `model` with the noise prediction type ("noise") .
-                    def my_wrapper(fn):
-                        def wrapped(x, t, **kwargs):
-                            ret = fn(x, t, **kwargs)
-                            self.bar.update(1)
-                            return ret
-
-                        return wrapped
-
-                    model_fn = model_wrapper(
-                        my_wrapper(self.denoise_fn),
-                        noise_schedule,
-                        model_type="noise",  # or "x_start" or "v" or "score"
-                        model_kwargs={"cond": cond}
-                    )
-
-                    # 3. Define dpm-solver and sample by singlestep DPM-Solver.
-                    # (We recommend singlestep DPM-Solver for unconditional sampling)
-                    # You can adjust the `steps` to balance the computation
-                    # costs and the sample quality.
-                    dpm_solver = DPM_Solver(model_fn, noise_schedule)
-
-                    steps = t // hparams["pndm_speedup"]
-                    self.bar = tqdm(desc="sample time step", total=steps, disable=not hparams['infer'])
-                    x = dpm_solver.sample(
-                        x,
-                        steps=steps,
-                        order=3,
-                        skip_type="time_uniform",
-                        method="singlestep",
-                    )
-                    self.bar.close()
-                elif algorithm == 'pndm':
-                    self.noise_list = deque(maxlen=4)
-                    iteration_interval = hparams['pndm_speedup']
-                    for i in tqdm(
-                            reversed(range(0, t, iteration_interval)), desc='sample time step',
-                            total=t // iteration_interval, disable=not hparams['infer']
-                    ):
-                        x = self.p_sample_plms(
-                            x, torch.full((b,), i, device=device, dtype=torch.long),
-                            iteration_interval, cond=cond
-                        )
-                else:
-                    raise NotImplementedError(algorithm)
-            else:
-                for i in tqdm(reversed(range(0, t)), desc='sample time step', total=t, disable=not hparams['infer']):
-                    x = self.p_sample(x, torch.full((b,), i, device=device, dtype=torch.long), cond)
-            x = x.transpose(2, 3).squeeze(1)  # [B, F, M, T] => [B, T, M] or [B, F, T, M]
+            x = self.inference(cond, b=b, device=device)
             return self.denorm_spec(x)
 
     def norm_spec(self, x):
