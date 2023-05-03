@@ -134,7 +134,7 @@ class DurationPredictor(torch.nn.Module):
 
         dur_pred = self.out2dur(xs)
         if infer:
-            dur_pred = dur_pred.clamp(min=0.).round().long()  # avoid negative value
+            dur_pred = dur_pred.clamp(min=0.)  # avoid negative value
         return dur_pred
 
 
@@ -257,6 +257,34 @@ class PitchPredictor(torch.nn.Module):
             xs = f(xs)  # (B, C, Tmax)
         xs = self.linear(xs.transpose(1, -1))  # (B, Tmax, H)
         return self.out2pitch(xs) + base, xs
+
+
+class RhythmRegulator(torch.nn.Module):
+    def __init__(self, eps=1e-5):
+        super().__init__()
+        self.eps = eps
+
+    def forward(self, ph_dur, ph2word, word_dur):
+        """
+        Example (no batch dim version):
+            1. ph_dur = [4,2,3,2]
+            2. word_dur = [3,4,2], ph2word = [1,2,2,3]
+            3. word_dur_in = [4,5,2]
+            4. alpha_w = [0.75,0.8,1], alpha_ph = [0.75,0.8,0.8,1]
+            5. ph_dur_out = [3,1.6,2.4,2]
+        :param ph_dur: [B, T_ph]
+        :param ph2word: [B, T_ph]
+        :param word_dur: [B, T_w]
+        """
+        ph_dur = ph_dur.float() * (ph2word > 0)
+        word_dur = word_dur.float()
+        word_dur_in = ph_dur.new_zeros(ph_dur.shape[0], ph2word.max() + 1).scatter_add(
+            1, ph2word, ph_dur
+        )[:, 1:]  # [B, T_ph] => [B, T_w]
+        alpha_w = word_dur / word_dur_in.clamp(min=self.eps)  # avoid dividing by zero
+        alpha_ph = torch.gather(F.pad(alpha_w, [1, 0]), 1, ph2word)  # [B, T_w] => [B, T_ph]
+        ph_dur_out = ph_dur * alpha_ph
+        return ph_dur_out.round().long()
 
 
 class LengthRegulator(torch.nn.Module):

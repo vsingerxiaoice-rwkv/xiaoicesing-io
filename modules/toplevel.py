@@ -11,7 +11,7 @@ from modules.diffusion.ddpm import (
 )
 from modules.fastspeech.acoustic_encoder import FastSpeech2Acoustic
 from modules.fastspeech.param_adaptor import ParameterAdaptorModule
-from modules.fastspeech.tts_modules import LengthRegulator
+from modules.fastspeech.tts_modules import RhythmRegulator, LengthRegulator
 from modules.fastspeech.variance_encoder import FastSpeech2Variance
 from utils.hparams import hparams
 
@@ -61,23 +61,25 @@ class DiffSingerAcoustic(ParameterAdaptorModule, CategorizedModule):
         if infer:
             if not self.predict_variances:
                 variance_pred_out = {}
-            elif not all([v is not None for v in variance_inputs]):
-                variance_outputs = self.variance_adaptor(adaptor_cond, variance_inputs, infer)
-                variance_choices = [
-                    v_in if v_in is not None else v_pred
-                    for v_in, v_pred in zip(variance_inputs, variance_outputs)
-                ]
+            else:
+                if not all([v is not None for v in variance_inputs]):
+                    variance_outputs = self.variance_adaptor(adaptor_cond, variance_inputs, infer)
+                    variance_choices = [
+                        v_in if v_in is not None else v_pred
+                        for v_in, v_pred in zip(variance_inputs, variance_outputs)
+                    ]
+                    variance_pred_out = self.collect_variance_outputs(variance_choices)
+                else:
+                    variance_choices = variance_inputs
+                    variance_pred_out = {
+                        name: kwargs[name]
+                        for name in self.variance_prediction_list
+                    }
                 variance_embeds = torch.stack([
                     self.variance_embeds[v_name](v_choice[:, :, None])  # [B, T] => [B, T, H]
                     for v_name, v_choice in zip(self.variance_prediction_list, variance_choices)
                 ], dim=-1).sum(-1)
                 mel_cond += variance_embeds
-                variance_pred_out = self.collect_variance_outputs(variance_choices)
-            else:
-                variance_pred_out = {
-                    name: kwargs[name]
-                    for name in self.variance_prediction_list
-                }
 
             mel_pred_out = self.diffusion(mel_cond, infer=True)
             mel_pred_out *= ((mel2ph > 0).float()[:, :, None])
@@ -110,6 +112,7 @@ class DiffSingerVariance(ParameterAdaptorModule, CategorizedModule):
         self.fs2 = FastSpeech2Variance(
             vocab_size=vocab_size
         )
+        self.rr = RhythmRegulator()
         self.lr = LengthRegulator()
 
         self.predict_pitch = hparams['predict_pitch']
@@ -155,9 +158,10 @@ class DiffSingerVariance(ParameterAdaptorModule, CategorizedModule):
         if not self.predict_pitch and not self.predict_variances:
             return dur_pred_out, None, None, ({} if infer else None)
 
-        if mel2ph is None or hparams['dur_cascade']:
-            # (extract mel2ph from dur_pred_out)
-            raise NotImplementedError()
+        if mel2ph is None and word_dur is not None:  # inference from file
+            dur_pred_align = self.rr(dur_pred_out, ph2word, word_dur)
+            mel2ph = self.lr(dur_pred_align)
+            mel2ph = F.pad(mel2ph, [0, base_pitch.shape[1] - mel2ph.shape[1]])
 
         encoder_out = F.pad(encoder_out, [0, 0, 1, 0])
         mel2ph_ = mel2ph[..., None].repeat([1, 1, hparams['hidden_size']])

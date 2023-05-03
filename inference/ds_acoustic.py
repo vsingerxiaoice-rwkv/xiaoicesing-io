@@ -168,7 +168,7 @@ class DiffSingerAcousticInfer(BaseSVSInfer):
                     align_length=length
                 )).to(self.device)[None]
                 print(f'Using manual {v_name} curve')
-            else:
+            elif v_name in self.variances_to_predict:
                 print(f'Using predicted {v_name} curve')
 
         if hparams.get('use_key_shift_embed', False):

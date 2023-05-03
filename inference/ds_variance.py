@@ -6,7 +6,10 @@ import torch.nn.functional as F
 from scipy import interpolate
 
 from basics.base_svs_infer import BaseSVSInfer
-from modules.fastspeech.tts_modules import LengthRegulator, mel2ph_to_dur
+from modules.fastspeech.tts_modules import (
+    LengthRegulator, RhythmRegulator,
+    mel2ph_to_dur
+)
 from modules.toplevel import DiffSingerVariance
 from utils import load_ckpt
 from utils.hparams import hparams
@@ -22,6 +25,7 @@ class DiffSingerVarianceInfer(BaseSVSInfer):
         self.ph_encoder = TokenTextEncoder(vocab_list=build_phoneme_list())
         self.model = self.build_model(ckpt_steps=ckpt_steps)
         self.lr = LengthRegulator()
+        self.rr = RhythmRegulator()
         smooth_kernel_size = round(hparams['midi_smooth_width'] / self.timestep)
         self.smooth = nn.Conv1d(
             in_channels=1,
@@ -146,12 +150,15 @@ class DiffSingerVarianceInfer(BaseSVSInfer):
     @torch.no_grad()
     def run_model(self, sample):
         txt_tokens = sample['tokens']
+        word_dur = sample['word_dur']
+        ph2word = sample['ph2word']
         base_pitch = sample['base_pitch']
         dur_pred, pitch_pred, variance_pred = self.model(
-            txt_tokens, midi=sample['midi'], ph2word=sample['ph2word'],
-            word_dur=sample['word_dur'],
+            txt_tokens, midi=sample['midi'], ph2word=ph2word, word_dur=word_dur,
             mel2ph=sample['mel2ph'], base_pitch=base_pitch, delta_pitch=sample.get('delta_pitch')
         )
+        if dur_pred is not None:
+            dur_pred = self.rr(dur_pred, ph2word, word_dur)
         if pitch_pred is not None:
             pitch_pred = base_pitch + pitch_pred
         return dur_pred, pitch_pred, variance_pred
