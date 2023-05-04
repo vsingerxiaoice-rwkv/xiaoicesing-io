@@ -6,6 +6,7 @@ import torch
 
 from basics.base_svs_infer import BaseSVSInfer
 from modules.fastspeech.tts_modules import LengthRegulator
+from modules.fastspeech.param_adaptor import VARIANCE_CHECKLIST
 from modules.toplevel import DiffSingerAcoustic
 from modules.vocoders.registry import VOCODERS
 from utils import load_ckpt
@@ -13,8 +14,6 @@ from utils.hparams import hparams
 from utils.infer_utils import resample_align_curve
 from utils.phoneme_utils import build_phoneme_list
 from utils.text_encoder import TokenTextEncoder
-
-VARIANCE_CHECKLIST = ['energy', 'breathiness']
 
 
 class DiffSingerAcousticInfer(BaseSVSInfer):

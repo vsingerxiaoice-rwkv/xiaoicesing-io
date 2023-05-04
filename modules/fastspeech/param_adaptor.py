@@ -3,6 +3,8 @@ import torch
 from modules.diffusion.ddpm import MultiVarianceDiffusion
 from utils.hparams import hparams
 
+VARIANCE_CHECKLIST = ['energy', 'breathiness']
+
 
 class ParameterAdaptorModule(torch.nn.Module):
     def __init__(self):

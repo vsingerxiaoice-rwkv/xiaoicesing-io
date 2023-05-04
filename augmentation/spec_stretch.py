@@ -4,13 +4,12 @@ import numpy as np
 import torch
 
 from basics.base_augmentation import BaseAugmentation, require_same_keys
+from modules.fastspeech.param_adaptor import VARIANCE_CHECKLIST
 from modules.fastspeech.tts_modules import LengthRegulator
 from modules.vocoders.registry import VOCODERS
 from utils.binarizer_utils import get_pitch_parselmouth, get_mel2ph_torch
 from utils.hparams import hparams
 from utils.infer_utils import resample_align_curve
-
-VARIANCE_CHECKLIST = ['energy', 'breathiness']
 
 
 class SpectrogramStretchAugmentation(BaseAugmentation):

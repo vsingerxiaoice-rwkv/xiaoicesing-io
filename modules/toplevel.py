@@ -10,7 +10,7 @@ from modules.diffusion.ddpm import (
     GaussianDiffusion, PitchDiffusion
 )
 from modules.fastspeech.acoustic_encoder import FastSpeech2Acoustic
-from modules.fastspeech.param_adaptor import ParameterAdaptorModule
+from modules.fastspeech.param_adaptor import VARIANCE_CHECKLIST, ParameterAdaptorModule
 from modules.fastspeech.tts_modules import RhythmRegulator, LengthRegulator
 from modules.fastspeech.variance_encoder import FastSpeech2Variance
 from utils.hparams import hparams
@@ -29,9 +29,22 @@ class DiffSingerAcoustic(ParameterAdaptorModule, CategorizedModule):
 
         if self.predict_variances:
             self.variance_adaptor = self.build_adaptor()
+        variances_to_embed = set()
+        if hparams.get('use_energy_embed', False) and not self.predict_energy:
+            # energy is embedded but not predicted
+            variances_to_embed.add('energy')
+        if hparams.get('use_breathiness_embed', False) and not self.predict_breathiness:
+            # breathiness is embedded but not predicted
+            variances_to_embed.add('breathiness')
+        self.embed_variances = len(variances_to_embed) > 0
+        self.variance_aware_list = [
+            v_name for v_name in VARIANCE_CHECKLIST
+            if v_name in self.variance_prediction_list or v_name in self.variances_to_embed
+        ]
+        if self.embed_variances or self.predict_variances:
             self.variance_embeds = nn.ModuleDict({
-                name: Linear(1, hparams['hidden_size'])
-                for name in self.variance_prediction_list
+                v_name: Linear(1, hparams['hidden_size'])
+                for v_name in self.variance_aware_list
             })
 
         self.diffusion = GaussianDiffusion(
@@ -57,45 +70,48 @@ class DiffSingerAcoustic(ParameterAdaptorModule, CategorizedModule):
             spk_embed_id=spk_embed_id, infer=infer, **kwargs
         )
 
-        variance_inputs = self.collect_variance_inputs(**kwargs)
+        variance_embed_inputs = {
+            v_name: kwargs.get(v_name) for v_name in self.variance_aware_list
+        }  # all possible variance inputs
+
         if infer:
-            if not self.predict_variances:
-                variance_pred_out = {}
+            if self.predict_variances:
+                # get variance predictor inputs
+                variance_preset_inputs = self.collect_variance_inputs(**variance_embed_inputs)
+                if not all([v is not None for v in variance_preset_inputs]):  # need to predict some variances
+                    variance_pred_outputs = self.collect_variance_outputs(
+                        self.variance_adaptor(adaptor_cond, infer=True)
+                    )  # dict of predictions
+                    variance_embed_inputs = {
+                        v_name: (
+                            variance_embed_inputs[v_name] if variance_embed_inputs[v_name] is not None
+                            else variance_pred_outputs[v_name]
+                        )
+                        for v_name in self.variance_aware_list
+                    }  # merge presets and predictions, should contain no NoneType
+                variance_pred_out = self.collect_variance_outputs(variance_embed_inputs)  # collect from embed inputs
             else:
-                if not all([v is not None for v in variance_inputs]):
-                    variance_outputs = self.variance_adaptor(adaptor_cond, variance_inputs, infer)
-                    variance_choices = [
-                        v_in if v_in is not None else v_pred
-                        for v_in, v_pred in zip(variance_inputs, variance_outputs)
-                    ]
-                    variance_pred_out = self.collect_variance_outputs(variance_choices)
-                else:
-                    variance_choices = variance_inputs
-                    variance_pred_out = {
-                        name: kwargs[name]
-                        for name in self.variance_prediction_list
-                    }
-                variance_embeds = torch.stack([
-                    self.variance_embeds[v_name](v_choice[:, :, None])  # [B, T] => [B, T, H]
-                    for v_name, v_choice in zip(self.variance_prediction_list, variance_choices)
-                ], dim=-1).sum(-1)
-                mel_cond += variance_embeds
-
-            mel_pred_out = self.diffusion(mel_cond, infer=True)
-            mel_pred_out *= ((mel2ph > 0).float()[:, :, None])
-
+                variance_pred_out = {}
         else:
             if self.predict_variances:
-                variance_pred_out = self.variance_adaptor(adaptor_cond, variance_inputs, infer)
-
-                variance_embeds = torch.stack([
-                    self.variance_embeds[v_name](v_choice[:, :, None])  # [B, T] => [B, T, H]
-                    for v_name, v_choice in zip(self.variance_prediction_list, variance_inputs)
-                ], dim=-1).sum(-1)
-                mel_cond = mel_cond + variance_embeds
+                # use gt variances to train the predictor
+                variance_inputs = self.collect_variance_inputs(**variance_embed_inputs)
+                variance_pred_out = self.variance_adaptor(adaptor_cond, variance_inputs, infer=False)
             else:
                 variance_pred_out = None
 
+        if self.predict_variances or self.embed_variances:
+            # embed variances into mel condition
+            variance_embeds = torch.stack([
+                self.variance_embeds[v_name](variance_embed_inputs[v_name][:, :, None])  # [B, T] => [B, T, H]
+                for v_name in self.variance_aware_list
+            ], dim=-1).sum(-1)
+            mel_cond += variance_embeds
+
+        if infer:
+            mel_pred_out = self.diffusion(mel_cond, infer=True)
+            mel_pred_out *= ((mel2ph > 0).float()[:, :, None])
+        else:
             mel_pred_out = self.diffusion(mel_cond, gt_spec=gt_mel, infer=False)
 
         return mel_pred_out, variance_pred_out
