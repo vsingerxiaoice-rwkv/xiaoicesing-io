@@ -2,19 +2,17 @@ import copy
 
 from torch import Tensor, nn
 
-from basics.base_module import CategorizedModule
 from deployment.modules.diffusion import GaussianDiffusionONNX
 from deployment.modules.fastspeech2 import FastSpeech2AcousticONNX
+from modules.toplevel import DiffSingerAcoustic, DiffSingerVariance
 from utils.hparams import hparams
 
 
-class DiffSingerAcousticONNX(CategorizedModule):
-    @property
-    def category(self):
-        return 'acoustic'
-
+class DiffSingerAcousticONNX(DiffSingerAcoustic):
     def __init__(self, vocab_size, out_dims):
-        super().__init__()
+        super().__init__(vocab_size, out_dims)
+        del self.fs2
+        del self.diffusion
         self.fs2 = FastSpeech2AcousticONNX(
             vocab_size=vocab_size
         )
@@ -50,18 +48,33 @@ class DiffSingerAcousticONNX(CategorizedModule):
 
     def view_as_fs2(self) -> nn.Module:
         model = copy.deepcopy(self)
-        model.diffusion = None
+        try:
+            del model.variance_embeds
+            del model.variance_adaptor
+        except AttributeError:
+            pass
+        del model.diffusion
         model.forward = model.forward_fs2
         return model
 
+    def view_as_adaptor(self) -> nn.Module:
+        model = copy.deepcopy(self)
+        del model.fs2
+        del model.diffusion
+        raise NotImplementedError()
+        
+
     def view_as_diffusion(self) -> nn.Module:
         model = copy.deepcopy(self)
-        model.fs2 = None
+        del model.fs2
+        try:
+            del model.variance_embeds
+            del model.variance_adaptor
+        except AttributeError:
+            pass
         model.forward = model.forward_diffusion
         return model
 
 
-class DiffSingerVarianceOnnx(CategorizedModule):
-    @property
-    def category(self):
-        return 'variance'
+class DiffSingerVarianceOnnx(DiffSingerVariance):
+    pass
