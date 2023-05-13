@@ -20,7 +20,6 @@ from lightning.pytorch.loggers import TensorBoardLogger
 from lightning.pytorch.utilities.rank_zero import rank_zero_debug, rank_zero_info, rank_zero_only
 
 from basics.base_module import CategorizedModule
-from utils import filter_kwargs
 from utils.hparams import hparams
 from utils.training_utils import (
     DsModelCheckpoint, DsTQDMProgressBar,
@@ -62,9 +61,6 @@ class BaseTask(pl.LightningModule):
     def __init__(self, *args, **kwargs):
         # dataset configs
         super().__init__(*args, **kwargs)
-        self.loaded_optimizer_states_dict = {}
-        self.example_input_array = None
-
         self.dataset_cls = None
         self.max_batch_frames = hparams['max_batch_frames']
         self.max_batch_size = hparams['max_batch_size']
@@ -331,7 +327,7 @@ class BaseTask(pl.LightningModule):
             log_every_n_steps=hparams['log_interval'],
             max_steps=hparams['max_updates'],
             use_distributed_sampler=False,
-            num_sanity_val_steps=hparams['num_sanity_val_steps'] if not hparams['validate'] else 10000,
+            num_sanity_val_steps=hparams['num_sanity_val_steps'],
             accumulate_grad_batches=hparams['accumulate_grad_batches']
         )
         if not hparams['infer']:  # train

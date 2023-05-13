@@ -48,7 +48,6 @@ keep_bins: 128
 mel_vmin: -6. #-6.
 mel_vmax: 1.5
 interp_uv: true
-save_f0: true
 
 use_spk_id: false
 f0_embed_type: continuous

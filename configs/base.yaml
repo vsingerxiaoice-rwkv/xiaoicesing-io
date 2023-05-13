@@ -3,7 +3,6 @@ task_cls: ''
 work_dir: '' # experiment directory.
 infer: false # infer
 seed: 1234
-debug: false
 save_codes:
   - configs
   - modules
@@ -21,13 +20,13 @@ binarization_args:
   shuffle: false
   num_workers: 0
 
-audio_num_mel_bins: 80
-audio_sample_rate: 22050
-hop_size: 256  # For 22050Hz, 275 ~= 12.5 ms (0.0125 * sample_rate)
-win_size: 1024  # For 22050Hz, 1100 ~= 50 ms (If None, win_size: fft_size) (0.05 * sample_rate)
-fmin: 80  # Set this to 55 if your speaker is male! if female, 95 should help taking off noise. (To test depending on dataset. Pitch info: male~[65, 260], female~[100, 525])
-fmax: 7600  # To be increased/reduced depending on data.
-fft_size: 1024  # Extra window size is filled with 0 paddings to match this parameter
+audio_num_mel_bins: 128
+audio_sample_rate: 44100
+hop_size: 512  # For 22050Hz, 275 ~= 12.5 ms (0.0125 * sample_rate)
+win_size: 2048  # For 22050Hz, 1100 ~= 50 ms (If None, win_size: fft_size) (0.05 * sample_rate)
+fmin: 40  # Set this to 55 if your speaker is male! if female, 95 should help taking off noise. (To test depending on dataset. Pitch info: male~[65, 260], female~[100, 525])
+fmax: 16000  # To be increased/reduced depending on data.
+fft_size: 2048  # Extra window size is filled with 0 paddings to match this parameter
 num_spk: 1
 mel_vmin: -6
 mel_vmax: 1.5
@@ -53,7 +52,7 @@ use_spk_id: false
 ###########
 optimizer_args:
   optimizer_cls: torch.optim.AdamW
-  lr: 2.0
+  lr: 0.0004
   beta1: 0.9
   beta2: 0.98
   weight_decay: 0
@@ -63,15 +62,14 @@ lr_scheduler_args:
   step_size: 50000
   gamma: 0.5
 clip_grad_norm: 1
-dur_loss: mse # huber|mol
 
 ###########
 # train and eval
 ###########
-num_ckpt_keep: 3
+num_ckpt_keep: 5
 accumulate_grad_batches: 1
 log_interval: 100
-num_sanity_val_steps: 5  # steps of validation at the beginning
+num_sanity_val_steps: 1  # steps of validation at the beginning
 val_check_interval: 2000
 max_updates: 120000
 max_batch_frames: 32000
@@ -82,11 +80,7 @@ train_set_name: 'train'
 valid_set_name: 'valid'
 vocoder: ''
 vocoder_ckpt: ''
-out_wav_norm: false
-save_gt: false
-save_f0: false
-gen_dir_name: ''
-num_valid_plots: 5
+num_valid_plots: 10
 
 ###########
 # pytorch lightning

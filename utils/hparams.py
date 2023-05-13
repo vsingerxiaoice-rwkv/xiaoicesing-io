@@ -43,9 +43,7 @@ def set_hparams(config='', exp_name='', hparams_str='', print_hparams=True, glob
         parser.add_argument('--hparams', type=str, default='',
                             help='location of the data corpus')
         parser.add_argument('--infer', action='store_true', help='infer')
-        parser.add_argument('--validate', action='store_true', help='validate')
         parser.add_argument('--reset', action='store_true', help='reset hparams')
-        parser.add_argument('--debug', action='store_true', help='debug')
         args, unknown = parser.parse_known_args()
         
         tmp_args_hparams = args.hparams.split(',') if args.hparams.strip() != '' else []
@@ -53,7 +51,7 @@ def set_hparams(config='', exp_name='', hparams_str='', print_hparams=True, glob
         args.hparams = ','.join(tmp_args_hparams)
     else:
         args = Args(config=config, exp_name=exp_name, hparams=hparams_str,
-                    infer=False, validate=False, reset=False, debug=False)
+                    infer=False, reset=False)
 
     args_work_dir = ''
     if args.exp_name != '':
@@ -124,8 +122,6 @@ def set_hparams(config='', exp_name='', hparams_str='', print_hparams=True, glob
     dump_hparams()
 
     hparams_['infer'] = args.infer
-    hparams_['debug'] = args.debug
-    hparams_['validate'] = args.validate
     if global_hparams:
         hparams.clear()
         hparams.update(hparams_)
