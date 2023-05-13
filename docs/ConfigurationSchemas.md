@@ -1061,7 +1061,7 @@ float
 
 ### lr_scheduler_args
 
-Arguments of learning rate scheduler. Keys will be used as keyword arguments when initializing the scheduler object.
+Arguments of learning rate scheduler. Keys will be used as keyword arguments of the `__init__()` method of [lr_scheduler_args.scheduler_cls](#lr_scheduler_args.scheduler_cls).
 
 #### type
 
@@ -1453,7 +1453,7 @@ int
 
 ### optimizer_args
 
-Arguments of optimizer. Keys will be used as keyword arguments when initializing the optimizer object.
+Arguments of optimizer. Keys will be used as keyword arguments  of the `__init__()` method of [optimizer_args.optimizer_cls](#optimizer_args.optimizer_cls).
 
 #### type
 
