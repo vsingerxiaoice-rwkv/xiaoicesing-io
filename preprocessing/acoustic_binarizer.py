@@ -163,7 +163,7 @@ class AcousticBinarizer(BaseBinarizer):
         aug_list = []
         all_item_names = [item_name for item_name, _ in data_iterator]
         total_scale = 0
-        if self.augmentation_args.get('random_pitch_shifting', {}).get('enabled', True):
+        if self.augmentation_args['random_pitch_shifting']['enabled']:
             from augmentation.spec_stretch import SpectrogramStretchAugmentation
             aug_args = self.augmentation_args['random_pitch_shifting']
             key_shift_min, key_shift_max = aug_args['range']
@@ -195,12 +195,12 @@ class AcousticBinarizer(BaseBinarizer):
 
             total_scale += scale
 
-        if self.augmentation_args.get('fixed_pitch_shifting', {}).get('enabled', True):
+        if self.augmentation_args['fixed_pitch_shifting']['enabled']:
             from augmentation.spec_stretch import SpectrogramStretchAugmentation
             aug_args = self.augmentation_args['fixed_pitch_shifting']
             targets = aug_args['targets']
             scale = aug_args['scale']
-            assert not self.augmentation_args.get('random_pitch_shifting', {}).get('enabled'), \
+            assert not self.augmentation_args['random_pitch_shifting']['enabled'], \
                 'Fixed pitch shifting augmentation is not compatible with random pitch shifting.'
             assert len(targets) == len(set(targets)), \
                 'Fixed pitch shifting augmentation requires having no duplicate targets.'
@@ -227,7 +227,7 @@ class AcousticBinarizer(BaseBinarizer):
 
             total_scale += scale * len(targets)
 
-        if self.augmentation_args.get('random_time_stretching', {}).get('enabled', True):
+        if self.augmentation_args['random_time_stretching']['enabled']:
             from augmentation.spec_stretch import SpectrogramStretchAugmentation
             aug_args = self.augmentation_args['random_time_stretching']
             speed_min, speed_max = aug_args['range']
