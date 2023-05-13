@@ -111,8 +111,8 @@ class GaussianDiffusion(nn.Module):
         self.register_buffer('posterior_mean_coef2', to_torch(
             (1. - alphas_cumprod_prev) * np.sqrt(alphas) / (1. - alphas_cumprod)))
 
-        self.register_buffer('spec_min', torch.FloatTensor(spec_min)[None, None, :hparams['keep_bins']])
-        self.register_buffer('spec_max', torch.FloatTensor(spec_max)[None, None, :hparams['keep_bins']])
+        self.register_buffer('spec_min', torch.FloatTensor(spec_min)[None, None, :hparams['audio_num_mel_bins']])
+        self.register_buffer('spec_max', torch.FloatTensor(spec_max)[None, None, :hparams['audio_num_mel_bins']])
 
     def q_mean_variance(self, x_start, t):
         mean = extract(self.sqrt_alphas_cumprod, t, x_start.shape) * x_start

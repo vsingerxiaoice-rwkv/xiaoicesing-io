@@ -1,7 +1,5 @@
 # task
 task_cls: ''
-work_dir: '' # experiment directory.
-infer: false # infer
 seed: 1234
 save_codes:
   - configs
