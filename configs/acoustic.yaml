@@ -26,17 +26,20 @@ fmax: 16000
 binarization_args:
   shuffle: true
   num_workers: 0
-#augmentation_args:
-#  random_pitch_shifting:
-#    range: [-5., 5.]
-#    scale: 1.0
-#  fixed_pitch_shifting:
-#    targets: [-5., 5.]
-#    scale: 0.75
-#  random_time_stretching:
-#    range: [0.5, 2.]
-#    domain: log  # or linear
-#    scale: 2.0
+augmentation_args:
+  random_pitch_shifting:
+    enabled: false
+    range: [-5., 5.]
+    scale: 1.0
+  fixed_pitch_shifting:
+    enabled: false
+    targets: [-5., 5.]
+    scale: 0.75
+  random_time_stretching:
+    enabled: false
+    range: [0.5, 2.]
+    domain: log  # or linear
+    scale: 1.0
 
 raw_data_dir: 'data/opencpop/raw'
 binary_data_dir: 'data/opencpop/binary'

@@ -109,6 +109,34 @@ Arguments for fixed pitch shifting augmentation.
 
 dict
 
+### augmentation_args.fixed_pitch_shifting.enabled
+
+Whether to apply fixed pitch shifting augmentation.
+
+#### visibility
+
+acoustic
+
+#### scope
+
+preprocessing
+
+#### customizability
+
+recommended
+
+#### type
+
+bool
+
+#### default
+
+false
+
+#### constraints
+
+Must be false if [augmentation_args.random_pitch_shifting.enabled](#augmentation_args.random_pitch_shifting.enabled) is set to true.
+
 ### augmentation_args.fixed_pitch_shifting.scale
 
 Scale ratio of each target in fixed pitch shifting augmentation.
@@ -159,7 +187,19 @@ tuple
 
 ### augmentation_args.random_pitch_shifting
 
-all
+Arguments for random pitch shifting augmentation.
+
+#### type
+
+dict
+
+### augmentation_args.random_pitch_shifting.enabled
+
+Whether to apply random pitch shifting augmentation.
+
+#### visibility
+
+acoustic
 
 #### scope
 
@@ -171,43 +211,15 @@ recommended
 
 #### type
 
-float
+bool
 
 #### default
 
-0.75
+false
 
-### augmentation_args.fixed_pitch_shifting.targets
+#### constraints
 
-Targets of fixed pitch shifting augmentation, each in semitones.
-
-#### visibility
-
-all
-
-#### scope
-
-preprocessing
-
-#### customizability
-
-not recommended
-
-#### type
-
-list
-
-#### default
-
-[-5, 5]
-
-### augmentation_args.random_pitch_shifting
-
-Arguments for random pitch shifting augmentation.
-
-#### type
-
-dict
+Must be false if [augmentation_args.fixed_pitch_shifting.enabled](#augmentation_args.fixed_pitch_shifting.enabled) is set to true.
 
 ### augmentation_args.random_pitch_shifting.range
 
@@ -257,6 +269,14 @@ float
 
 1.0
 
+### augmentation_args.random_time_stretching
+
+Arguments for random time stretching augmentation.
+
+#### type
+
+dict
+
 ### augmentation_args.random_time_stretching.domain
 
 The domain where random time stretching factors are uniformly distributed in.
@@ -287,6 +307,30 @@ log
 #### constraint
 
 Choose from 'log', 'linear'.
+
+### augmentation_args.random_time_stretching.enabled
+
+Whether to apply random time stretching augmentation.
+
+#### visibility
+
+acoustic
+
+#### scope
+
+preprocessing
+
+#### customizability
+
+recommended
+
+#### type
+
+bool
+
+#### default
+
+false
 
 ### augmentation_args.random_time_stretching.range
 
@@ -334,7 +378,7 @@ float
 
 #### default
 
-0.75
+1.0
 
 ### base_config
 
