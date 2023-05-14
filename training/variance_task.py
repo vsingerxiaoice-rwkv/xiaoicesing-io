@@ -9,7 +9,7 @@ import utils.infer_utils
 from basics.base_dataset import BaseDataset
 from basics.base_task import BaseTask
 from modules.losses.diff_loss import DiffusionNoiseLoss
-from modules.losses.variance_loss import DurationLoss
+from modules.losses.dur_loss import DurationLoss
 from modules.toplevel import DiffSingerVariance
 from utils.hparams import hparams
 from utils.plot import dur_to_figure, curve_to_figure

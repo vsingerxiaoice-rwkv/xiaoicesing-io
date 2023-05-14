@@ -3,7 +3,6 @@ from functools import partial
 from inspect import isfunction
 from typing import List, Tuple
 
-import librosa.sequence
 import numpy as np
 import torch
 from torch import nn
@@ -410,65 +409,3 @@ class MultiVarianceDiffusion(RepetitiveDiffusion):
             xs = xs.unbind(dim=1)
         assert len(xs) == self.num_feats
         return self.clamp_spec(xs)
-
-
-class CurveDiffusion1d(GaussianDiffusion):
-    def __init__(self, vmin, vmax, timesteps=1000, k_step=1000,
-                 denoiser_type=None, denoiser_args=None, betas=None):
-        self.vmin = vmin
-        self.vmax = vmax
-        super().__init__(
-            1, timesteps=timesteps, k_step=k_step,
-            denoiser_type=denoiser_type, denoiser_args=denoiser_args,
-            betas=betas, spec_min=[vmin], spec_max=[vmax]
-        )
-
-    def norm_spec(self, x):
-        return super().norm_spec(x.unsqueeze(-1).clamp(min=self.vmin, max=self.vmax))
-
-    def denorm_spec(self, x):
-        return super().denorm_spec(x).clamp(min=self.vmin, max=self.vmax).squeeze(-1)
-
-
-class CurveDiffusion2d(GaussianDiffusion):
-    def __init__(self, vmin, vmax, num_bins, deviation, timesteps=1000, k_step=1000,
-                 denoiser_type=None, denoiser_args=None, betas=None):
-        super().__init__(
-            num_bins, timesteps=timesteps, k_step=k_step,
-            denoiser_type=denoiser_type, denoiser_args=denoiser_args,
-            betas=betas, spec_min=[0.], spec_max=[1.]
-        )
-        self.vmin = vmin
-        self.vmax = vmax
-        self.num_bins = num_bins
-        self.interval = (vmax - vmin) / (num_bins - 1)  # align with centers of bins
-        self.sigma = deviation / self.interval
-        self.width = int(3 * self.sigma)
-        self.register_buffer('x', torch.arange(self.num_bins).float().reshape(1, 1, -1))  # [1, 1, N]
-        xx, yy = np.meshgrid(range(num_bins), range(num_bins))
-        transition = np.maximum(self.width * 2 - abs(xx - yy), 0)
-        self.transition = transition / transition.sum(axis=1, keepdims=True)
-
-    def values_to_bins(self, values):
-        return (values - self.vmin) / self.interval
-
-    def bins_to_values(self, bins):
-        return bins * self.interval + self.vmin
-
-    def norm_spec(self, curve):
-        miu = self.values_to_bins(curve)[:, :, None]  # [B, T, 1]
-        probs = ((self.x - miu) / self.sigma).pow(2).div(-2).exp()  # gaussian blur, [B, T, N]
-        return super().norm_spec(probs)
-
-    def denorm_spec(self, probs):
-        probs = super().denorm_spec(probs)  # [B, T, N]
-        sequences = probs.softmax(dim=2).transpose(1, 2).cpu().numpy()
-        peaks = torch.from_numpy(
-            librosa.sequence.viterbi(sequences, self.transition).astype(np.int64)
-        ).to(probs.device).unsqueeze(-1)  # [B, T, 1]
-        probs *= probs > 0
-        start = torch.max(torch.tensor(0, device=probs.device), peaks - self.width)
-        end = torch.min(torch.tensor(self.num_bins - 1, device=probs.device), peaks + self.width)
-        probs[(self.x < start) | (self.x > end)] = 0.
-        bins = torch.sum(self.x * probs, dim=2) / torch.sum(probs, dim=2)  # [B, T]
-        return self.bins_to_values(bins).clamp(min=self.vmin, max=self.vmax)
