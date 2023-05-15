@@ -39,7 +39,7 @@ class DiffSingerAcoustic(ParameterAdaptorModule, CategorizedModule):
         self.embed_variances = len(variances_to_embed) > 0
         self.variance_aware_list = [
             v_name for v_name in VARIANCE_CHECKLIST
-            if v_name in self.variance_prediction_list or v_name in self.variances_to_embed
+            if v_name in self.variance_prediction_list or v_name in variances_to_embed
         ]
         if self.embed_variances or self.predict_variances:
             self.variance_embeds = nn.ModuleDict({
