@@ -66,9 +66,9 @@ def curve_to_figure(curve_gt, curve_pred=None, curve_base=None, grid=None):
     fig = plt.figure()
     if curve_base is not None:
         plt.plot(curve_base, color='g', label='base')
+    plt.plot(curve_gt, color='b', label='gt')
     if curve_pred is not None:
         plt.plot(curve_pred, color='r', label='pred')
-    plt.plot(curve_gt, color='b', label='gt')
     if grid is not None:
         plt.gca().yaxis.set_major_locator(MultipleLocator(grid))
     plt.grid(axis='y')
