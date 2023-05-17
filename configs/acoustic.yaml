@@ -26,28 +26,31 @@ fmax: 16000
 binarization_args:
   shuffle: true
   num_workers: 0
-#augmentation_args:
-#  random_pitch_shifting:
-#    range: [-5., 5.]
-#    scale: 1.0
-#  fixed_pitch_shifting:
-#    targets: [-5., 5.]
-#    scale: 0.75
-#  random_time_stretching:
-#    range: [0.5, 2.]
-#    domain: log  # or linear
-#    scale: 2.0
+augmentation_args:
+  random_pitch_shifting:
+    enabled: false
+    range: [-5., 5.]
+    scale: 1.0
+  fixed_pitch_shifting:
+    enabled: false
+    targets: [-5., 5.]
+    scale: 0.75
+  random_time_stretching:
+    enabled: false
+    range: [0.5, 2.]
+    domain: log  # or linear
+    scale: 1.0
 
 raw_data_dir: 'data/opencpop/raw'
 binary_data_dir: 'data/opencpop/binary'
 binarizer_cls: preprocessing.acoustic_binarizer.AcousticBinarizer
 dictionary: dictionaries/opencpop-extension.txt
+num_pad_tokens: 1
 spec_min: [-5]
 spec_max: [0]
 mel_vmin: -6. #-6.
 mel_vmax: 1.5
 interp_uv: true
-save_f0: true
 
 use_spk_id: false
 f0_embed_type: continuous

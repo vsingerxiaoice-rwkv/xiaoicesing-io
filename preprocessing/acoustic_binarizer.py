@@ -7,7 +7,6 @@
     ph_dur: phoneme durations
 """
 import csv
-import json
 import os
 import pathlib
 import random
@@ -53,20 +52,8 @@ class AcousticBinarizer(BaseBinarizer):
         )
 
     def load_meta_data(self, raw_data_dir: pathlib.Path, ds_id):
-        meta_info = {
-            'category': 'acoustic',
-            'format': 'grid'
-        }
-        meta_file = raw_data_dir / 'meta.json'
-        if meta_file.exists():
-            meta_info.update(json.load(open(meta_file, 'r', encoding='utf8')))
-        category = meta_info['category']
-        assert category == 'acoustic', \
-            f'Dataset in \'{raw_data_dir}\' is of category \'{category}\', ' \
-            f'but a dataset of category \'acoustic\' is required.'
-
         meta_data_dict = {}
-        if meta_info['format'] == 'csv':
+        if (raw_data_dir / 'transcriptions.csv').exists():
             for utterance_label in csv.DictReader(
                     open(raw_data_dir / 'transcriptions.csv', 'r', encoding='utf-8')
             ):
@@ -205,7 +192,7 @@ class AcousticBinarizer(BaseBinarizer):
         aug_list = []
         all_item_names = [item_name for item_name, _ in data_iterator]
         total_scale = 0
-        if self.augmentation_args.get('random_pitch_shifting') is not None:
+        if self.augmentation_args['random_pitch_shifting']['enabled']:
             from augmentation.spec_stretch import SpectrogramStretchAugmentation
             aug_args = self.augmentation_args['random_pitch_shifting']
             key_shift_min, key_shift_max = aug_args['range']
@@ -237,12 +224,12 @@ class AcousticBinarizer(BaseBinarizer):
 
             total_scale += scale
 
-        if self.augmentation_args.get('fixed_pitch_shifting') is not None:
+        if self.augmentation_args['fixed_pitch_shifting']['enabled']:
             from augmentation.spec_stretch import SpectrogramStretchAugmentation
             aug_args = self.augmentation_args['fixed_pitch_shifting']
             targets = aug_args['targets']
             scale = aug_args['scale']
-            assert self.augmentation_args.get('random_pitch_shifting') is None, \
+            assert not self.augmentation_args['random_pitch_shifting']['enabled'], \
                 'Fixed pitch shifting augmentation is not compatible with random pitch shifting.'
             assert len(targets) == len(set(targets)), \
                 'Fixed pitch shifting augmentation requires having no duplicate targets.'
@@ -269,7 +256,7 @@ class AcousticBinarizer(BaseBinarizer):
 
             total_scale += scale * len(targets)
 
-        if self.augmentation_args.get('random_time_stretching') is not None:
+        if self.augmentation_args['random_time_stretching']['enabled']:
             from augmentation.spec_stretch import SpectrogramStretchAugmentation
             aug_args = self.augmentation_args['random_time_stretching']
             speed_min, speed_max = aug_args['range']
