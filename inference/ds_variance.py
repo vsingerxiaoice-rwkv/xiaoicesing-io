@@ -72,22 +72,12 @@ class DiffSingerVarianceInfer(BaseSVSInfer):
         note_dur = torch.diff(note_acc, dim=1, prepend=note_acc.new_zeros(1, 1))
         mel2note = self.lr(note_dur)  # [B=1, T_t]
         T_t = mel2note.shape[1]
-        is_slur = torch.BoolTensor([[int(s) for s in param['note_slur'].split()]]).to(self.device)  # [B=1, T_n]
-        note2word = torch.cumsum(~is_slur, dim=1)  # [B=1, T_n]
-        word_dur = note_dur.new_zeros(1, T_w + 1).scatter_add(
-            1, note2word, note_dur
-        )[:, 1:]  # => [B=1, T_w]
-        mel2word = self.lr(word_dur)  # [B=1, T_t]
 
         print(f'Length: {T_w} word(s), {note_seq.shape[1]} note(s), {T_ph} token(s), '
               f'{T_t} frame(s), {T_t * self.timestep:.2f} second(s)')
 
-        if mel2word.shape[1] != T_t:  # Align words with notes
-            mel2word = F.pad(mel2word, [0, T_t - mel2word.shape[1]], value=mel2word[0, -1])
-            word_dur = mel2ph_to_dur(mel2word, T_w)
-        batch['word_dur'] = word_dur
-
-        if param.get('ph_dur'):  # Get mel2ph if ph_dur is given
+        if param.get('ph_dur'):
+            # Get mel2ph if ph_dur is given
             ph_dur_sec = torch.from_numpy(
                 np.array([param['ph_dur'].split()], np.float32)
             ).to(self.device)  # [B=1, T_ph]
@@ -97,11 +87,28 @@ class DiffSingerVarianceInfer(BaseSVSInfer):
             if mel2ph.shape[1] != T_t:  # Align phones with notes
                 mel2ph = F.pad(mel2ph, [0, T_t - mel2ph.shape[1]], value=mel2ph[0, -1])
                 ph_dur = mel2ph_to_dur(mel2ph, T_ph)
+            # Get word_dur from ph_dur and ph_num
+            word_dur = note_dur.new_zeros(1, T_w + 1).scatter_add(
+                1, ph2word, ph_dur
+            )[:, 1:]  # => [B=1, T_w]
         else:
             ph_dur = None
             mel2ph = None
+            # Get word_dur from note_dur and note_slur
+            is_slur = torch.BoolTensor([[int(s) for s in param['note_slur'].split()]]).to(self.device)  # [B=1, T_n]
+            note2word = torch.cumsum(~is_slur, dim=1)  # [B=1, T_n]
+            word_dur = note_dur.new_zeros(1, T_w + 1).scatter_add(
+                1, note2word, note_dur
+            )[:, 1:]  # => [B=1, T_w]
+
         batch['ph_dur'] = ph_dur
         batch['mel2ph'] = mel2ph
+
+        mel2word = self.lr(word_dur)  # [B=1, T_t]
+        if mel2word.shape[1] != T_t:  # Align words with notes
+            mel2word = F.pad(mel2word, [0, T_t - mel2word.shape[1]], value=mel2word[0, -1])
+            word_dur = mel2ph_to_dur(mel2word, T_w)
+        batch['word_dur'] = word_dur
 
         # Calculate frame-level MIDI pitch, which is a step function curve
         frame_midi_pitch = torch.gather(
