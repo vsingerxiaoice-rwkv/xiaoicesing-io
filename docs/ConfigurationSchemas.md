@@ -12,14 +12,14 @@ This document explains the meaning and usages of all editable keys in a configur
 Each configuration key (including nested keys) are described with a brief explanation and several attributes listed as
 follows:
 
-|    Attribute    | Explanation                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                   |
-|:---------------:|:----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------|
-|   visibility    | Represents what kind(s) of models and tasks this configuration belongs to.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                    |
-|      scope      | The scope of effects of the configuration, indicating what it can influence within the whole pipeline. Possible values are:<br>**nn** - This configuration is related to how the neural networks are formed and initialized. Modifying it will result in failure when loading or resuming from checkpoints.<br>**preprocessing** - This configuration controls how raw data pieces or inference inputs are converted to inputs of neural networks. Binarizers should be re-run if this configuration is modified.<br>**training** - This configuration describes the training procedures. Most training configurations can affect training performance, memory consumption, device utilization and loss calculation. Modifying training-only configurations will not cause severe inconsistency or errors in most situations.<br>**inference** - This configuration describes the calculation logic through the model graph. Changing it can lead to inconsistent or wrong outputs of inference or validation.<br>**others** - Other configurations not discussed above. Will have different effects according to  the descriptions.                                                          |
-| customizability | The level of customizability of the configuration. Possible values are:<br>**required** - This configuration **must** be set or modified according to the actual situation or condition, otherwise errors can be raised.<br>**recommended** - It is recommended to adjust this configuration according to the dataset, requirements, environment and hardware. Most functionality-related and feature-related configurations are at this level, and all configurations in this level are widely tested with different values. However, leaving it unchanged will not cause problems.<br>**normal** - There is no need to modify it as the default value is carefully tuned and widely validated. However, one can still use another value if there are some special requirements or situations.<br>**not recommended** - No other values except the default one of this configuration are tested. Modifying it will not cause errors, but may cause unpredictable or significant impacts to the pipelines.<br>**preserved** - This configuration **must not** be modified. It appears in the configuration file only for future scalability, and currently changing it will result in errors. |
-|      type       | Value type of the configuration. Follows the syntax of Python type hints.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                     |
-|   constraints   | Value constraints of the configuration.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                       |
-|     default     | Default value of the configuration. Uses YAML value syntax.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                   |
+|    Attribute    | Explanation                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                  |
+|:---------------:|:---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------|
+|   visibility    | Represents what kind(s) of models and tasks this configuration belongs to.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                   |
+|      scope      | The scope of effects of the configuration, indicating what it can influence within the whole pipeline. Possible values are:<br>**nn** - This configuration is related to how the neural networks are formed and initialized. Modifying it will result in failure when loading or resuming from checkpoints.<br>**preprocessing** - This configuration controls how raw data pieces or inference inputs are converted to inputs of neural networks. Binarizers should be re-run if this configuration is modified.<br>**training** - This configuration describes the training procedures. Most training configurations can affect training performance, memory consumption, device utilization and loss calculation. Modifying training-only configurations will not cause severe inconsistency or errors in most situations.<br>**inference** - This configuration describes the calculation logic through the model graph. Changing it can lead to inconsistent or wrong outputs of inference or validation.<br>**others** - Other configurations not discussed above. Will have different effects according to  the descriptions.                                                         |
+| customizability | The level of customizability of the configuration. Possible values are:<br>**required** - This configuration **must** be set or modified according to the actual situation or condition, otherwise errors can be raised.<br>**recommended** - It is recommended to adjust this configuration according to the dataset, requirements, environment and hardware. Most functionality-related and feature-related configurations are at this level, and all configurations in this level are widely tested with different values. However, leaving it unchanged will not cause problems.<br>**normal** - There is no need to modify it as the default value is carefully tuned and widely validated. However, one can still use another value if there are some special requirements or situations.<br>**not recommended** - No other values except the default one of this configuration are tested. Modifying it will not cause errors, but may cause unpredictable or significant impacts to the pipelines.<br>**reserved** - This configuration **must not** be modified. It appears in the configuration file only for future scalability, and currently changing it will result in errors. |
+|      type       | Value type of the configuration. Follows the syntax of Python type hints.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                    |
+|   constraints   | Value constraints of the configuration.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                      |
+|     default     | Default value of the configuration. Uses YAML value syntax.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                  |
 
 ### accumulate_grad_batches
 
@@ -59,7 +59,7 @@ nn, preprocessing, inference
 
 #### customizability
 
-preserved
+reserved
 
 #### type
 
@@ -83,7 +83,7 @@ preprocessing
 
 #### customizability
 
-preserved
+reserved
 
 #### type
 
@@ -462,7 +462,7 @@ preprocessing
 
 #### customizability
 
-preserved
+reserved
 
 #### type
 
@@ -598,7 +598,7 @@ nn
 
 #### customizability
 
-preserved
+reserved
 
 #### type
 
@@ -857,7 +857,7 @@ preprocessing
 
 #### customizability
 
-preserved
+reserved
 
 #### type
 
@@ -881,7 +881,7 @@ preprocessing
 
 #### customizability
 
-preserved
+reserved
 
 #### type
 
@@ -905,7 +905,7 @@ preprocessing
 
 #### customizability
 
-preserved
+reserved
 
 #### type
 
@@ -953,7 +953,7 @@ preprocessing
 
 #### customizability
 
-preserved
+reserved
 
 #### type
 
@@ -977,7 +977,7 @@ preprocessing
 
 #### customizability
 
-preserved
+reserved
 
 #### type
 
@@ -1249,7 +1249,7 @@ training
 
 #### customizability
 
-preserved
+reserved
 
 #### type
 
@@ -1273,7 +1273,7 @@ training
 
 #### customizability
 
-preserved
+reserved
 
 #### type
 
@@ -1419,7 +1419,7 @@ training
 
 #### customizability
 
-preserved
+reserved
 
 #### type
 
@@ -1571,7 +1571,7 @@ training
 
 #### customizability
 
-preserved
+reserved
 
 #### type
 
@@ -1741,7 +1741,7 @@ training
 
 #### customization
 
-preserved
+reserved
 
 #### type
 
@@ -1765,7 +1765,7 @@ training
 
 #### customization
 
-preserved
+reserved
 
 #### type
 
@@ -2099,7 +2099,7 @@ training
 
 #### customizability
 
-preserved
+reserved
 
 #### type
 
@@ -2148,7 +2148,7 @@ preprocessing, training
 
 #### customizability
 
-preserved
+reserved
 
 #### type
 
@@ -2316,7 +2316,7 @@ preprocessing, training
 
 #### customizability
 
-preserved
+reserved
 
 #### type
 
@@ -2388,7 +2388,7 @@ preprocessing
 
 #### customizability
 
-preserved
+reserved
 
 #### type
 
