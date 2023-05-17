@@ -1379,6 +1379,32 @@ int
 
 2
 
+### num_pad_tokens
+
+Number of padding phoneme indexes before all real tokens.
+
+Due to some historical reasons, old checkpoints may have 3 padding tokens called \<PAD\>, \<EOS\> and \<UNK\>. After refactoring, all padding tokens are called \<PAD\>, and only the first one (token == 0) will be used.
+
+#### visibility
+
+acoustic
+
+#### scope
+
+nn, preprocess
+
+#### customizability
+
+not recommended
+
+#### type
+
+int
+
+#### default
+
+1
+
 ### num_sanity_val_steps
 
 Number of sanity validation steps at the beginning.
