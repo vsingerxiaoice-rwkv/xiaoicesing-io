@@ -5,6 +5,7 @@ import torch.nn.functional as F
 from basics.base_module import CategorizedModule
 from modules.commons.common_layers import (
     XavierUniformInitLinear as Linear,
+    NormalInitEmbedding as Embedding
 )
 from modules.diffusion.ddpm import (
     GaussianDiffusion, PitchDiffusion
@@ -133,14 +134,8 @@ class DiffSingerVariance(ParameterAdaptorModule, CategorizedModule):
 
         self.predict_pitch = hparams['predict_pitch']
 
-        predict_energy = hparams.get('predict_energy', False)
-        predict_breathiness = hparams.get('predict_breathiness', False)
-        self.variance_prediction_list = []
-        if predict_energy:
-            self.variance_prediction_list.append('energy')
-        if predict_breathiness:
-            self.variance_prediction_list.append('breathiness')
-        self.predict_variances = len(self.variance_prediction_list) > 0
+        if self.predict_pitch or self.predict_variances:
+            self.retake_embed = Embedding(2, hparams['hidden_size'])
 
         if self.predict_pitch:
             pitch_hparams = hparams['pitch_prediction_args']
@@ -160,11 +155,15 @@ class DiffSingerVariance(ParameterAdaptorModule, CategorizedModule):
 
         if self.predict_variances:
             self.pitch_embed = Linear(1, hparams['hidden_size'])
+            self.variance_embeds = nn.ModuleDict({
+                v_name: Linear(1, hparams['hidden_size'])
+                for v_name in self.variance_prediction_list
+            })
             self.variance_predictor = self.build_adaptor()
 
     def forward(
             self, txt_tokens, midi, ph2word, ph_dur=None, word_dur=None, mel2ph=None,
-            base_pitch=None, delta_pitch=None, infer=True, **kwargs
+            base_pitch=None, delta_pitch=None, retake=None, infer=True, **kwargs
     ):
         encoder_out, dur_pred_out = self.fs2(
             txt_tokens, midi=midi, ph2word=ph2word,
@@ -183,7 +182,17 @@ class DiffSingerVariance(ParameterAdaptorModule, CategorizedModule):
         mel2ph_ = mel2ph[..., None].repeat([1, 1, hparams['hidden_size']])
         condition = torch.gather(encoder_out, 1, mel2ph_)
 
+        if self.predict_pitch or self.predict_variances:
+            if retake is None:
+                retake_embed = self.retake_embed(torch.ones_like(mel2ph))
+            else:
+                retake_embed = self.retake_embed(retake.long())
+            condition += retake_embed
+
         if self.predict_pitch:
+            if retake is not None:
+                base_pitch = base_pitch + delta_pitch * ~retake
+                delta_pitch = delta_pitch * retake
             pitch_cond = condition + self.base_pitch_embed(base_pitch[:, :, None])
             pitch_pred_out = self.pitch_predictor(pitch_cond, delta_pitch, infer)
         else:
@@ -196,11 +205,24 @@ class DiffSingerVariance(ParameterAdaptorModule, CategorizedModule):
             pitch = base_pitch + pitch_pred_out
         else:
             pitch = base_pitch + delta_pitch
-        pitch_embed = self.pitch_embed(pitch[:, :, None])
-        condition += pitch_embed
+        condition += self.pitch_embed(pitch[:, :, None])
 
         variance_inputs = self.collect_variance_inputs(**kwargs)
+
+        if retake is None:
+            variance_embeds = [
+                self.variance_embeds[v_name](torch.zeros_like(pitch)[:, :, None])
+                for v_name in self.variance_prediction_list
+            ]
+        else:
+            variance_embeds = [
+                self.variance_embeds[v_name]((v_input * ~retake)[:, :, None])
+                for v_name, v_input in zip(self.variance_prediction_list, variance_inputs)
+            ]
+        condition += torch.stack(variance_embeds, dim=-1).sum(-1)
+
         variance_outputs = self.variance_predictor(condition, variance_inputs, infer)
+
         if infer:
             variances_pred_out = self.collect_variance_outputs(variance_outputs)
         else:
