@@ -68,19 +68,12 @@ class AcousticBinarizer(BaseBinarizer):
                     f'Lengths of ph_seq and ph_dur mismatch in \'{item_name}\'.'
                 meta_data_dict[f'{ds_id}:{item_name}'] = temp_dict
         else:
-            utterance_labels = open(raw_data_dir / 'transcriptions.txt', 'r', encoding='utf-8').readlines()
-            for utterance_label in utterance_labels:
-                song_info = utterance_label.split('|')
-                item_name = song_info[0]
-                temp_dict = {
-                    'wav_fn': f'{raw_data_dir}/wavs/{item_name}.wav',
-                    'ph_seq': song_info[2].split(),
-                    'ph_dur': [float(x) for x in song_info[5].split()],
-                    'spk_id': ds_id
-                }
-                assert len(temp_dict['ph_seq']) == len(temp_dict['ph_dur']), \
-                    f'Lengths of ph_seq and ph_dur mismatch in \'{item_name}\'.'
-                meta_data_dict[f'{ds_id}:{item_name}'] = temp_dict
+            raise FileNotFoundError(
+                f'transcriptions.csv not found in {raw_data_dir}. '
+                'If this is a dataset with the old transcription format, please consider '
+                'migrating it to the new format via the following command:\n'
+                'python scripts/migrate.py txt <INPUT_TXT>'
+            )
         self.items.update(meta_data_dict)
 
     def check_coverage(self):
