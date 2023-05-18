@@ -125,12 +125,14 @@ class DurationPredictor(torch.nn.Module):
             (train) FloatTensor, (infer) LongTensor: Batch of predicted durations in linear domain (B, Tmax).
         """
         xs = xs.transpose(1, -1)  # (B, idim, Tmax)
+        masks = 1 - x_masks.float()
+        masks_ = masks[:, None, :]
         for f in self.conv:
             xs = f(xs)  # (B, C, Tmax)
             if x_masks is not None:
-                xs = xs * (1 - x_masks.float())[:, None, :]
+                xs = xs * masks_
         xs = self.linear(xs.transpose(1, -1))  # [B, T, C]
-        xs = xs * (1 - x_masks.float())[:, :, None]  # (B, T, C)
+        xs = xs * masks[:, :, None]  # (B, T, C)
 
         dur_pred = self.out2dur(xs)
         if infer:
