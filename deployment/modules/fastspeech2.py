@@ -1,12 +1,16 @@
+import copy
+
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
 
 from modules.fastspeech.acoustic_encoder import FastSpeech2Acoustic
+from modules.fastspeech.variance_encoder import FastSpeech2Variance
 from utils.hparams import hparams
 from utils.pitch_utils import (
     f0_bin, f0_mel_min, f0_mel_max
 )
+from utils.text_encoder import PAD_INDEX
 
 
 def f0_to_coarse(f0):
@@ -83,3 +87,42 @@ class FastSpeech2AcousticONNX(FastSpeech2Acoustic):
             else:
                 condition += spk_embed
         return condition
+
+
+class FastSpeech2VarianceONNX(FastSpeech2Variance):
+    def __init__(self, vocab_size):
+        super().__init__(vocab_size=vocab_size)
+        self.lr = LengthRegulator()
+
+    def forward_encoder_word(self, tokens, word_div, word_dur):
+        ph2word = self.lr(word_div)
+        onset = ph2word > F.pad(ph2word, [1, -1])
+        onset_embed = self.onset_embed(onset.long())
+        ph_word_dur = torch.gather(F.pad(word_dur, [1, 0]), 1, ph2word)
+        word_dur_embed = self.word_dur_embed(ph_word_dur.float()[:, :, None])
+        return self.encoder(tokens, onset_embed + word_dur_embed), tokens == 0
+
+    def forward_encoder_phoneme(self, tokens, ph_dur):
+        ph_dur_embed = self.ph_dur_embed(ph_dur.float()[:, :, None])
+        return self.encoder(tokens, ph_dur_embed), tokens == PAD_INDEX
+
+    def forward_dur_predictor(self, encoder_out, x_masks, ph_midi):
+        midi_embed = self.midi_embed(ph_midi)
+        dur_cond = encoder_out + midi_embed
+        ph_dur = self.dur_predictor(dur_cond, x_masks=x_masks)
+        return ph_dur
+
+    def view_as_encoder(self):
+        model = copy.deepcopy(self)
+        if self.predict_dur:
+            del model.dur_predictor
+            model.forward = model.forward_encoder_word
+        else:
+            model.forward = model.forward_encoder_phoneme
+        return model
+
+    def view_as_dur_predictor(self):
+        model = copy.deepcopy(self)
+        del model.encoder
+        model.forward = model.forward_dur_predictor
+        return model

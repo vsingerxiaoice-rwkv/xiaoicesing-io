@@ -18,7 +18,7 @@ class ParameterAdaptorModule(torch.nn.Module):
             self.variance_prediction_list.append('breathiness')
         self.predict_variances = len(self.variance_prediction_list) > 0
 
-    def build_adaptor(self):
+    def build_adaptor(self, cls=MultiVarianceDiffusion):
         ranges = []
         clamps = []
 
@@ -37,7 +37,7 @@ class ParameterAdaptorModule(torch.nn.Module):
             clamps.append((0., 1.))
 
         variances_hparams = hparams['variances_prediction_args']
-        return MultiVarianceDiffusion(
+        return cls(
             ranges=ranges,
             clamps=clamps,
             repeat_bins=variances_hparams['repeat_bins'],
