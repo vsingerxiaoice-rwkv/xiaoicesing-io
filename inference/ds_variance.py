@@ -45,7 +45,7 @@ class DiffSingerVarianceInfer(BaseSVSInfer):
         model = DiffSingerVariance(
             vocab_size=len(self.ph_encoder)
         ).eval().to(self.device)
-        load_ckpt(model, hparams['work_dir'], ckpt_steps=ckpt_steps, required_category='variance',
+        load_ckpt(model, hparams['work_dir'], ckpt_steps=ckpt_steps,
                   prefix_in_ckpt='model', strict=True, device=self.device)
         return model
 

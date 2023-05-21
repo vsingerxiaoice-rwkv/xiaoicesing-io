@@ -140,7 +140,7 @@ def filter_kwargs(dict_to_filter, kwarg_obj):
 
 def load_ckpt(
         cur_model, ckpt_base_dir, ckpt_steps=None,
-        required_category=None, prefix_in_ckpt='model', key_in_ckpt='state_dict',
+        prefix_in_ckpt='model', key_in_ckpt='state_dict',
         strict=True, device='cpu'
 ):
     if not isinstance(ckpt_base_dir, pathlib.Path):
@@ -164,10 +164,7 @@ def load_ckpt(
     assert len(checkpoint_path) > 0, f'| ckpt not found in {ckpt_base_dir}.'
     checkpoint_path = checkpoint_path[-1]
     ckpt_loaded = torch.load(checkpoint_path, map_location=device)
-    if required_category is not None:
-        if not isinstance(cur_model, CategorizedModule):
-            raise TypeError(f'The \'{required_category}\' argument can only be used '
-                            f'on a \'basics.base_model.CategorizedModule\'.')
+    if isinstance(cur_model, CategorizedModule):
         cur_model.check_category(ckpt_loaded.get('category'))
     if key_in_ckpt is None:
         state_dict = ckpt_loaded

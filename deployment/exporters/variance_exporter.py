@@ -59,7 +59,7 @@ class DiffSingerVarianceExporter(BaseExporter):
         model = DiffSingerVarianceONNX(
             vocab_size=len(self.vocab)
         ).eval().to(self.device)
-        load_ckpt(model, hparams['work_dir'], ckpt_steps=self.ckpt_steps, required_category='variance',
+        load_ckpt(model, hparams['work_dir'], ckpt_steps=self.ckpt_steps,
                   prefix_in_ckpt='model', strict=True, device=self.device)
         model.build_smooth_op(self.device)
         return model

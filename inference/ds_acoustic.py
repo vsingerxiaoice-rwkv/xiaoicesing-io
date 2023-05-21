@@ -51,7 +51,7 @@ class DiffSingerAcousticInfer(BaseSVSInfer):
             vocab_size=len(self.ph_encoder),
             out_dims=hparams['audio_num_mel_bins']
         ).eval().to(self.device)
-        load_ckpt(model, hparams['work_dir'], ckpt_steps=ckpt_steps, required_category='acoustic',
+        load_ckpt(model, hparams['work_dir'], ckpt_steps=ckpt_steps,
                   prefix_in_ckpt='model', strict=True, device=self.device)
         return model
 
