@@ -240,7 +240,7 @@ class DiffSingerAcousticExporter(BaseExporter):
         return spk_mix_embed
 
     def _optimize_fs2_graph(self, fs2: onnx.ModelProto) -> onnx.ModelProto:
-        print(f'Running ONNX Simplifier for {self.fs2_class_name}...')
+        print(f'Running ONNX Simplifier on {self.fs2_class_name}...')
         fs2, check = onnxsim.simplify(fs2, include_subgraph=True)
         assert check, 'Simplified ONNX model could not be validated'
         print(f'| optimize graph: {self.fs2_class_name}')
@@ -250,7 +250,7 @@ class DiffSingerAcousticExporter(BaseExporter):
         onnx_helper.model_override_io_shapes(diffusion, output_shapes={
             'mel': (1, 'n_frames', hparams['audio_num_mel_bins'])
         })
-        print(f'Running ONNX Simplifier #1 for {self.diffusion_class_name}...')
+        print(f'Running ONNX Simplifier #1 on {self.diffusion_class_name}...')
         diffusion, check = onnxsim.simplify(diffusion, include_subgraph=True)
         assert check, 'Simplified ONNX model could not be validated'
         onnx_helper.graph_fold_back_to_squeeze(diffusion.graph)
@@ -260,7 +260,7 @@ class DiffSingerAcousticExporter(BaseExporter):
             alias_prefix='/diffusion/denoise_fn/cache'
         )
         onnx_helper.graph_remove_unused_values(diffusion.graph)
-        print(f'Running ONNX Simplifier #2 for {self.diffusion_class_name}...')
+        print(f'Running ONNX Simplifier #2 on {self.diffusion_class_name}...')
         diffusion, check = onnxsim.simplify(
             diffusion,
             include_subgraph=True

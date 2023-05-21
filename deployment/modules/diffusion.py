@@ -117,12 +117,14 @@ class PitchDiffusionONNX(GaussianDiffusionONNX, PitchDiffusion):
             betas=betas
         )
 
+    def clamp_spec(self, x):
+        return x.clamp(min=self.vmin, max=self.vmax)
+
     def denorm_spec(self, x):
         d = (self.spec_max - self.spec_min) / 2.
         m = (self.spec_max + self.spec_min) / 2.
         x = x * d + m
         x = x.mean(dim=-1)
-        x = x.clamp(min=self.vmin, max=self.vmax)
         return x
 
 

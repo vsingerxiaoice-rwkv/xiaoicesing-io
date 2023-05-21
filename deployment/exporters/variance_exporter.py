@@ -31,6 +31,7 @@ class DiffSingerVarianceExporter(BaseExporter):
         self.dur_predictor_cache_path = self.cache_dir / 'dur.onnx'
         self.pitch_preprocess_cache_path = self.cache_dir / 'pitch_pre.onnx'
         self.pitch_diffusion_cache_path = self.cache_dir / 'pitch.onnx'
+        self.pitch_postprocess_cache_path = self.cache_dir / 'pitch_post.onnx'
         self.variance_preprocess_cache_path = self.cache_dir / 'variance_pre.onnx'
         self.variance_diffusion_cache_path = self.cache_dir / 'variance.onnx'
         self.variance_postprocess_cache_path = self.cache_dir / 'variance_post.onnx'
@@ -82,9 +83,11 @@ class DiffSingerVarianceExporter(BaseExporter):
             onnx.save(dur_predictor_onnx, dur_predictor_path)
             self.dur_predictor_cache_path.unlink()
             print(f'| export dur predictor => {dur_predictor_path}')
-        if self.model.predict_pitch and False:
+        if self.model.predict_pitch:
             pitch_predictor_onnx = self._optimize_merge_pitch_predictor_graph(
-                onnx.load(self.pitch_preprocess_cache_path), onnx.load(self.pitch_diffusion_cache_path)
+                onnx.load(self.pitch_preprocess_cache_path),
+                onnx.load(self.pitch_diffusion_cache_path),
+                onnx.load(self.pitch_postprocess_cache_path)
             )
             pitch_predictor_path = path / f'{self.model_name}.pitch.onnx'
             onnx.save(pitch_predictor_onnx, pitch_predictor_path)
@@ -212,21 +215,12 @@ class DiffSingerVarianceExporter(BaseExporter):
                 opset_version=15
             )
 
-        if self.model.predict_pitch and False:
+        if self.model.predict_pitch:
             # Prepare inputs for preprocessor of PitchDiffusion
             note_midi = torch.FloatTensor([[60.] * 4]).to(self.device)
             note_dur = torch.LongTensor([[2, 6, 3, 4]]).to(self.device)
             pitch = torch.FloatTensor([[60.] * 15]).to(self.device)
             retake = torch.ones_like(pitch, dtype=torch.bool)
-            pitch_common_io = ['pitch_cond', 'base_pitch']
-            pitch_common_axes = {
-                'pitch_cond': {
-                    1: 'n_frames'
-                },
-                'base_pitch': {
-                    1: 'n_frames'
-                }
-            }
             torch.onnx.export(
                 self.model.view_as_pitch_preprocess(),
                 (
@@ -243,7 +237,9 @@ class DiffSingerVarianceExporter(BaseExporter):
                     'note_midi', 'note_dur',
                     'pitch', 'retake'
                 ],
-                output_names=pitch_common_io,
+                output_names=[
+                    'pitch_cond', 'base_pitch'
+                ],
                 dynamic_axes={
                     'encoder_out': {
                         1: 'n_tokens'
@@ -263,7 +259,12 @@ class DiffSingerVarianceExporter(BaseExporter):
                     'retake': {
                         1: 'n_frames'
                     },
-                    **pitch_common_axes
+                    'pitch_cond': {
+                        1: 'n_frames'
+                    },
+                    'base_pitch': {
+                        1: 'n_frames'
+                    }
                 },
                 opset_version=15
             )
@@ -291,12 +292,10 @@ class DiffSingerVarianceExporter(BaseExporter):
                 example_inputs=[
                     (
                         condition.transpose(1, 2),
-                        pitch,
                         1  # p_sample branch
                     ),
                     (
                         condition.transpose(1, 2),
-                        pitch,
                         200  # p_sample_plms branch
                     )
                 ]
@@ -307,18 +306,48 @@ class DiffSingerVarianceExporter(BaseExporter):
                 pitch_diffusion,
                 (
                     condition.transpose(1, 2),
-                    pitch,
                     200
                 ),
                 self.pitch_diffusion_cache_path,
                 input_names=[
-                    *pitch_common_io, 'speedup'
+                    'pitch_cond', 'speedup'
+                ],
+                output_names=[
+                    'x_pred'
+                ],
+                dynamic_axes={
+                    'pitch_cond': {
+                        1: 'n_frames'
+                    },
+                    'x_pred': {
+                        1: 'n_frames'
+                    }
+                },
+                opset_version=15
+            )
+
+            # Prepare inputs for postprocessor of MultiVarianceDiffusion
+            torch.onnx.export(
+                self.model.view_as_pitch_postprocess(),
+                (
+                    pitch,
+                    pitch
+                ),
+                self.pitch_postprocess_cache_path,
+                input_names=[
+                    'x_pred',
+                    'base_pitch'
                 ],
                 output_names=[
                     'pitch_pred'
                 ],
                 dynamic_axes={
-                    **pitch_common_axes,
+                    'x_pred': {
+                        1: 'n_frames'
+                    },
+                    'base_pitch': {
+                        1: 'n_frames'
+                    },
                     'pitch_pred': {
                         1: 'n_frames'
                     }
@@ -473,7 +502,7 @@ class DiffSingerVarianceExporter(BaseExporter):
                 'encoder_out': (1, 'n_tokens', hparams['hidden_size'])
             }
         )
-        print(f'Running ONNX Simplifier for {self.fs2_class_name}...')
+        print(f'Running ONNX Simplifier on {self.fs2_class_name}...')
         linguistic, check = onnxsim.simplify(linguistic, include_subgraph=True)
         assert check, 'Simplified ONNX model could not be validated'
         print(f'| optimize graph: {self.fs2_class_name}')
@@ -486,14 +515,14 @@ class DiffSingerVarianceExporter(BaseExporter):
                 'ph_dur_pred': (1, 'n_tokens')
             }
         )
-        print(f'Running ONNX Simplifier for {self.dur_predictor_class_name}...')
+        print(f'Running ONNX Simplifier on {self.dur_predictor_class_name}...')
         dur_predictor, check = onnxsim.simplify(dur_predictor, include_subgraph=True)
         assert check, 'Simplified ONNX model could not be validated'
         print(f'| optimize graph: {self.dur_predictor_class_name}')
         return dur_predictor
 
     def _optimize_merge_pitch_predictor_graph(
-            self, pitch_pre: onnx.ModelProto, pitch_diffusion: onnx.ModelProto
+            self, pitch_pre: onnx.ModelProto, pitch_diffusion: onnx.ModelProto, pitch_post: onnx.ModelProto
     ) -> onnx.ModelProto:
         onnx_helper.model_override_io_shapes(
             pitch_pre, output_shapes={'pitch_cond': (1, 'n_frames', hparams['hidden_size'])}
@@ -504,7 +533,7 @@ class DiffSingerVarianceExporter(BaseExporter):
         onnx_helper.model_override_io_shapes(
             pitch_diffusion, output_shapes={'pitch_pred': (1, 'n_frames')}
         )
-        print(f'Running ONNX Simplifier #1 for {self.pitch_diffusion_class_name}...')
+        print(f'Running ONNX Simplifier #1 on {self.pitch_diffusion_class_name}...')
         pitch_diffusion, check = onnxsim.simplify(pitch_diffusion, include_subgraph=True)
         assert check, 'Simplified ONNX model could not be validated'
         onnx_helper.graph_fold_back_to_squeeze(pitch_diffusion.graph)
@@ -514,13 +543,24 @@ class DiffSingerVarianceExporter(BaseExporter):
             alias_prefix='/pitch_predictor/denoise_fn/cache'
         )
         onnx_helper.graph_remove_unused_values(pitch_diffusion.graph)
-        print(f'Running ONNX Simplifier #2 for {self.pitch_diffusion_class_name}...')
+        print(f'Running ONNX Simplifier #2 on {self.pitch_diffusion_class_name}...')
         pitch_diffusion, check = onnxsim.simplify(pitch_diffusion, include_subgraph=True)
         assert check, 'Simplified ONNX model could not be validated'
 
+        onnx_helper.model_add_prefixes(pitch_pre, node_prefix='/pre', ignored_pattern=r'.*embed.*')
+        onnx_helper.model_add_prefixes(pitch_pre, dim_prefix='pre.', ignored_pattern='(n_tokens)|(n_notes)|(n_frames)')
+        onnx_helper.model_add_prefixes(pitch_post, node_prefix='/post', ignored_pattern=None)
+        onnx_helper.model_add_prefixes(pitch_post, dim_prefix='post.', ignored_pattern='n_frames')
+        pitch_pre_diffusion = onnx.compose.merge_models(
+            pitch_pre, pitch_diffusion, io_map=[('pitch_cond', 'pitch_cond')],
+            prefix1='', prefix2='', doc_string='',
+            producer_name=pitch_pre.producer_name, producer_version=pitch_pre.producer_version,
+            domain=pitch_pre.domain, model_version=pitch_pre.model_version
+        )
+        pitch_pre_diffusion.graph.name = pitch_pre.graph.name
         pitch_predictor = onnx.compose.merge_models(
-            pitch_pre, pitch_diffusion, io_map=[
-                ('pitch_cond', 'pitch_cond'), ('base_pitch', 'base_pitch')
+            pitch_pre_diffusion, pitch_post, io_map=[
+                ('x_pred', 'x_pred'), ('base_pitch', 'base_pitch')
             ], prefix1='', prefix2='', doc_string='',
             producer_name=pitch_pre.producer_name, producer_version=pitch_pre.producer_version,
             domain=pitch_pre.domain, model_version=pitch_pre.model_version
@@ -546,7 +586,8 @@ class DiffSingerVarianceExporter(BaseExporter):
                 else (1, len(self.model.variance_prediction_list), 'n_frames')
             }
         )
-        print(f'Running ONNX Simplifier #1 for {self.variance_diffusion_class_name}...')
+        print(f'Running ONNX Simplifier #1 on'
+              f' {self.variance_diffusion_class_name}...')
         var_diffusion, check = onnxsim.simplify(var_diffusion, include_subgraph=True)
         assert check, 'Simplified ONNX model could not be validated'
         onnx_helper.graph_fold_back_to_squeeze(var_diffusion.graph)
@@ -556,13 +597,22 @@ class DiffSingerVarianceExporter(BaseExporter):
             alias_prefix='/variance_predictor/denoise_fn/cache'
         )
         onnx_helper.graph_remove_unused_values(var_diffusion.graph)
-        print(f'Running ONNX Simplifier #2 for {self.variance_diffusion_class_name}...')
+        print(f'Running ONNX Simplifier #2 on {self.variance_diffusion_class_name}...')
         var_diffusion, check = onnxsim.simplify(var_diffusion, include_subgraph=True)
         assert check, 'Simplified ONNX model could not be validated'
 
         var_post, check = onnxsim.simplify(var_post, include_subgraph=True)
         assert check, 'Simplified ONNX model could not be validated'
 
+        ignored_variance_names = '|'.join([f'({v_name})' for v_name in self.model.variance_prediction_list])
+        onnx_helper.model_add_prefixes(
+            var_pre, node_prefix='/pre', ignored_pattern=fr'.*((embed)|{ignored_variance_names}).*'
+        )
+        onnx_helper.model_add_prefixes(var_pre, dim_prefix='pre.', ignored_pattern='(n_tokens)|(n_frames)')
+        onnx_helper.model_add_prefixes(var_post, node_prefix='/post', ignored_pattern=None)
+        onnx_helper.model_add_prefixes(var_post, dim_prefix='post.', ignored_pattern='n_frames')
+
+        print(f'Merging {self.variance_diffusion_class_name} subroutines...')
         var_pre_diffusion = onnx.compose.merge_models(
             var_pre, var_diffusion, io_map=[('variance_cond', 'variance_cond')],
             prefix1='', prefix2='', doc_string='',
