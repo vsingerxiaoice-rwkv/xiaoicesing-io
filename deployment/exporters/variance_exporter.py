@@ -93,6 +93,7 @@ class DiffSingerVarianceExporter(BaseExporter):
             onnx.save(pitch_predictor_onnx, pitch_predictor_path)
             self.pitch_preprocess_cache_path.unlink()
             self.pitch_diffusion_cache_path.unlink()
+            self.pitch_postprocess_cache_path.unlink()
             print(f'| export pitch predictor => {pitch_predictor_path}')
         if self.model.predict_variances:
             variance_predictor_onnx = self._optimize_merge_variance_predictor_graph(
