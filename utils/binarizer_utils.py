@@ -32,7 +32,7 @@ def pad_frames(frames, hop_size, n_samples, n_expect):
         frames = frames[:rpad]
         rpad = 0
     if lpad > 0 or rpad > 0:
-        frames = np.pad(frames, [[lpad, rpad]], mode='constant')
+        frames = np.pad(frames, (lpad, rpad), mode='constant', constant_values=(frames[0], frames[-1]))
     return frames
 
 
