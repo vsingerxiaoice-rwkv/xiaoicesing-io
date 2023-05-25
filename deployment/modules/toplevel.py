@@ -98,7 +98,7 @@ class DiffSingerVarianceONNX(DiffSingerVariance):
                 vmax=pitch_hparams['pitd_norm_max'],
                 cmin=pitch_hparams['pitd_clip_min'],
                 cmax=pitch_hparams['pitd_clip_max'],
-                repeat_bins=pitch_hparams['num_pitch_bins'],
+                repeat_bins=pitch_hparams['repeat_bins'],
                 timesteps=hparams['timesteps'],
                 k_step=hparams['K_step'],
                 denoiser_type=hparams['diff_decoder_type'],
