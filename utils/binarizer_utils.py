@@ -97,7 +97,7 @@ def get_breathiness_pyworld(wav_data, f0, length, hparams):
     wav_frames = (x.shape[0] + hop_size - 1) // hop_size
     f0_frames = f0.shape[0]
     if f0_frames < wav_frames:
-        f0 = np.pad(f0, [[0, wav_frames - f0_frames]], mode='constant')
+        f0 = np.pad(f0, (0, wav_frames - f0_frames), mode='constant', constant_values=(f0[0], f0[-1]))
     elif f0_frames > wav_frames:
         f0 = f0[:wav_frames]
 
