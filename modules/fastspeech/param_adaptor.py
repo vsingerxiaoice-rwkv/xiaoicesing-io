@@ -9,9 +9,9 @@ VARIANCE_CHECKLIST = ['energy', 'breathiness']
 class ParameterAdaptorModule(torch.nn.Module):
     def __init__(self):
         super().__init__()
+        self.variance_prediction_list = []
         self.predict_energy = hparams.get('predict_energy', False)
         self.predict_breathiness = hparams.get('predict_breathiness', False)
-        self.variance_prediction_list = []
         if self.predict_energy:
             self.variance_prediction_list.append('energy')
         if self.predict_breathiness:

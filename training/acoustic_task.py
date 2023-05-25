@@ -22,9 +22,9 @@ class AcousticDataset(BaseDataset):
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
         self.required_variances = {}  # key: variance name, value: padding value
-        if hparams.get('use_energy_embed', False) or hparams.get('predict_energy', False):
+        if hparams.get('use_energy_embed', False):
             self.required_variances['energy'] = 0.0
-        if hparams.get('use_breathiness_embed', False) or hparams.get('predict_breathiness', False):
+        if hparams.get('use_breathiness_embed', False):
             self.required_variances['breathiness'] = 0.0
 
         self.need_key_shift = hparams.get('use_key_shift_embed', False)
@@ -64,14 +64,11 @@ class AcousticTask(BaseTask):
         if self.use_vocoder:
             self.vocoder: BaseVocoder = get_vocoder_cls(hparams)()
         self.logged_gt_wav = set()
-
-        self.variances_to_predict = set()
-        if hparams['predict_energy']:
-            self.variances_to_predict.add('energy')
-        if hparams['predict_breathiness']:
-            self.variances_to_predict.add('breathiness')
-        self.predict_variances = len(self.variances_to_predict) > 0
-        self.lambda_var_loss = hparams['lambda_var_loss']
+        self.required_variances = []
+        if hparams.get('use_energy_embed', False):
+            self.required_variances.append('energy')
+        if hparams.get('use_breathiness_embed', False):
+            self.required_variances.append('breathiness')
 
     def build_model(self):
         return DiffSingerAcoustic(
@@ -82,10 +79,6 @@ class AcousticTask(BaseTask):
     # noinspection PyAttributeOutsideInit
     def build_losses(self):
         self.mel_loss = DiffusionNoiseLoss(loss_type=hparams['diff_loss_type'])
-        if self.predict_variances:
-            self.var_loss = DiffusionNoiseLoss(
-                loss_type=hparams['diff_loss_type'],
-            )
 
     def run_model(self, sample, infer=False):
         txt_tokens = sample['tokens']  # [B, T_ph]
@@ -93,8 +86,8 @@ class AcousticTask(BaseTask):
         mel2ph = sample['mel2ph']  # [B, T_s]
         f0 = sample['f0']
         variances = {
-            v_name: None if infer else sample[v_name]
-            for v_name in self.variances_to_predict
+            v_name: sample[v_name]
+            for v_name in self.required_variances
         }
         key_shift = sample.get('key_shift')
         speed = sample.get('speed')
@@ -110,18 +103,13 @@ class AcousticTask(BaseTask):
         )
 
         if infer:
-            mel_pred, var_pred = output
-            return mel_pred, var_pred
+            return output  # mel_pred
         else:
-            (x_recon, x_noise), var_pred_out = output
-            mel_loss = self.mel_loss(x_recon, x_noise)
+            x_recon, x_noise = output
+            mel_loss = self.mel_loss(x_recon, x_noise, nonpadding=(mel2ph > 0).unsqueeze(-1).float())
             losses = {
                 'mel_loss': mel_loss
             }
-
-            if self.predict_variances:
-                (v_recon, v_noise) = var_pred_out
-                losses['var_loss'] = self.lambda_var_loss * self.var_loss(v_recon, v_noise)
 
             return losses
 
