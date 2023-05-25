@@ -40,12 +40,13 @@ class DiffSingerAcousticONNX(DiffSingerAcoustic):
             tokens: Tensor,
             durations: Tensor,
             f0: Tensor,
+            variances: dict,
             gender: Tensor = None,
             velocity: Tensor = None,
             spk_embed: Tensor = None
     ) -> Tensor:
         return self.fs2(
-            tokens, durations, f0,
+            tokens, durations, f0, variances=variances,
             gender=gender, velocity=velocity, spk_embed=spk_embed
         )
 

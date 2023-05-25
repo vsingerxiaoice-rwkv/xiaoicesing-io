@@ -46,10 +46,8 @@ class AcousticBinarizer(BaseBinarizer):
     def __init__(self):
         super().__init__(data_attrs=ACOUSTIC_ITEM_ATTRIBUTES)
         self.lr = LengthRegulator()
-        self.need_energy = hparams.get('use_energy_embed', False) or hparams.get('predict_energy', False)
-        self.need_breathiness = (
-                hparams.get('use_breathiness_embed', False) or hparams.get('predict_breathiness', False)
-        )
+        self.need_energy = hparams.get('use_energy_embed', False)
+        self.need_breathiness = hparams.get('use_breathiness_embed', False)
 
     def load_meta_data(self, raw_data_dir: pathlib.Path, ds_id):
         meta_data_dict = {}

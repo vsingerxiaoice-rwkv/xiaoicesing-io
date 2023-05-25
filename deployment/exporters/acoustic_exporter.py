@@ -70,7 +70,7 @@ class DiffSingerAcousticExporter(BaseExporter):
             out_dims=hparams['audio_num_mel_bins']
         ).eval().to(self.device)
         load_ckpt(model, hparams['work_dir'], ckpt_steps=self.ckpt_steps,
-                  prefix_in_ckpt='model', strict=True, device=self.device)
+                  prefix_in_ckpt='model', strict=False, device=self.device)
         return model
 
     def export(self, path: Path):
@@ -107,9 +107,13 @@ class DiffSingerAcousticExporter(BaseExporter):
         tokens = torch.LongTensor([[1]]).to(self.device)
         durations = torch.LongTensor([[n_frames]]).to(self.device)
         f0 = torch.FloatTensor([[440.] * n_frames]).to(self.device)
+        variances = {
+            v_name: torch.zeros(1, n_frames, dtype=torch.float32, device=self.device)
+            for v_name in self.model.fs2.variance_embed_list
+        }
         kwargs: dict[str, torch.Tensor] = {}
-        arguments = (tokens, durations, f0, kwargs)
-        input_names = ['tokens', 'durations', 'f0']
+        arguments = (tokens, durations, f0, variances, kwargs)
+        input_names = ['tokens', 'durations', 'f0'] + self.model.fs2.variance_embed_list
         dynamix_axes = {
             'tokens': {
                 1: 'n_tokens'
@@ -119,6 +123,12 @@ class DiffSingerAcousticExporter(BaseExporter):
             },
             'f0': {
                 1: 'n_frames'
+            },
+            **{
+                v_name: {
+                    1: 'n_frames'
+                }
+                for v_name in self.model.fs2.variance_embed_list
             }
         }
         if hparams.get('use_key_shift_embed', False):

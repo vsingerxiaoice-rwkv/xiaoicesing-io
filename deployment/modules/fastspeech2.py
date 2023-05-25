@@ -45,7 +45,7 @@ class FastSpeech2AcousticONNX(FastSpeech2Acoustic):
             self.speed_min, self.speed_max = hparams['augmentation_args']['random_time_stretching']['range']
 
     # noinspection PyMethodOverriding
-    def forward(self, tokens, durations, f0, gender=None, velocity=None, spk_embed=None):
+    def forward(self, tokens, durations, f0, variances: dict, gender=None, velocity=None, spk_embed=None):
         durations = durations * (tokens > 0)
         mel2ph = self.lr(durations)
         f0 = f0 * (mel2ph > 0)
@@ -62,6 +62,13 @@ class FastSpeech2AcousticONNX(FastSpeech2Acoustic):
             f0_mel = (1 + f0 / 700).log()
             pitch_embed = self.pitch_embed(f0_mel[:, :, None])
         condition += pitch_embed
+
+        if self.use_variance_embeds:
+            variance_embeds = torch.stack([
+                self.variance_embeds[v_name](variances[v_name][:, :, None])
+                for v_name in self.variance_embed_list
+            ], dim=-1).sum(-1)
+            condition += variance_embeds
 
         if hparams.get('use_key_shift_embed', False):
             if hasattr(self, 'frozen_key_shift'):
