@@ -130,21 +130,11 @@ class AcousticTask(BaseTask):
 
         if batch_idx < hparams['num_valid_plots'] \
                 and (self.trainer.distributed_sampler_kwargs or {}).get('rank', 0) == 0:
-            mel_pred, var_pred = self.run_model(sample, infer=True)
+            mel_pred = self.run_model(sample, infer=True)
 
             if self.use_vocoder:
                 self.plot_wav(batch_idx, sample['mel'], mel_pred, f0=sample['f0'])
             self.plot_mel(batch_idx, sample['mel'], mel_pred, name=f'diffmel_{batch_idx}')
-
-            for name in self.variances_to_predict:
-                variance = sample[name]
-                variance_pred = var_pred[name]
-                self.plot_curve(
-                    batch_idx,
-                    gt_curve=variance,
-                    pred_curve=variance_pred,
-                    curve_name=name
-                )
 
         return outputs, sample['size']
 
