@@ -76,9 +76,9 @@ class FastSpeech2Acoustic(nn.Module):
         return condition
 
     def forward(
-            self, txt_tokens, mel2ph, f0, energy=None, breathiness=None,
-            key_shift=None, speed=None, spk_embed_id=None,
-            **kwargs
+            self, txt_tokens, mel2ph, f0,
+            key_shift=None, speed=None,
+            spk_embed_id=None, **kwargs
     ):
         dur = mel2ph_to_dur(mel2ph, txt_tokens.shape[1]).float()
         dur_embed = self.dur_embed(dur[:, :, None])
