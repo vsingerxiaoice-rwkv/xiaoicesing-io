@@ -88,7 +88,7 @@ class AcousticTask(BaseTask):
             )
 
     def run_model(self, sample, infer=False):
-        txt_tokens = sample['tokens']  # [B, T_t]
+        txt_tokens = sample['tokens']  # [B, T_ph]
         target = sample['mel']  # [B, T_s, M]
         mel2ph = sample['mel2ph']  # [B, T_s]
         f0 = sample['f0']

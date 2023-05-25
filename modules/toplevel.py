@@ -165,7 +165,7 @@ class DiffSingerVariance(ParameterAdaptorModule, CategorizedModule):
 
     def forward(
             self, txt_tokens, midi, ph2word, ph_dur=None, word_dur=None, mel2ph=None,
-            base_pitch=None, delta_pitch=None, retake=None, infer=True, **kwargs
+            base_pitch=None, pitch=None, retake=None, infer=True, **kwargs
     ):
         encoder_out, dur_pred_out = self.fs2(
             txt_tokens, midi=midi, ph2word=ph2word,
@@ -193,24 +193,20 @@ class DiffSingerVariance(ParameterAdaptorModule, CategorizedModule):
 
         if self.predict_pitch:
             if retake is not None:
-                base_pitch = base_pitch + delta_pitch * ~retake
-                delta_pitch = delta_pitch * retake
+                base_pitch = base_pitch * retake + pitch * ~retake
             pitch_cond = condition + self.base_pitch_embed(base_pitch[:, :, None])
-            pitch_pred_out = self.pitch_predictor(pitch_cond, delta_pitch, infer)
+            pitch_pred_out = self.pitch_predictor(pitch_cond, pitch - base_pitch, infer)
         else:
             pitch_pred_out = None
 
         if not self.predict_variances:
             return dur_pred_out, pitch_pred_out, ({} if infer else None)
 
-        if delta_pitch is None:
+        if pitch is None:
             pitch = base_pitch + pitch_pred_out
-        else:
-            pitch = base_pitch + delta_pitch
         condition += self.pitch_embed(pitch[:, :, None])
 
         variance_inputs = self.collect_variance_inputs(**kwargs)
-
         if retake is None:
             variance_embeds = [
                 self.variance_embeds[v_name](torch.zeros_like(pitch)[:, :, None])

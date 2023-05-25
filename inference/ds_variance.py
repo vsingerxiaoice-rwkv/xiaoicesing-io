@@ -70,11 +70,11 @@ class DiffSingerVarianceInfer(BaseSVSInfer):
         note_dur_sec = torch.from_numpy(np.array([param['note_dur'].split()], np.float32)).to(self.device)  # [B=1, T_n]
         note_acc = torch.round(torch.cumsum(note_dur_sec, dim=1) / self.timestep + 0.5).long()
         note_dur = torch.diff(note_acc, dim=1, prepend=note_acc.new_zeros(1, 1))
-        mel2note = self.lr(note_dur)  # [B=1, T_t]
-        T_t = mel2note.shape[1]
+        mel2note = self.lr(note_dur)  # [B=1, T_s]
+        T_s = mel2note.shape[1]
 
         print(f'Length: {T_w} word(s), {note_seq.shape[1]} note(s), {T_ph} token(s), '
-              f'{T_t} frame(s), {T_t * self.timestep:.2f} second(s)')
+              f'{T_s} frame(s), {T_s * self.timestep:.2f} second(s)')
 
         if param.get('ph_dur'):
             # Get mel2ph if ph_dur is given
@@ -84,8 +84,8 @@ class DiffSingerVarianceInfer(BaseSVSInfer):
             ph_acc = torch.round(torch.cumsum(ph_dur_sec, dim=1) / self.timestep + 0.5).long()
             ph_dur = torch.diff(ph_acc, dim=1, prepend=ph_acc.new_zeros(1, 1))
             mel2ph = self.lr(ph_dur, txt_tokens == 0)
-            if mel2ph.shape[1] != T_t:  # Align phones with notes
-                mel2ph = F.pad(mel2ph, [0, T_t - mel2ph.shape[1]], value=mel2ph[0, -1])
+            if mel2ph.shape[1] != T_s:  # Align phones with notes
+                mel2ph = F.pad(mel2ph, [0, T_s - mel2ph.shape[1]], value=mel2ph[0, -1])
                 ph_dur = mel2ph_to_dur(mel2ph, T_ph)
             # Get word_dur from ph_dur and ph_num
             word_dur = note_dur.new_zeros(1, T_w + 1).scatter_add(
@@ -104,16 +104,16 @@ class DiffSingerVarianceInfer(BaseSVSInfer):
         batch['ph_dur'] = ph_dur
         batch['mel2ph'] = mel2ph
 
-        mel2word = self.lr(word_dur)  # [B=1, T_t]
-        if mel2word.shape[1] != T_t:  # Align words with notes
-            mel2word = F.pad(mel2word, [0, T_t - mel2word.shape[1]], value=mel2word[0, -1])
+        mel2word = self.lr(word_dur)  # [B=1, T_s]
+        if mel2word.shape[1] != T_s:  # Align words with notes
+            mel2word = F.pad(mel2word, [0, T_s - mel2word.shape[1]], value=mel2word[0, -1])
             word_dur = mel2ph_to_dur(mel2word, T_w)
         batch['word_dur'] = word_dur
 
         # Calculate frame-level MIDI pitch, which is a step function curve
         frame_midi_pitch = torch.gather(
             F.pad(note_seq, [1, 0]), 1, mel2note
-        )  # => frame-level MIDI pitch, [B=1, T_t]
+        )  # => frame-level MIDI pitch, [B=1, T_s]
         rest = (frame_midi_pitch < 0)[0].cpu().numpy()
         frame_midi_pitch = frame_midi_pitch[0].cpu().numpy()
         interp_func = interpolate.interp1d(
@@ -147,7 +147,7 @@ class DiffSingerVarianceInfer(BaseSVSInfer):
                 np.array(param['f0_seq'].split(), np.float32),
                 original_timestep=float(param['f0_timestep']),
                 target_timestep=self.timestep,
-                align_length=T_t
+                align_length=T_s
             )
             batch['delta_pitch'] = torch.from_numpy(
                 librosa.hz_to_midi(interp_f0(f0)[0]).astype(np.float32)

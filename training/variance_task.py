@@ -100,14 +100,14 @@ class VarianceTask(BaseTask):
 
     def run_model(self, sample, infer=False):
         txt_tokens = sample['tokens']  # [B, T_ph]
-        midi = sample['midi']  # [B, T_ph]
-        ph2word = sample['ph2word']  # [B, T_ph]
         ph_dur = sample['ph_dur']  # [B, T_ph]
-        mel2ph = sample['mel2ph']  # [B, T_t]
-        base_pitch = sample['base_pitch']  # [B, T_t]
-        delta_pitch = sample['delta_pitch']  # [B, T_t]
-        energy = sample.get('energy')  # [B, T_t]
-        breathiness = sample.get('breathiness')  # [B, T_t]
+        ph2word = sample.get('ph2word')  # [B, T_ph]
+        midi = sample.get('midi')  # [B, T_ph]
+        mel2ph = sample.get('mel2ph')  # [B, T_s]
+        base_pitch = sample.get('base_pitch')  # [B, T_s]
+        pitch = sample.get('pitch')  # [B, T_s]
+        energy = sample.get('energy')  # [B, T_s]
+        breathiness = sample.get('breathiness')  # [B, T_s]
 
         if (self.predict_pitch or self.predict_variances) and not infer:
             # randomly select continuous retaking regions
@@ -123,8 +123,9 @@ class VarianceTask(BaseTask):
             retake = None
 
         output = self.model(
-            txt_tokens, midi=midi, ph2word=ph2word, ph_dur=ph_dur, mel2ph=mel2ph,
-            base_pitch=base_pitch, delta_pitch=delta_pitch,
+            txt_tokens, midi=midi, ph2word=ph2word,
+            ph_dur=ph_dur, mel2ph=mel2ph,
+            base_pitch=base_pitch, pitch=pitch,
             energy=energy, breathiness=breathiness,
             retake=retake, infer=infer
         )
@@ -165,10 +166,9 @@ class VarianceTask(BaseTask):
                 self.plot_dur(batch_idx, sample['ph_dur'], dur_pred, txt=sample['tokens'])
             if pitch_pred is not None:
                 base_pitch = sample['base_pitch']
-                delta_pitch = sample['delta_pitch']
                 self.plot_curve(
                     batch_idx,
-                    gt_curve=base_pitch + delta_pitch,
+                    gt_curve=sample['pitch'],
                     pred_curve=base_pitch + pitch_pred,
                     base_curve=base_pitch,
                     curve_name='pitch',
