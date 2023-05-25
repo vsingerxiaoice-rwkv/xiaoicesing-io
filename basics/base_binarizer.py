@@ -156,7 +156,7 @@ class BaseBinarizer:
         self.process_dataset(
             'train',
             num_workers=int(self.binarization_args['num_workers']),
-            apply_augmentation=len(self.augmentation_args) > 0
+            apply_augmentation=any(args['enabled'] for args in self.augmentation_args)
         )
 
     def check_coverage(self):
