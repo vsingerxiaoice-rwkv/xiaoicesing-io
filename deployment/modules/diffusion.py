@@ -104,12 +104,15 @@ class GaussianDiffusionONNX(GaussianDiffusion):
 
 
 class PitchDiffusionONNX(GaussianDiffusionONNX, PitchDiffusion):
-    def __init__(self, vmin: float, vmax: float, repeat_bins,
+    def __init__(self, vmin: float, vmax: float,
+                 cmin: float, cmax: float, repeat_bins,
                  timesteps=1000, k_step=1000,
                  denoiser_type=None, denoiser_args=None,
                  betas=None):
         self.vmin = vmin
         self.vmax = vmax
+        self.cmin = cmin
+        self.cmax = cmax
         super(PitchDiffusion, self).__init__(
             vmin=vmin, vmax=vmax, repeat_bins=repeat_bins,
             timesteps=timesteps, k_step=k_step,
@@ -118,7 +121,7 @@ class PitchDiffusionONNX(GaussianDiffusionONNX, PitchDiffusion):
         )
 
     def clamp_spec(self, x):
-        return x.clamp(min=self.vmin, max=self.vmax)
+        return x.clamp(min=self.cmin, max=self.cmax)
 
     def denorm_spec(self, x):
         d = (self.spec_max - self.spec_min) / 2.

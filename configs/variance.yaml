@@ -51,10 +51,11 @@ dur_prediction_args:
   lambda_sdur_loss: 3.0
 
 pitch_prediction_args:
-  pitch_delta_vmin: -12.0  # -12.75
-  pitch_delta_vmax: 12.0  # 12.75
-  num_pitch_bins: 64
-  deviation: 0.25
+  pitd_norm_min: -8.0
+  pitd_norm_max: 8.0
+  pitd_clip_min: -12.0
+  pitd_clip_max: 12.0
+  repeat_bins: 64
   residual_layers: 20
   residual_channels: 256
 

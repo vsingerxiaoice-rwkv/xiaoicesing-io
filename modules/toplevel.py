@@ -141,8 +141,10 @@ class DiffSingerVariance(ParameterAdaptorModule, CategorizedModule):
             pitch_hparams = hparams['pitch_prediction_args']
             self.base_pitch_embed = Linear(1, hparams['hidden_size'])
             self.pitch_predictor = PitchDiffusion(
-                vmin=pitch_hparams['pitch_delta_vmin'],
-                vmax=pitch_hparams['pitch_delta_vmax'],
+                vmin=pitch_hparams['pitd_norm_min'],
+                vmax=pitch_hparams['pitd_norm_max'],
+                cmin=pitch_hparams['pitd_clip_min'],
+                cmax=pitch_hparams['pitd_clip_max'],
                 repeat_bins=pitch_hparams['num_pitch_bins'],
                 timesteps=hparams['timesteps'],
                 k_step=hparams['K_step'],

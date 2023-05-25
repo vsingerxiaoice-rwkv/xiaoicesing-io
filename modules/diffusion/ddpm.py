@@ -331,12 +331,15 @@ class RepetitiveDiffusion(GaussianDiffusion):
 
 
 class PitchDiffusion(RepetitiveDiffusion):
-    def __init__(self, vmin: float, vmax: float, repeat_bins,
+    def __init__(self, vmin: float, vmax: float,
+                 cmin: float, cmax: float, repeat_bins,
                  timesteps=1000, k_step=1000,
                  denoiser_type=None, denoiser_args=None,
                  betas=None):
-        self.vmin = vmin
-        self.vmax = vmax
+        self.vmin = vmin  # norm min
+        self.vmax = vmax  # norm max
+        self.cmin = cmin  # clip min
+        self.cmax = cmax  # clip max
         super().__init__(
             vmin=vmin, vmax=vmax, repeat_bins=repeat_bins,
             timesteps=timesteps, k_step=k_step,
@@ -345,10 +348,10 @@ class PitchDiffusion(RepetitiveDiffusion):
         )
 
     def norm_spec(self, x):
-        return super().norm_spec(x.clamp(min=self.vmin, max=self.vmax))
+        return super().norm_spec(x.clamp(min=self.cmin, max=self.cmax))
 
     def denorm_spec(self, x):
-        return super().denorm_spec(x).clamp(min=self.vmin, max=self.vmax)
+        return super().denorm_spec(x).clamp(min=self.cmin, max=self.cmax)
 
 
 class MultiVarianceDiffusion(RepetitiveDiffusion):
