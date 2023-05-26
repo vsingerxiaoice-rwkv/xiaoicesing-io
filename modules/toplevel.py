@@ -137,7 +137,10 @@ class DiffSingerVariance(ParameterAdaptorModule, CategorizedModule):
             if retake is not None:
                 base_pitch = base_pitch * retake + pitch * ~retake
             pitch_cond = condition + self.base_pitch_embed(base_pitch[:, :, None])
-            pitch_pred_out = self.pitch_predictor(pitch_cond, pitch - base_pitch, infer)
+            if infer:
+                pitch_pred_out = self.pitch_predictor(pitch_cond, infer=True)
+            else:
+                pitch_pred_out = self.pitch_predictor(pitch_cond, pitch - base_pitch, infer=False)
         else:
             pitch_pred_out = None
 
