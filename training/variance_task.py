@@ -55,6 +55,8 @@ class VarianceTask(BaseTask):
         super().__init__()
         self.dataset_cls = VarianceDataset
 
+        self.use_spk_id = hparams['use_spk_id']
+
         self.predict_dur = hparams['predict_dur']
         if self.predict_dur:
             self.lambda_dur_loss = hparams['lambda_dur_loss']
@@ -99,6 +101,7 @@ class VarianceTask(BaseTask):
             )
 
     def run_model(self, sample, infer=False):
+        spk_ids = sample['spk_ids'] if self.use_spk_id else None  # [B,]
         txt_tokens = sample['tokens']  # [B, T_ph]
         ph_dur = sample['ph_dur']  # [B, T_ph]
         ph2word = sample.get('ph2word')  # [B, T_ph]
@@ -127,7 +130,7 @@ class VarianceTask(BaseTask):
             ph_dur=ph_dur, mel2ph=mel2ph,
             base_pitch=base_pitch, pitch=pitch,
             energy=energy, breathiness=breathiness,
-            retake=retake, infer=infer
+            retake=retake, spk_id=spk_ids, infer=infer
         )
 
         dur_pred, pitch_pred, variances_pred = output

@@ -46,13 +46,14 @@ class FastSpeech2Variance(nn.Module):
                 dur_loss_type=dur_hparams['loss_type']
             )
 
-    def forward(self, txt_tokens, midi, ph2word, ph_dur=None, word_dur=None, infer=True):
+    def forward(self, txt_tokens, midi, ph2word, ph_dur=None, word_dur=None, spk_embed=None, infer=True):
         """
         :param txt_tokens: (train, infer) [B, T_ph]
         :param midi: (train, infer) [B, T_ph]
         :param ph2word: (train, infer) [B, T_ph]
         :param ph_dur: (train, [infer]) [B, T_ph]
         :param word_dur: (infer) [B, T_w]
+        :param spk_embed: (train) [B, T_ph, H]
         :param infer: whether inference
         :return: encoder_out, ph_dur_pred
         """
@@ -72,6 +73,8 @@ class FastSpeech2Variance(nn.Module):
 
             midi_embed = self.midi_embed(midi)  # => [B, T_ph, H]
             dur_cond = encoder_out + midi_embed
+            if spk_embed is not None:
+                dur_cond += spk_embed
             ph_dur_pred = self.dur_predictor(dur_cond, x_masks=txt_tokens == PAD_INDEX, infer=infer)
 
             return encoder_out, ph_dur_pred

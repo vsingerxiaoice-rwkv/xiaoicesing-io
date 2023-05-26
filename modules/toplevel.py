@@ -68,6 +68,11 @@ class DiffSingerVariance(ParameterAdaptorModule, CategorizedModule):
     def __init__(self, vocab_size):
         super().__init__()
         self.predict_dur = hparams['predict_dur']
+
+        self.use_spk_id = hparams['use_spk_id']
+        if self.use_spk_id:
+            self.spk_embed = Embedding(hparams['num_spk'], hparams['hidden_size'])
+
         self.fs2 = FastSpeech2Variance(
             vocab_size=vocab_size
         )
@@ -107,11 +112,17 @@ class DiffSingerVariance(ParameterAdaptorModule, CategorizedModule):
 
     def forward(
             self, txt_tokens, midi, ph2word, ph_dur=None, word_dur=None, mel2ph=None,
-            base_pitch=None, pitch=None, retake=None, infer=True, **kwargs
+            base_pitch=None, pitch=None, retake=None, spk_id=None, infer=True, **kwargs
     ):
+        if self.use_spk_id:
+            spk_embed = self.spk_embed(spk_id)[:, None, :]  # [B,] => [B, T=1, H]
+        else:
+            spk_embed = None
+
         encoder_out, dur_pred_out = self.fs2(
             txt_tokens, midi=midi, ph2word=ph2word,
-            ph_dur=ph_dur, word_dur=word_dur, infer=infer
+            ph_dur=ph_dur, word_dur=word_dur,
+            spk_embed=spk_embed, infer=infer
         )
 
         if not self.predict_pitch and not self.predict_variances:
@@ -126,12 +137,13 @@ class DiffSingerVariance(ParameterAdaptorModule, CategorizedModule):
         mel2ph_ = mel2ph[..., None].repeat([1, 1, hparams['hidden_size']])
         condition = torch.gather(encoder_out, 1, mel2ph_)
 
-        if self.predict_pitch or self.predict_variances:
-            if retake is None:
-                retake_embed = self.retake_embed(torch.ones_like(mel2ph))
-            else:
-                retake_embed = self.retake_embed(retake.long())
-            condition += retake_embed
+        if self.use_spk_id:
+            condition += spk_embed
+        if retake is None:
+            retake_embed = self.retake_embed(torch.ones_like(mel2ph))
+        else:
+            retake_embed = self.retake_embed(retake.long())
+        condition += retake_embed
 
         if self.predict_pitch:
             if retake is not None:
