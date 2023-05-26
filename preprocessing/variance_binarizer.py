@@ -34,6 +34,28 @@ VARIANCE_ITEM_ATTRIBUTES = [
 ]
 
 
+# This operator is used as global variable due to a PyTorch shared memory bug on Windows.
+# See https://github.com/pytorch/pytorch/issues/100358
+smooth: nn.Conv1d = None
+
+
+def build_smooth_op(kernel_size, device):
+    global smooth
+    smooth = nn.Conv1d(
+        in_channels=1,
+        out_channels=1,
+        kernel_size=kernel_size,
+        bias=False,
+        padding='same',
+        padding_mode='replicate'
+    ).eval().to(device)
+    smooth_kernel = torch.sin(torch.from_numpy(
+        np.linspace(0, 1, kernel_size).astype(np.float32) * np.pi
+    ).to(device))
+    smooth_kernel /= smooth_kernel.sum()
+    smooth.weight.data = smooth_kernel[None, None]
+
+
 class VarianceBinarizer(BaseBinarizer):
     def __init__(self):
         super().__init__(data_attrs=VARIANCE_ITEM_ATTRIBUTES)
@@ -41,22 +63,8 @@ class VarianceBinarizer(BaseBinarizer):
         predict_energy = hparams['predict_energy']
         predict_breathiness = hparams['predict_breathiness']
         self.predict_variances = predict_energy or predict_breathiness
-
         self.lr = LengthRegulator().to(self.device)
-        smooth_kernel_size = round(hparams['midi_smooth_width'] / self.timestep)
-        self.smooth = nn.Conv1d(
-            in_channels=1,
-            out_channels=1,
-            kernel_size=smooth_kernel_size,
-            bias=False,
-            padding='same',
-            padding_mode='replicate'
-        ).eval().to(self.device)
-        smooth_kernel = torch.sin(torch.from_numpy(
-            np.linspace(0, 1, smooth_kernel_size).astype(np.float32) * np.pi
-        ).to(self.device))
-        smooth_kernel /= smooth_kernel.sum()
-        self.smooth.weight.data = smooth_kernel[None, None]
+        # self.smooth: nn.Conv1d = None
 
     def load_meta_data(self, raw_data_dir: pathlib.Path, ds_id):
         meta_data_dict = {}
@@ -97,6 +105,9 @@ class VarianceBinarizer(BaseBinarizer):
 
     @torch.no_grad()
     def process_item(self, item_name, meta_data, binarization_args):
+        if smooth is None:
+            build_smooth_op(round(hparams['midi_smooth_width'] / self.timestep), self.device)
+
         seconds = sum(meta_data['ph_dur'])
         length = round(seconds / self.timestep)
         T_ph = len(meta_data['ph_seq'])
@@ -159,7 +170,7 @@ class VarianceBinarizer(BaseBinarizer):
             frame_midi_pitch = torch.from_numpy(frame_midi_pitch).to(self.device)
 
             # Below: smoothen the pitch step curve as the base pitch curve
-            smoothed_midi_pitch = self.smooth(frame_midi_pitch[None])[0]
+            smoothed_midi_pitch = smooth(frame_midi_pitch[None])[0]
             processed_input['base_pitch'] = smoothed_midi_pitch.cpu().numpy()
 
         if hparams['predict_pitch'] or self.predict_variances:
