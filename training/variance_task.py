@@ -27,7 +27,7 @@ class VarianceDataset(BaseDataset):
         ph2word = utils.collate_nd([s['ph2word'] for s in samples], 0)
         mel2ph = utils.collate_nd([s['mel2ph'] for s in samples], 0)
         base_pitch = utils.collate_nd([s['base_pitch'] for s in samples], 0)
-        delta_pitch = utils.collate_nd([s['delta_pitch'] for s in samples], 0)
+        pitch = utils.collate_nd([s['pitch'] for s in samples], 0)
         batch.update({
             'tokens': tokens,
             'ph_dur': ph_dur,
@@ -35,7 +35,7 @@ class VarianceDataset(BaseDataset):
             'ph2word': ph2word,
             'mel2ph': mel2ph,
             'base_pitch': base_pitch,
-            'delta_pitch': delta_pitch,
+            'pitch': pitch,
         })
         if hparams['predict_energy']:
             energy = utils.collate_nd([s['energy'] for s in samples], 0)
