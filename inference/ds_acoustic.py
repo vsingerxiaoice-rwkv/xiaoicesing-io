@@ -1,3 +1,6 @@
+from collections import OrderedDict
+
+import tqdm
 import json
 import pathlib
 
@@ -5,13 +8,13 @@ import numpy as np
 import torch
 
 from basics.base_svs_infer import BaseSVSInfer
-from modules.fastspeech.tts_modules import LengthRegulator
 from modules.fastspeech.param_adaptor import VARIANCE_CHECKLIST
+from modules.fastspeech.tts_modules import LengthRegulator
 from modules.toplevel import DiffSingerAcoustic
 from modules.vocoders.registry import VOCODERS
 from utils import load_ckpt
 from utils.hparams import hparams
-from utils.infer_utils import resample_align_curve
+from utils.infer_utils import cross_fade, resample_align_curve, save_wav
 from utils.phoneme_utils import build_phoneme_list
 from utils.text_encoder import TokenTextEncoder
 
@@ -23,16 +26,10 @@ class DiffSingerAcousticInfer(BaseSVSInfer):
             self.variance_checklist = []
 
             self.variances_to_embed = set()
-            self.variances_to_predict = set()
 
-            if hparams.get('predict_energy', False):
-                self.variances_to_predict.add('energy')
-            elif hparams.get('use_energy_embed', False):
+            if hparams.get('use_energy_embed', False):
                 self.variances_to_embed.add('energy')
-
-            if hparams.get('predict_breathiness', False):
-                self.variances_to_predict.add('breathiness')
-            elif hparams.get('use_breathiness_embed', False):
+            if hparams.get('use_breathiness_embed', False):
                 self.variances_to_embed.add('breathiness')
 
             self.ph_encoder = TokenTextEncoder(vocab_list=build_phoneme_list())
@@ -63,12 +60,14 @@ class DiffSingerAcousticInfer(BaseSVSInfer):
         vocoder.to_device(self.device)
         return vocoder
 
-    def preprocess_input(self, param):
+    def preprocess_input(self, param, idx=0):
         """
         :param param: one segment in the .ds file
+        :param idx: index of the segment
         :return: batch of the model inputs
         """
         batch = {}
+        summary = OrderedDict()
         txt_tokens = torch.LongTensor([self.ph_encoder.encode(param['ph_seq'])]).to(self.device)  # => [B, T_txt]
         batch['tokens'] = txt_tokens
 
@@ -79,7 +78,9 @@ class DiffSingerAcousticInfer(BaseSVSInfer):
         batch['mel2ph'] = mel2ph
         length = mel2ph.size(1)  # => T
 
-        print(f'Length: {txt_tokens.size(1)} token(s), {length} frame(s), {length * self.timestep:.2f} second(s)')
+        summary['tokens'] = txt_tokens.size(1)
+        summary['frames'] = length
+        summary['seconds'] = '%.2f' % (length * self.timestep)
 
         if hparams['use_spk_id']:
             spk_mix_map = param.get('spk_mix')  # { spk_name: value } or { spk_name: "value value value ..." }
@@ -94,14 +95,14 @@ class DiffSingerAcousticInfer(BaseSVSInfer):
                     assert name in self.spk_map, f'Speaker \'{name}\' not found.'
 
             if len(spk_mix_map) == 1:
-                print(f'Using speaker \'{list(spk_mix_map.keys())[0]}\'')
+                summary['spk'] = list(spk_mix_map.keys())[0]
             elif any([isinstance(val, str) for val in spk_mix_map.values()]):
                 print_mix = '|'.join(spk_mix_map.keys())
-                print(f'Using dynamic speaker mix \'{print_mix}\'')
+                summary['spk_mix'] = f'dynamic({print_mix})'
                 dynamic = True
             else:
                 print_mix = '|'.join([f'{n}:{"%.3f" % spk_mix_map[n]}' for n in spk_mix_map])
-                print(f'Using static speaker mix \'{print_mix}\'')
+                summary['spk_mix'] = f'static({print_mix})'
 
             spk_mix_id_list = []
             spk_mix_value_list = []
@@ -159,26 +160,24 @@ class DiffSingerAcousticInfer(BaseSVSInfer):
         )).to(self.device)[None]
 
         for v_name in VARIANCE_CHECKLIST:
-            if v_name in self.variances_to_embed or (v_name in self.variances_to_predict and param.get(v_name)):
+            if v_name in self.variances_to_embed:
                 batch[v_name] = torch.from_numpy(resample_align_curve(
                     np.array(param[v_name].split(), np.float32),
                     original_timestep=float(param[f'{v_name}_timestep']),
                     target_timestep=self.timestep,
                     align_length=length
                 )).to(self.device)[None]
-                print(f'Using manual {v_name} curve')
-            elif v_name in self.variances_to_predict:
-                print(f'Using predicted {v_name} curve')
+                summary[v_name] = 'input'
 
         if hparams.get('use_key_shift_embed', False):
             shift_min, shift_max = hparams['augmentation_args']['random_pitch_shifting']['range']
             gender = param.get('gender', 0.)
             if isinstance(gender, (int, float, bool)):  # static gender value
-                print(f'Using static gender value: {gender:.3f}')
+                summary['gender'] = f'static({gender:.3f})'
                 key_shift_value = gender * shift_max if gender >= 0 else gender * abs(shift_min)
                 batch['key_shift'] = torch.FloatTensor([key_shift_value]).to(self.device)[:, None]  # => [B=1, T=1]
             else:
-                print('Using dynamic gender curve')
+                summary['gender'] = 'dynamic'
                 gender_seq = resample_align_curve(
                     np.array(gender.split(), np.float32),
                     original_timestep=float(param['gender_timestep']),
@@ -194,10 +193,10 @@ class DiffSingerAcousticInfer(BaseSVSInfer):
 
         if hparams.get('use_speed_embed', False):
             if param.get('velocity') is None:
-                print('Using default velocity value')
+                summary['velocity'] = 'default'
                 batch['speed'] = torch.FloatTensor([1.]).to(self.device)[:, None]  # => [B=1, T=1]
             else:
-                print('Using manual velocity curve')
+                summary['velocity'] = 'manual'
                 speed_min, speed_max = hparams['augmentation_args']['random_time_stretching']['range']
                 speed_seq = resample_align_curve(
                     np.array(param['velocity'].split(), np.float32),
@@ -210,14 +209,16 @@ class DiffSingerAcousticInfer(BaseSVSInfer):
                     min=speed_min, max=speed_max
                 )
 
+        print(f'[{idx}]\t' + ', '.join(f'{k}: {v}' for k, v in summary.items()))
+
         return batch
 
     @torch.no_grad()
-    def run_model(self, sample, return_mel=False):
+    def forward_model(self, sample):
         txt_tokens = sample['tokens']
         variances = {
             v_name: sample.get(v_name)
-            for v_name in self.variances_to_embed | self.variances_to_predict
+            for v_name in self.variances_to_embed
         }
         if hparams['use_spk_id']:
             spk_mix_id = sample['spk_mix_id']
@@ -241,11 +242,61 @@ class DiffSingerAcousticInfer(BaseSVSInfer):
         y = self.vocoder.spec2wav_torch(spec, **kwargs)
         return y[None]
 
-    def infer_once(self, param, return_mel=False):
-        batch = self.preprocess_input(param)
-        mel = self.run_model(batch, return_mel=True)
-        if return_mel:
-            return mel.cpu(), batch['f0'].cpu()
-        else:
-            waveform = self.run_vocoder(mel, f0=batch['f0'])
-        return waveform.view(-1).cpu().numpy()
+    def run_inference(
+            self, params,
+            out_dir: pathlib.Path = None,
+            title: str = None,
+            num_runs: int = 1,
+            spk_mix: dict[str, float] = None,
+            seed: int = -1,
+            save_mel: bool = False
+    ):
+        batches = [self.preprocess_input(param, idx=i) for i, param in enumerate(params)]
+
+        out_dir.mkdir(parents=True, exist_ok=True)
+        suffix = '.wav' if not save_mel else '.mel.pt'
+        for i in range(num_runs):
+            if save_mel:
+                result = []
+            else:
+                result = np.zeros(0)
+            current_length = 0
+
+            for param, batch in tqdm.tqdm(
+                    zip(params, batches), desc='infer segments', total=len(params)
+            ):
+                if 'seed' in param:
+                    torch.manual_seed(param["seed"] & 0xffff_ffff)
+                    torch.cuda.manual_seed_all(param["seed"] & 0xffff_ffff)
+                elif seed >= 0:
+                    torch.manual_seed(seed & 0xffff_ffff)
+                    torch.cuda.manual_seed_all(seed & 0xffff_ffff)
+
+                mel_pred = self.forward_model(batch)
+                if save_mel:
+                    result.append({
+                        'offset': param.get('offset', 0.),
+                        'mel': mel_pred.cpu(),
+                        'f0': batch['f0'].cpu()
+                    })
+                else:
+                    waveform_pred = self.run_vocoder(mel_pred, f0=batch['f0'])[0].cpu().numpy()
+                    silent_length = round(param.get('offset', 0) * hparams['audio_sample_rate']) - current_length
+                    if silent_length >= 0:
+                        result = np.append(result, np.zeros(silent_length))
+                        result = np.append(result, waveform_pred)
+                    else:
+                        result = cross_fade(result, waveform_pred, current_length + silent_length)
+                    current_length = current_length + silent_length + waveform_pred.shape[0]
+
+            if num_runs > 1:
+                filename = f'{title}-{str(i).zfill(3)}{suffix}'
+            else:
+                filename = title + suffix
+            save_path = out_dir / filename
+            if save_mel:
+                print(f'| save mel: {save_path}')
+                torch.save(result, save_path)
+            else:
+                print(f'| save audio: {save_path}')
+                save_wav(result, save_path, hparams['audio_sample_rate'])

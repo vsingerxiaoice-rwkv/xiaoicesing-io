@@ -1,4 +1,5 @@
 import re
+import warnings
 
 import librosa
 import numpy as np
@@ -10,6 +11,12 @@ head_list = ["C", "C#", "D", "D#", "E", "F", "F#", "G", "G#", "A", "A#", "B"]
 def merge_slurs(param):
     if not param.get('is_slur_seq'):
         return
+    warnings.warn(
+        'You are running inference from a DS file in old format. Please re-export it in new format '
+        'or ask for a new version from the provider of this file.',
+        category=DeprecationWarning
+    )
+    warnings.filterwarnings(action='default')
     ph_seq = param['ph_seq'].split()
     note_seq = param['note_seq'].split()
     note_dur_seq = param['note_dur_seq'].split()

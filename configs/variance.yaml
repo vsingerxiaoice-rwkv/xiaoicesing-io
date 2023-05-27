@@ -40,6 +40,7 @@ predict_energy: false
 predict_breathiness: false
 
 dur_prediction_args:
+  arch: fs2
   hidden_size: 512
   dropout: 0.1
   num_layers: 5

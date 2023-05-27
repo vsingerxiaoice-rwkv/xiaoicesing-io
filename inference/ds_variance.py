@@ -1,3 +1,6 @@
+import pathlib
+from collections import OrderedDict
+
 import librosa
 import numpy as np
 import torch
@@ -50,12 +53,14 @@ class DiffSingerVarianceInfer(BaseSVSInfer):
         return model
 
     @torch.no_grad()
-    def preprocess_input(self, param):
+    def preprocess_input(self, param, idx=0):
         """
         :param param: one segment in the .ds file
+        :param idx: index of the segment
         :return: batch of the model inputs
         """
         batch = {}
+        summary = OrderedDict()
         txt_tokens = torch.LongTensor([self.ph_encoder.encode(param['ph_seq'].split())]).to(self.device)  # [B=1, T_ph]
         T_ph = txt_tokens.shape[1]
         batch['tokens'] = txt_tokens
@@ -73,8 +78,11 @@ class DiffSingerVarianceInfer(BaseSVSInfer):
         mel2note = self.lr(note_dur)  # [B=1, T_s]
         T_s = mel2note.shape[1]
 
-        print(f'Length: {T_w} word(s), {note_seq.shape[1]} note(s), {T_ph} token(s), '
-              f'{T_s} frame(s), {T_s * self.timestep:.2f} second(s)')
+        summary['words'] = T_w
+        summary['notes'] = note_seq.shape[1]
+        summary['tokens'] = T_ph
+        summary['frames'] = T_s
+        summary['seconds'] = '%.2f' % (T_s * self.timestep)
 
         if param.get('ph_dur'):
             # Get mel2ph if ph_dur is given
@@ -153,10 +161,12 @@ class DiffSingerVarianceInfer(BaseSVSInfer):
                 librosa.hz_to_midi(interp_f0(f0)[0]).astype(np.float32)
             ).to(self.device)[None]
 
+        print(f'[{idx}]\t' + ', '.join(f'{k}: {v}' for k, v in summary.items()))
+
         return batch
 
     @torch.no_grad()
-    def run_model(self, sample):
+    def forward_model(self, sample):
         txt_tokens = sample['tokens']
         midi = sample['midi']
         ph2word = sample['ph2word']
@@ -179,7 +189,7 @@ class DiffSingerVarianceInfer(BaseSVSInfer):
 
     def infer_once(self, param):
         batch = self.preprocess_input(param)
-        dur_pred, pitch_pred, variance_pred = self.run_model(batch)
+        dur_pred, pitch_pred, variance_pred = self.forward_model(batch)
         if dur_pred is not None:
             dur_pred = dur_pred[0].cpu().numpy()
         if pitch_pred is not None:
@@ -192,3 +202,12 @@ class DiffSingerVarianceInfer(BaseSVSInfer):
             for k, v in variance_pred.items()
         }
         return dur_pred, f0_pred, variance_pred
+
+    def run_inference(
+            self, params,
+            out_dir: pathlib.Path = None,
+            title: str = None,
+            num_runs: int = 1,
+            seed: int = -1
+    ):
+        pass

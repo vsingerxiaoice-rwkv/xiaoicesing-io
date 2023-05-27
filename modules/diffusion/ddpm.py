@@ -239,7 +239,7 @@ class GaussianDiffusion(nn.Module):
                 dpm_solver = DPM_Solver(model_fn, noise_schedule)
 
                 steps = t // hparams["pndm_speedup"]
-                self.bar = tqdm(desc="sample time step", total=steps, disable=not hparams['infer'])
+                self.bar = tqdm(desc="sample time step", total=steps, disable=not hparams['infer'], leave=False)
                 x = dpm_solver.sample(
                     x,
                     steps=steps,
@@ -253,7 +253,7 @@ class GaussianDiffusion(nn.Module):
                 iteration_interval = hparams['pndm_speedup']
                 for i in tqdm(
                         reversed(range(0, t, iteration_interval)), desc='sample time step',
-                        total=t // iteration_interval, disable=not hparams['infer']
+                        total=t // iteration_interval, disable=not hparams['infer'], leave=False
                 ):
                     x = self.p_sample_plms(
                         x, torch.full((b,), i, device=device, dtype=torch.long),
@@ -262,7 +262,8 @@ class GaussianDiffusion(nn.Module):
             else:
                 raise NotImplementedError(algorithm)
         else:
-            for i in tqdm(reversed(range(0, t)), desc='sample time step', total=t, disable=not hparams['infer']):
+            for i in tqdm(reversed(range(0, t)), desc='sample time step', total=t,
+                          disable=not hparams['infer'], leave=False):
                 x = self.p_sample(x, torch.full((b,), i, device=device, dtype=torch.long), cond)
         x = x.transpose(2, 3).squeeze(1)  # [B, F, M, T] => [B, T, M] or [B, F, T, M]
         return x

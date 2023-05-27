@@ -26,15 +26,16 @@ class BaseSVSInfer:
         self.device = device
         self.timestep = hparams['hop_size'] / hparams['audio_sample_rate']
         self.spk_map = {}
+        self.model: torch.nn.Module = None
 
-    def build_model(self, ckpt_steps=None):
+    def build_model(self, ckpt_steps=None) -> torch.nn.Module:
         raise NotImplementedError
 
-    def preprocess_input(self, param):
+    def preprocess_input(self, param: dict, idx=0) -> dict[str, torch.Tensor]:
         raise NotImplementedError
 
-    def run_model(self, sample):
+    def forward_model(self, sample: dict[str, torch.Tensor]):
         raise NotImplementedError
 
-    def infer_once(self, param):
+    def run_inference(self, params, **kwargs):
         raise NotImplementedError()
