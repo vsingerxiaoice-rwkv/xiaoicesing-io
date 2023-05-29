@@ -107,6 +107,7 @@ def acoustic(
 
     if speedup > 0:
         assert hparams['K_step'] % speedup == 0, f'Acceleration ratio must be factor of K_step {hparams["K_step"]}.'
+        hparams['pndm_speedup'] = speedup
 
     spk_mix = parse_commandline_spk_mix(spk) if hparams['use_spk_id'] and spk is not None else None
     for param in params:
