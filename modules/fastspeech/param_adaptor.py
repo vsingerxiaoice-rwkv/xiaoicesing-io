@@ -24,17 +24,17 @@ class ParameterAdaptorModule(torch.nn.Module):
 
         if self.predict_energy:
             ranges.append((
-                10. ** (hparams['energy_db_min'] / 20.),
-                10. ** (hparams['energy_db_max'] / 20.)
+                hparams['energy_db_min'],
+                hparams['energy_db_max']
             ))
-            clamps.append((0., 1.))
+            clamps.append((hparams['energy_db_min'], 0.))
 
         if self.predict_breathiness:
             ranges.append((
-                10. ** (hparams['breathiness_db_min'] / 20.),
-                10. ** (hparams['breathiness_db_max'] / 20.)
+                hparams['breathiness_db_min'],
+                hparams['breathiness_db_max']
             ))
-            clamps.append((0., 1.))
+            clamps.append((hparams['breathiness_db_min'], 0.))
 
         variances_hparams = hparams['variances_prediction_args']
         return cls(
@@ -44,10 +44,11 @@ class ParameterAdaptorModule(torch.nn.Module):
             timesteps=hparams['timesteps'],
             k_step=hparams['K_step'],
             denoiser_type=hparams['diff_decoder_type'],
-            denoiser_args=(
-                variances_hparams['residual_layers'],
-                variances_hparams['residual_channels']
-            )
+            denoiser_args={
+                'n_layers': variances_hparams['residual_layers'],
+                'n_chans': variances_hparams['residual_channels'],
+                'n_dilates': variances_hparams['dilation_cycle_length'],
+            }
         )
 
     def collect_variance_inputs(self, **kwargs) -> list:
