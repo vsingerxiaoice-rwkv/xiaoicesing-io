@@ -151,12 +151,12 @@ class BaseBinarizer:
         shutil.copy(locate_dictionary(), self.binary_data_dir / 'dictionary.txt')
         self.check_coverage()
 
-        # Process train set and valid set
+        # Process valid set and train set
         self.process_dataset('valid')
         self.process_dataset(
             'train',
             num_workers=int(self.binarization_args['num_workers']),
-            apply_augmentation=any(args['enabled'] for args in self.augmentation_args)
+            apply_augmentation=any(args['enabled'] for args in self.augmentation_args.values())
         )
 
     def check_coverage(self):
