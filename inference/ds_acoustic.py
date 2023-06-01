@@ -167,7 +167,7 @@ class DiffSingerAcousticInfer(BaseSVSInfer):
                     target_timestep=self.timestep,
                     align_length=length
                 )).to(self.device)[None]
-                summary[v_name] = 'input'
+                summary[v_name] = 'manual'
 
         if hparams.get('use_key_shift_embed', False):
             shift_min, shift_max = hparams['augmentation_args']['random_pitch_shifting']['range']

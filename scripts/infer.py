@@ -137,9 +137,9 @@ def acoustic(
 @click.option('--spk', type=str, required=False, help='Speaker name or mix of speakers')
 @click.option('--out', type=str, required=False, metavar='DIR', help='Path of the output folder')
 @click.option('--title', type=str, required=False, help='Title of output file')
-@click.option('--overwrite', is_flag=True, help='Overwrite the input file')
 @click.option('--num', type=int, required=False, default=1, help='Number of runs')
-@click.option('--seed', type=int, required=False, help='Random seed of the inference')
+@click.option('--key', type=int, required=False, default=0, help='Key transition of pitch')
+@click.option('--seed', type=int, required=False, default=-1, help='Random seed of the inference')
 @click.option('--speedup', type=int, required=False, default=0, help='Diffusion acceleration ratio')
 def variance(
         proj: str,
@@ -149,13 +149,68 @@ def variance(
         predict: tuple[str],
         out: str,
         title: str,
-        overwrite: bool,
         num: int,
+        key: int,
         seed: int,
         speedup: int
 ):
-    print(predict)
-    pass
+    proj = pathlib.Path(proj).resolve()
+    name = proj.stem if not title else title
+    exp = find_exp(exp)
+    if out:
+        out = pathlib.Path(out)
+    else:
+        out = proj.parent
+    if (not out or out.resolve() == proj.parent.resolve()) and not title:
+        name += '_variance'
+
+    with open(proj, 'r', encoding='utf-8') as f:
+        params = json.load(f)
+
+    if not isinstance(params, list):
+        params = [params]
+
+    if len(params) == 0:
+        print('The input file is empty.')
+        exit()
+
+    from utils.infer_utils import trans_key, parse_commandline_spk_mix, merge_slurs
+
+    if key != 0:
+        params = trans_key(params, key)
+        key_suffix = '%+dkey' % key
+        if not title:
+            name += key_suffix
+        print(f'| key transition: {key:+d}')
+
+    sys.argv = [
+        sys.argv[0],
+        '--exp_name',
+        exp,
+        '--infer'
+    ]
+    from utils.hparams import set_hparams, hparams
+    set_hparams()
+
+    if speedup > 0:
+        assert hparams['K_step'] % speedup == 0, f'Acceleration ratio must be factor of K_step {hparams["K_step"]}.'
+        hparams['pndm_speedup'] = speedup
+
+    # spk_mix = parse_commandline_spk_mix(spk) if hparams['use_spk_id'] and spk is not None else None
+    for param in params:
+        # if spk_mix is not None:
+        #     param['spk_mix'] = spk_mix
+
+        merge_slurs(param)
+
+    from inference.ds_variance import DiffSingerVarianceInfer
+    infer_ins = DiffSingerVarianceInfer(ckpt_steps=ckpt, predictions=set(predict))
+    print(f'| Model: {type(infer_ins.model)}')
+
+    infer_ins.run_inference(
+        params, out_dir=out, title=name,
+        num_runs=num, seed=seed
+    )
 
 
 if __name__ == '__main__':

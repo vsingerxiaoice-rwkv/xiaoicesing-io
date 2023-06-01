@@ -128,7 +128,7 @@ class DiffSingerVariance(ParameterAdaptorModule, CategorizedModule):
         )
 
         if not self.predict_pitch and not self.predict_variances:
-            return dur_pred_out, None, None, ({} if infer else None)
+            return dur_pred_out, None, ({} if infer else None)
 
         if mel2ph is None and word_dur is not None:  # inference from file
             dur_pred_align = self.rr(dur_pred_out, ph2word, word_dur)

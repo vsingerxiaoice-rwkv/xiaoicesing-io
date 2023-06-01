@@ -15,6 +15,7 @@ class FastSpeech2Variance(nn.Module):
     def __init__(self, vocab_size):
         super().__init__()
         self.predict_dur = hparams['predict_dur']
+        self.linguistic_mode = 'word' if hparams['predict_dur'] else 'phoneme'
 
         self.txt_embed = Embedding(vocab_size, hparams['hidden_size'], PAD_INDEX)
 
@@ -57,7 +58,7 @@ class FastSpeech2Variance(nn.Module):
         :param infer: whether inference
         :return: encoder_out, ph_dur_pred
         """
-        if self.predict_dur:
+        if self.linguistic_mode == 'word':
             b = txt_tokens.shape[0]
             onset = torch.diff(ph2word, dim=1, prepend=ph2word.new_zeros(b, 1)) > 0
             onset_embed = self.onset_embed(onset.long())  # [B, T_ph, H]
@@ -70,7 +71,11 @@ class FastSpeech2Variance(nn.Module):
             word_dur_embed = self.word_dur_embed(word_dur.float()[:, :, None])
 
             encoder_out = self.encoder(txt_tokens, onset_embed + word_dur_embed)
+        else:
+            ph_dur_embed = self.ph_dur_embed(ph_dur.float()[:, :, None])
+            encoder_out = self.encoder(txt_tokens, ph_dur_embed)
 
+        if self.predict_dur:
             midi_embed = self.midi_embed(midi)  # => [B, T_ph, H]
             dur_cond = encoder_out + midi_embed
             if spk_embed is not None:
@@ -79,7 +84,4 @@ class FastSpeech2Variance(nn.Module):
 
             return encoder_out, ph_dur_pred
         else:
-            ph_dur_embed = self.ph_dur_embed(ph_dur.float()[:, :, None])
-            encoder_out = self.encoder(txt_tokens, ph_dur_embed)
-
             return encoder_out, None
