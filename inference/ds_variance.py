@@ -111,10 +111,10 @@ class DiffSingerVarianceInfer(BaseSVSInfer):
 
         if hparams['use_spk_id']:
             ph_spk_mix_id, ph_spk_mix_value = self.load_speaker_mix(
-                param_src=param, summary_dst=summary, mode='token', mix_length=T_ph
+                param_src=param, summary_dst=summary, mix_mode='token', mix_length=T_ph
             )
             spk_mix_id, spk_mix_value = self.load_speaker_mix(
-                param_src=param, summary_dst=summary, mode='frame', mix_length=T_s
+                param_src=param, summary_dst=summary, mix_mode='frame', mix_length=T_s
             )
             batch['ph_spk_mix_id'] = ph_spk_mix_id
             batch['ph_spk_mix_value'] = ph_spk_mix_value

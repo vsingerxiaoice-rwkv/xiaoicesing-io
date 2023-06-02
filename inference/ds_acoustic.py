@@ -83,7 +83,9 @@ class DiffSingerAcousticInfer(BaseSVSInfer):
         summary['seconds'] = '%.2f' % (length * self.timestep)
 
         if hparams['use_spk_id']:
-            spk_mix_id, spk_mix_value = self.load_speaker_mix(param, summary, length)
+            spk_mix_id, spk_mix_value = self.load_speaker_mix(
+                param_src=param, summary_dst=summary, mix_mode='frame', mix_length=length
+            )
             batch['spk_mix_id'] = spk_mix_id
             batch['spk_mix_value'] = spk_mix_value
 

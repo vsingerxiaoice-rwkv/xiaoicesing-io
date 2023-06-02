@@ -34,18 +34,18 @@ class BaseSVSInfer:
         raise NotImplementedError()
 
     def load_speaker_mix(self, param_src: dict, summary_dst: dict,
-                         mode: str = 'frame', mix_length: int = None) -> tuple[Tensor, Tensor]:
+                         mix_mode: str = 'frame', mix_length: int = None) -> tuple[Tensor, Tensor]:
         """
 
         :param param_src: param dict
         :param summary_dst: summary dict
-        :param mode: 'token' or 'frame'
+        :param mix_mode: 'token' or 'frame'
         :param mix_length: total tokens or frames to mix
         :return: spk_mix_id [B=1, 1, N], spk_mix_value [B=1, T, N]
         """
-        assert mode == 'token' or mode == 'frame'
-        param_key = 'spk_mix' if mode == 'frame' else 'ph_spk_mix'
-        summary_solo_key = 'spk' if mode == 'frame' else 'ph_spk'
+        assert mix_mode == 'token' or mix_mode == 'frame'
+        param_key = 'spk_mix' if mix_mode == 'frame' else 'ph_spk_mix'
+        summary_solo_key = 'spk' if mix_mode == 'frame' else 'ph_spk'
         spk_mix_map = param_src.get(param_key)  # { spk_name: value } or { spk_name: "value value value ..." }
         dynamic = False
         if spk_mix_map is None:
@@ -72,7 +72,7 @@ class BaseSVSInfer:
                 spk_mix_id_list.append(self.spk_map[name])
                 if isinstance(values, str):
                     # this speaker has a variable proportion
-                    if mode == 'token':
+                    if mix_mode == 'token':
                         cur_spk_mix_value = values.split()
                         assert len(cur_spk_mix_value) == mix_length, \
                             'Speaker mix checks failed. In dynamic token-level mix, ' \
@@ -89,7 +89,7 @@ class BaseSVSInfer:
                         )).to(self.device)[None]  # => [B=1, T]
                     assert torch.all(cur_spk_mix_value >= 0.), \
                         f'Speaker mix checks failed.\n' \
-                        f'Proportions of speaker \'{name}\' on some {mode}s are negative.'
+                        f'Proportions of speaker \'{name}\' on some {mix_mode}s are negative.'
                 else:
                     # this speaker has a constant proportion
                     assert values >= 0., f'Speaker mix checks failed.\n' \
