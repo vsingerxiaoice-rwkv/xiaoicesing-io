@@ -201,10 +201,9 @@ def variance(
     spk_mix = parse_commandline_spk_mix(spk) if hparams['use_spk_id'] and spk is not None else None
     for param in params:
         if spk_mix is not None:
-            if 'ph_spk_mix' in param:
-                param['ph_spk_mix_backup'] = param['ph_spk_mix']
-            if 'spk_mix' in param:
-                param['spk_mix_backup'] = param['spk_mix']
+            param['ph_spk_mix_backup'] = param.get('ph_spk_mix')
+            param['spk_mix_backup'] = param.get('spk_mix')
+            param['ph_spk_mix'] = param['spk_mix'] = spk_mix
 
         merge_slurs(param)
 

@@ -367,10 +367,16 @@ class DiffSingerVarianceInfer(BaseSVSInfer):
                 # Restore ph_spk_mix and spk_mix
                 if 'ph_spk_mix' in param_copy and 'spk_mix' in param_copy:
                     if 'ph_spk_mix_backup' in param_copy:
-                        param_copy['ph_spk_mix'] = param_copy['ph_spk_mix_backup']
+                        if param_copy['ph_spk_mix_backup'] is None:
+                            del param_copy['ph_spk_mix']
+                        else:
+                            param_copy['ph_spk_mix'] = param_copy['ph_spk_mix_backup']
                         del param['ph_spk_mix_backup']
                     if 'spk_mix_backup' in param_copy:
-                        param_copy['spk_mix'] = param_copy['spk_mix_backup']
+                        if param_copy['ph_spk_mix_backup'] is None:
+                            del param_copy['spk_mix']
+                        else:
+                            param_copy['spk_mix'] = param_copy['spk_mix_backup']
                         del param['spk_mix_backup']
 
                 results.append(param_copy)
