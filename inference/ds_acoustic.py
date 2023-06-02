@@ -83,72 +83,7 @@ class DiffSingerAcousticInfer(BaseSVSInfer):
         summary['seconds'] = '%.2f' % (length * self.timestep)
 
         if hparams['use_spk_id']:
-            spk_mix_map = param.get('spk_mix')  # { spk_name: value } or { spk_name: "value value value ..." }
-            dynamic = False
-            if spk_mix_map is None:
-                # Get the first speaker
-                for name in self.spk_map.keys():
-                    spk_mix_map = {name: 1.0}
-                    break
-            else:
-                for name in spk_mix_map:
-                    assert name in self.spk_map, f'Speaker \'{name}\' not found.'
-
-            if len(spk_mix_map) == 1:
-                summary['spk'] = list(spk_mix_map.keys())[0]
-            elif any([isinstance(val, str) for val in spk_mix_map.values()]):
-                print_mix = '|'.join(spk_mix_map.keys())
-                summary['spk_mix'] = f'dynamic({print_mix})'
-                dynamic = True
-            else:
-                print_mix = '|'.join([f'{n}:{"%.3f" % spk_mix_map[n]}' for n in spk_mix_map])
-                summary['spk_mix'] = f'static({print_mix})'
-
-            spk_mix_id_list = []
-            spk_mix_value_list = []
-            if dynamic:
-                for name, values in spk_mix_map.items():
-                    spk_mix_id_list.append(self.spk_map[name])
-                    if isinstance(values, str):
-                        # this speaker has a variable proportion
-                        cur_spk_mix_value = torch.from_numpy(resample_align_curve(
-                            np.array(values.split(), 'float32'),
-                            original_timestep=float(param['spk_mix_timestep']),
-                            target_timestep=self.timestep,
-                            align_length=length
-                        )).to(self.device)[None]  # => [B=1, T]
-                        assert torch.all(cur_spk_mix_value >= 0.), \
-                            f'Speaker mix checks failed.\n' \
-                            f'Proportions of speaker \'{name}\' on some frames are negative.'
-                    else:
-                        # this speaker has a constant proportion
-                        assert values >= 0., f'Speaker mix checks failed.\n' \
-                                             f'Proportion of speaker \'{name}\' is negative.'
-                        cur_spk_mix_value = torch.full(
-                            (1, length), fill_value=values,
-                            dtype=torch.float32, device=self.device
-                        )
-                    spk_mix_value_list.append(cur_spk_mix_value)
-                spk_mix_id = torch.LongTensor(spk_mix_id_list).to(self.device)[None, None]  # => [B=1, 1, N]
-                spk_mix_value = torch.stack(spk_mix_value_list, dim=2)  # [B=1, T] => [B=1, T, N]
-                spk_mix_value_sum = torch.sum(spk_mix_value, dim=2, keepdim=True)  # => [B=1, T, 1]
-                assert torch.all(spk_mix_value_sum > 0.), \
-                    f'Speaker mix checks failed.\n' \
-                    f'Proportions of speaker mix on some frames sum to zero.'
-                spk_mix_value /= spk_mix_value_sum  # normalize
-            else:
-                for name, value in spk_mix_map.items():
-                    spk_mix_id_list.append(self.spk_map[name])
-                    assert value >= 0., f'Speaker mix checks failed.\n' \
-                                        f'Proportion of speaker \'{name}\' is negative.'
-                    spk_mix_value_list.append(value)
-                spk_mix_id = torch.LongTensor(spk_mix_id_list).to(self.device)[None, None]  # => [B=1, 1, N]
-                spk_mix_value = torch.FloatTensor(spk_mix_value_list).to(self.device)[None, None]  # => [B=1, 1, N]
-                spk_mix_value_sum = spk_mix_value.sum()
-                assert spk_mix_value_sum > 0., f'Speaker mix checks failed.\n' \
-                                               f'Proportions of speaker mix sum to zero.'
-                spk_mix_value /= spk_mix_value_sum  # normalize
-
+            spk_mix_id, spk_mix_value = self.load_speaker_mix(param, summary, length)
             batch['spk_mix_id'] = spk_mix_id
             batch['spk_mix_value'] = spk_mix_value
 

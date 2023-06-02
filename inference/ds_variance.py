@@ -34,6 +34,11 @@ class DiffSingerVarianceInfer(BaseSVSInfer):
     ):
         super().__init__(device=device)
         self.ph_encoder = TokenTextEncoder(vocab_list=build_phoneme_list())
+        if hparams['use_spk_id']:
+            with open(pathlib.Path(hparams['work_dir']) / 'spk_map.json', 'r', encoding='utf8') as f:
+                self.spk_map = json.load(f)
+            assert isinstance(self.spk_map, dict) and len(self.spk_map) > 0, 'Invalid or empty speaker map!'
+            assert len(self.spk_map) == len(set(self.spk_map.values())), 'Duplicate speaker id in speaker map!'
         self.model: DiffSingerVariance = self.build_model(ckpt_steps=ckpt_steps)
         self.lr = LengthRegulator()
         self.rr = RhythmRegulator()
@@ -103,6 +108,18 @@ class DiffSingerVarianceInfer(BaseSVSInfer):
         summary['tokens'] = T_ph
         summary['frames'] = T_s
         summary['seconds'] = '%.2f' % (T_s * self.timestep)
+
+        if hparams['use_spk_id']:
+            ph_spk_mix_id, ph_spk_mix_value = self.load_speaker_mix(
+                param_src=param, summary_dst=summary, mode='token', mix_length=T_ph
+            )
+            spk_mix_id, spk_mix_value = self.load_speaker_mix(
+                param_src=param, summary_dst=summary, mode='frame', mix_length=T_s
+            )
+            batch['ph_spk_mix_id'] = ph_spk_mix_id
+            batch['ph_spk_mix_value'] = ph_spk_mix_value
+            batch['spk_mix_id'] = spk_mix_id
+            batch['spk_mix_value'] = spk_mix_value
 
         if load_dur:
             # Get mel2ph if ph_dur is needed
@@ -219,9 +236,26 @@ class DiffSingerVarianceInfer(BaseSVSInfer):
         base_pitch = sample['base_pitch']
         pitch = sample.get('pitch')
 
+        if hparams['use_spk_id']:
+            ph_spk_mix_id = sample['ph_spk_mix_id']
+            ph_spk_mix_value = sample['ph_spk_mix_value']
+            spk_mix_id = sample['spk_mix_id']
+            spk_mix_value = sample['spk_mix_value']
+            ph_spk_mix_embed = torch.sum(
+                self.model.spk_embed(ph_spk_mix_id) * ph_spk_mix_value.unsqueeze(3),  # => [B, T_ph, N, H]
+                dim=2, keepdim=False
+            )  # => [B, T_ph, H]
+            spk_mix_embed = torch.sum(
+                self.model.spk_embed(spk_mix_id) * spk_mix_value.unsqueeze(3),  # => [B, T_s, N, H]
+                dim=2, keepdim=False
+            )  # [B, T_s, H]
+        else:
+            ph_spk_mix_embed = spk_mix_embed = None
+
         dur_pred, pitch_pred, variance_pred = self.model(
             txt_tokens, midi=midi, ph2word=ph2word, word_dur=word_dur, ph_dur=ph_dur,
             mel2ph=mel2ph, base_pitch=base_pitch, pitch=pitch,
+            ph_spk_mix_embed=ph_spk_mix_embed, spk_mix_embed=spk_mix_embed,
             retake=None, infer=True
         )
         if dur_pred is not None:
@@ -284,7 +318,6 @@ class DiffSingerVarianceInfer(BaseSVSInfer):
 
         out_dir.mkdir(parents=True, exist_ok=True)
         for i in range(num_runs):
-
             results = []
             for param, flag, batch in tqdm.tqdm(
                     zip(params, predictor_flags, batches), desc='infer segments', total=len(params)
@@ -330,6 +363,15 @@ class DiffSingerVarianceInfer(BaseSVSInfer):
                 for v_name, v_pred in variance_pred.items():
                     param_copy[v_name] = ' '.join([str(round(v, 4)) for v in v_pred.tolist()])
                     param_copy[f'{v_name}_timestep'] = str(self.timestep)
+
+                # Restore ph_spk_mix and spk_mix
+                if 'ph_spk_mix' in param_copy and 'spk_mix' in param_copy:
+                    if 'ph_spk_mix_backup' in param_copy:
+                        param_copy['ph_spk_mix'] = param_copy['ph_spk_mix_backup']
+                        del param['ph_spk_mix_backup']
+                    if 'spk_mix_backup' in param_copy:
+                        param_copy['spk_mix'] = param_copy['spk_mix_backup']
+                        del param['spk_mix_backup']
 
                 results.append(param_copy)
 
