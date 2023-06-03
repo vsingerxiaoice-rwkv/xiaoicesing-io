@@ -638,7 +638,7 @@ Choose from 'gloo', 'nccl', 'nccl_no_p2p'. Windows platforms may use 'gloo'; Lin
 
 ### dictionary
 
-path to the word-phoneme mapping dictionary file. Training data must fully cover phonemes in the dictionary.
+Path to the word-phoneme mapping dictionary file. Training data must fully cover phonemes in the dictionary.
 
 #### visibility
 
@@ -655,6 +655,37 @@ normal
 #### type
 
 str
+
+### diff_accelerator
+
+Diffusion sampling acceleration method. The following method are currently available:
+
+- PNDM: the PLMS method from [Pseudo Numerical Methods for Diffusion Models on Manifolds](https://arxiv.org/abs/2202.09778)
+- DPM-Solver 2.0 adapted from [DPM-Solver: A Fast ODE Solver for Diffusion Probabilistic Model Sampling in Around 10 Steps](https://github.com/LuChengTHU/dpm-solver)
+
+#### visibility
+
+acoustic, variance
+
+#### scope
+
+inference
+
+#### customizability
+
+normal
+
+#### type
+
+str
+
+#### default
+
+dpm-solver
+
+#### constraints
+
+Choose from 'pndm', 'dpm-solver'.
 
 ### diff_decoder_type
 
