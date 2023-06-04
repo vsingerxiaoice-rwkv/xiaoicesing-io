@@ -72,7 +72,7 @@ def trans_key(raw_data, key):
             else:
                 new_note_seq_list.append(note_seq)
         i["note_seq"] = " ".join(new_note_seq_list)
-        if i["f0_seq"]:
+        if i.get("f0_seq"):
             f0_seq_list = i["f0_seq"].split(" ")
             f0_seq_list = [float(x) for x in f0_seq_list]
             new_f0_seq_list = []
