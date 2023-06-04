@@ -5,8 +5,6 @@ import librosa
 import numpy as np
 from scipy.io import wavfile
 
-head_list = ["C", "C#", "D", "D#", "E", "F", "F#", "G", "G#", "A", "A#", "B"]
-
 
 def merge_slurs(param):
     if not param.get('is_slur_seq'):
@@ -43,20 +41,6 @@ def merge_slurs(param):
 def trans_f0_seq(feature_pit, transform):
     feature_pit = feature_pit * 2 ** (transform / 12)
     return round(feature_pit, 1)
-
-
-def move_key(raw_data, mv_key):
-    head = raw_data[:-1]
-    body = int(raw_data[-1])
-    new_head_index = head_list.index(head) + mv_key
-    while new_head_index < 0:
-        body -= 1
-        new_head_index += 12
-    while new_head_index > 11:
-        body += 1
-        new_head_index -= 12
-    result_data = head_list[new_head_index] + str(body)
-    return result_data
 
 
 def trans_key(raw_data, key):
