@@ -130,7 +130,7 @@ def acoustic(
     )
 
 
-@main.command(help='Run DiffSinger acoustic model inference')
+@main.command(help='Run DiffSinger variance model inference')
 @click.argument('proj', type=str, metavar='DS_FILE')
 @click.option('--exp', type=str, required=True, metavar='EXP', help='Selection of model')
 @click.option('--ckpt', type=int, required=False, metavar='STEPS', help='Selection of checkpoint training steps')
