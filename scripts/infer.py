@@ -44,7 +44,7 @@ def main():
 @click.option('--title', type=str, required=False, help='Title of output file')
 @click.option('--num', type=int, required=False, default=1, help='Number of runs')
 @click.option('--key', type=int, required=False, default=0, help='Key transition of pitch')
-@click.option('--gender', type=float, required=False, default=0, help='Formant shifting (gender control)')
+@click.option('--gender', type=float, required=False, help='Formant shifting (gender control)')
 @click.option('--seed', type=int, required=False, default=-1, help='Random seed of the inference')
 @click.option('--speedup', type=int, required=False, default=0, help='Diffusion acceleration ratio')
 @click.option('--mel', is_flag=True, help='Save intermediate mel format instead of waveform')
