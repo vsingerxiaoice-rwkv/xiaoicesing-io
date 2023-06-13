@@ -6,6 +6,7 @@ from collections import OrderedDict
 from pathlib import Path
 
 import click
+from typing import Tuple
 
 root_dir = Path(__file__).parent.parent.resolve()
 os.environ['PYTHONPATH'] = str(root_dir)
@@ -145,7 +146,7 @@ def variance(
         exp: str,
         ckpt: int,
         spk: str,
-        predict: tuple[str],
+        predict: Tuple[str],
         out: str,
         title: str,
         num: int,

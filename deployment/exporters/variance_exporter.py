@@ -37,20 +37,20 @@ class DiffSingerVarianceExporter(BaseExporter):
         self.variance_postprocess_cache_path = self.cache_dir / 'variance_post.onnx'
 
         # Attributes for logging
-        self.fs2_class_name = self.model.fs2.__class__.__name__.removesuffix('ONNX')
+        self.fs2_class_name = self.model.fs2.__class__.__name__[:-len('ONNX')]
         self.dur_predictor_class_name = \
             self.model.fs2.dur_predictor.__class__.__name__ if self.model.predict_dur else None
         self.pitch_denoiser_class_name = \
-            self.model.pitch_predictor.denoise_fn.__class__.__name__.removesuffix('ONNX') \
+            self.model.pitch_predictor.denoise_fn.__class__.__name__[:-len('ONNX')] \
             if self.model.predict_pitch else None
         self.pitch_diffusion_class_name = \
-            self.model.pitch_predictor.__class__.__name__.removesuffix('ONNX') \
+            self.model.pitch_predictor.__class__.__name__[:-len('ONNX')] \
             if self.model.predict_pitch else None
         self.variance_denoiser_class_name = \
-            self.model.variance_predictor.denoise_fn.__class__.__name__.removesuffix('ONNX') \
+            self.model.variance_predictor.denoise_fn.__class__.__name__[:-len('ONNX')] \
             if self.model.predict_variances else None
         self.variance_diffusion_class_name = \
-            self.model.variance_predictor.__class__.__name__.removesuffix('ONNX') \
+            self.model.variance_predictor.__class__.__name__[:-len('ONNX')] \
             if self.model.predict_variances else None
 
         # Attributes for exporting

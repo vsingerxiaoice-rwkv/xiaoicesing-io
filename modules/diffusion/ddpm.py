@@ -1,3 +1,5 @@
+from __future__ import annotations
+
 from collections import deque
 from functools import partial
 from inspect import isfunction
@@ -298,8 +300,8 @@ class RepetitiveDiffusion(GaussianDiffusion):
                  timesteps=1000, k_step=1000,
                  denoiser_type=None, denoiser_args=None,
                  betas=None):
-        assert (isinstance(vmin, float | int) and isinstance(vmin, float | int)) or len(vmin) == len(vmax)
-        num_feats = 1 if isinstance(vmin, float | int) else len(vmin)
+        assert (isinstance(vmin, (float, int)) and isinstance(vmin, (float, int))) or len(vmin) == len(vmax)
+        num_feats = 1 if isinstance(vmin, (float, int)) else len(vmin)
         spec_min = [vmin] if num_feats == 1 else [[v] for v in vmin]
         spec_max = [vmax] if num_feats == 1 else [[v] for v in vmax]
         self.repeat_bins = repeat_bins
