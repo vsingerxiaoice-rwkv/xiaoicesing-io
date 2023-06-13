@@ -83,7 +83,7 @@ def acoustic(
         print('The input file is empty.')
         exit()
 
-    from utils.infer_utils import trans_key, parse_commandline_spk_mix, merge_slurs
+    from utils.infer_utils import trans_key, parse_commandline_spk_mix
 
     if key != 0:
         params = trans_key(params, key)
@@ -117,8 +117,6 @@ def acoustic(
 
         if spk_mix is not None:
             param['spk_mix'] = spk_mix
-
-        merge_slurs(param)
 
     from inference.ds_acoustic import DiffSingerAcousticInfer
     infer_ins = DiffSingerAcousticInfer(load_model=not mel, ckpt_steps=ckpt)
@@ -176,7 +174,7 @@ def variance(
         print('The input file is empty.')
         exit()
 
-    from utils.infer_utils import trans_key, parse_commandline_spk_mix, merge_slurs
+    from utils.infer_utils import trans_key, parse_commandline_spk_mix
 
     if key != 0:
         params = trans_key(params, key)
@@ -204,8 +202,6 @@ def variance(
             param['ph_spk_mix_backup'] = param.get('ph_spk_mix')
             param['spk_mix_backup'] = param.get('spk_mix')
             param['ph_spk_mix'] = param['spk_mix'] = spk_mix
-
-        merge_slurs(param)
 
     from inference.ds_variance import DiffSingerVarianceInfer
     infer_ins = DiffSingerVarianceInfer(ckpt_steps=ckpt, predictions=set(predict))
