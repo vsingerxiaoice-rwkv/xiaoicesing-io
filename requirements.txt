@@ -13,6 +13,7 @@ onnx==1.13.1
 onnxsim==0.4.27
 praat-parselmouth==0.4.3
 protobuf==3.20.3
+pyworld==0.3.3
 PyYAML
 resampy
 scipy

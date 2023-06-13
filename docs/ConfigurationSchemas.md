@@ -75,7 +75,7 @@ Sampling rate of waveforms.
 
 #### visibility
 
-all
+acoustic, variance
 
 #### scope
 
@@ -488,6 +488,78 @@ required
 
 str
 
+### breathiness_db_max
+
+Maximum breathiness value in dB used for normalization to [-1, 1].
+
+#### visibility
+
+variance
+
+#### scope
+
+inference
+
+#### customizability
+
+recommended
+
+#### type
+
+float
+
+#### default
+
+-20.0
+
+### breathiness_db_min
+
+Minimum breathiness value in dB used for normalization to [-1, 1].
+
+#### visibility
+
+acoustic, variance
+
+#### scope
+
+inference
+
+#### customizability
+
+recommended
+
+#### type
+
+float
+
+#### default
+
+-96.0
+
+### breathiness_smooth_width
+
+Length of sinusoidal smoothing convolution kernel (in seconds) on extracted breathiness curve.
+
+#### visibility
+
+acoustic, variance
+
+#### scope
+
+preprocessing
+
+#### customizability
+
+normal
+
+#### type
+
+float
+
+#### default
+
+0.12
+
 ### clip_grad_norm
 
 The value at which to clip gradients. Equivalent to `gradient_clip_val` in `lightning.pytorch.Trainer`.
@@ -566,11 +638,11 @@ Choose from 'gloo', 'nccl', 'nccl_no_p2p'. Windows platforms may use 'gloo'; Lin
 
 ### dictionary
 
-path to the word-phoneme mapping dictionary file. Training data must fully cover phonemes in the dictionary.
+Path to the word-phoneme mapping dictionary file. Training data must fully cover phonemes in the dictionary.
 
 #### visibility
 
-acoustic
+acoustic, variance
 
 #### scope
 
@@ -584,13 +656,44 @@ normal
 
 str
 
+### diff_accelerator
+
+Diffusion sampling acceleration method. The following method are currently available:
+
+- PNDM: the PLMS method from [Pseudo Numerical Methods for Diffusion Models on Manifolds](https://arxiv.org/abs/2202.09778)
+- DPM-Solver 2.0 adapted from [DPM-Solver: A Fast ODE Solver for Diffusion Probabilistic Model Sampling in Around 10 Steps](https://github.com/LuChengTHU/dpm-solver)
+
+#### visibility
+
+acoustic, variance
+
+#### scope
+
+inference
+
+#### customizability
+
+normal
+
+#### type
+
+str
+
+#### default
+
+dpm-solver
+
+#### constraints
+
+Choose from 'pndm', 'dpm-solver'.
+
 ### diff_decoder_type
 
 Denoiser type of the DDPM.
 
 #### visibility
 
-acoustic
+acoustic, variance
 
 #### scope
 
@@ -614,7 +717,7 @@ Loss type of the DDPM.
 
 #### visibility
 
-acoustic
+acoustic, variance
 
 #### scope
 
@@ -666,7 +769,7 @@ Dropout rate in some FastSpeech2 modules.
 
 #### visibility
 
-all
+acoustic, variance
 
 #### scope
 
@@ -708,13 +811,273 @@ int
 
 4
 
+### dur_prediction_args
+
+Arguments for phoneme duration prediction.
+
+#### type
+
+dict
+
+### dur_prediction_args.arch
+
+Architecture of duration predictor.
+
+#### visibility
+
+variance
+
+#### scope
+
+nn
+
+#### customizability
+
+reserved
+
+#### type
+
+str
+
+#### default
+
+fs2
+
+#### constraints
+
+Choose from 'fs2'.
+
+### dur_prediction_args.dropout
+
+Dropout rate in duration predictor of FastSpeech2.
+
+#### visibility
+
+variance
+
+#### scope
+
+nn
+
+#### customizability
+
+not recommended
+
+#### type
+
+float
+
+#### default
+
+0.1
+
+### dur_prediction_args.hidden_size
+
+Dimensions of hidden layers in duration predictor of FastSpeech2.
+
+#### visibility
+
+variance
+
+#### scope
+
+nn
+
+#### customizability
+
+normal
+
+#### type
+
+int
+
+#### default
+
+512
+
+### dur_prediction_args.kernel_size
+
+Kernel size of convolution layers of duration predictor of FastSpeech2.
+
+#### visibility
+
+variance
+
+#### scope
+
+nn
+
+#### customizability
+
+normal
+
+#### type
+
+int
+
+#### default
+
+3
+
+### dur_prediction_args.lambda_pdur_loss
+
+Coefficient of single phone duration loss when calculating joint duration loss.
+
+#### visibility
+
+variance
+
+#### scope
+
+training
+
+#### customizability
+
+normal
+
+#### type
+
+float
+
+#### default
+
+0.3
+
+### dur_prediction_args.lambda_sdur_loss
+
+Coefficient of sentence duration loss when calculating joint duration loss.
+
+#### visibility
+
+variance
+
+#### scope
+
+training
+
+#### customizability
+
+normal
+
+#### type
+
+float
+
+#### default
+
+3.0
+
+### dur_prediction_args.lambda_wdur_loss
+
+Coefficient of word duration loss when calculating joint duration loss.
+
+#### visibility
+
+variance
+
+#### scope
+
+training
+
+#### customizability
+
+normal
+
+#### type
+
+float
+
+#### default
+
+1.0
+
+### dur_prediction_args.log_offset
+
+Offset for log domain duration loss calculation, where the following transformation is applied:
+$$
+D' = \ln{(D+d)}
+$$
+with the offset value $d$.
+
+#### visibility
+
+variance
+
+#### scope
+
+training
+
+#### customizability
+
+not recommended
+
+#### type
+
+float
+
+#### default
+
+1.0
+
+### dur_prediction_args.loss_type
+
+Underlying loss type of duration loss.
+
+#### visibility
+
+variance
+
+#### scope
+
+training
+
+#### customizability
+
+normal
+
+#### type
+
+str
+
+#### default
+
+mse
+
+#### constraints
+
+Choose from 'mse', 'huber'.
+
+### dur_prediction_args.num_layers
+
+Number of duration predictor layers.
+
+#### visibility
+
+variance
+
+#### scope
+
+nn
+
+#### customizability
+
+normal
+
+#### type
+
+int
+
+#### default
+
+5
+
 ### enc_ffn_kernel_size
 
 Size of TransformerFFNLayer convolution kernel size in FastSpeech2 encoder.
 
 #### visibility
 
-all
+acoustic, variance
 
 #### scope
 
@@ -738,7 +1101,7 @@ Number of FastSpeech2 encoder layers.
 
 #### visibility
 
-all
+acoustic, variance
 
 #### scope
 
@@ -755,6 +1118,78 @@ int
 #### default
 
 4
+
+### energy_db_max
+
+Maximum energy value in dB used for normalization to [-1, 1].
+
+#### visibility
+
+variance
+
+#### scope
+
+inference
+
+#### customizability
+
+recommended
+
+#### type
+
+float
+
+#### default
+
+-12.0
+
+### energy_db_min
+
+Minimum energy value in dB used for normalization to [-1, 1].
+
+#### visibility
+
+variance
+
+#### scope
+
+inference
+
+#### customizability
+
+recommended
+
+#### type
+
+float
+
+#### default
+
+-96.0
+
+### energy_smooth_width
+
+Length of sinusoidal smoothing convolution kernel (in seconds) on extracted energy curve.
+
+#### visibility
+
+acoustic, variance
+
+#### scope
+
+preprocessing
+
+#### customizability
+
+normal
+
+#### type
+
+float
+
+#### default
+
+0.12
 
 ### f0_embed_type
 
@@ -797,7 +1232,7 @@ Activation function of TransformerFFNLayer in FastSpeech2 encoder:
 
 #### visibility
 
-all
+acoustic, variance
 
 #### scope
 
@@ -825,7 +1260,7 @@ Padding mode of TransformerFFNLayer convolution in FastSpeech2 encoder.
 
 #### visibility
 
-all
+acoustic, variance
 
 #### scope
 
@@ -849,7 +1284,7 @@ Fast Fourier Transforms parameter for mel extraction.
 
 #### visibility
 
-all
+acoustic, variance
 
 #### scope
 
@@ -921,7 +1356,7 @@ Dimension of hidden layers of FastSpeech2, token and variance embeddings, and di
 
 #### visibility
 
-acoustic
+acoustic, variance
 
 #### scope
 
@@ -945,7 +1380,7 @@ Hop size or step length (in number of waveform samples) of mel and feature extra
 
 #### visibility
 
-acoustic
+acoustic, variance
 
 #### scope
 
@@ -987,13 +1422,85 @@ boolean
 
 true
 
+### lambda_dur_loss
+
+Coefficient of duration loss when calculating total loss of variance model.
+
+#### visibility
+
+variance
+
+#### scope
+
+training
+
+#### customizability
+
+normal
+
+#### type
+
+float
+
+#### default
+
+1.0
+
+### lambda_pitch_loss
+
+Coefficient of pitch loss when calculating total loss of variance model.
+
+#### visibility
+
+variance
+
+#### scope
+
+training
+
+#### customizability
+
+normal
+
+#### type
+
+float
+
+#### default
+
+1.0
+
+### lambda_var_loss
+
+Coefficient of variance loss (all variance parameters other than pitch, like energy, breathiness, etc.) when calculating total loss of variance model.
+
+#### visibility
+
+variance
+
+#### scope
+
+training
+
+#### customizability
+
+normal
+
+#### type
+
+float
+
+#### default
+
+1.0
+
 ### K_step
 
 Total number of diffusion steps.
 
 #### visibility
 
-all
+acoustic, variance
 
 #### scope
 
@@ -1145,7 +1652,7 @@ Maximum number of data frames in each training batch. Used to dynamically contro
 
 #### visibility
 
-all
+acoustic, variance
 
 #### scope
 
@@ -1193,7 +1700,7 @@ Max beta of the DDPM noise schedule.
 
 #### visibility
 
-all
+acoustic, variance
 
 #### scope
 
@@ -1241,7 +1748,7 @@ Maximum number of data frames in each validation batch.
 
 #### visibility
 
-all
+acoustic, variance
 
 #### scope
 
@@ -1289,7 +1796,7 @@ Maximum mel spectrogram heatmap value for TensorBoard plotting.
 
 #### visibility
 
-all
+acoustic
 
 #### scope
 
@@ -1313,7 +1820,7 @@ Minimum mel spectrogram heatmap value for TensorBoard plotting.
 
 #### visibility
 
-all
+acoustic
 
 #### scope
 
@@ -1330,6 +1837,30 @@ float
 #### default
 
 -6.0
+
+### midi_smooth_width
+
+Length of sinusoidal smoothing convolution kernel (in seconds) on the step function representing MIDI sequence for base pitch calculation.
+
+#### visibility
+
+variance
+
+#### scope
+
+preprocessing
+
+#### customizability
+
+normal
+
+#### type
+
+float
+
+#### default
+
+0.06
 
 ### num_ckpt_keep
 
@@ -1361,7 +1892,7 @@ The number of attention heads of `torch.nn.MultiheadAttention` in FastSpeech2 en
 
 #### visibility
 
-all
+acoustic, variance
 
 #### scope
 
@@ -1387,7 +1918,7 @@ Due to some historical reasons, old checkpoints may have 3 padding tokens called
 
 #### visibility
 
-acoustic
+acoustic, variance
 
 #### scope
 
@@ -1435,7 +1966,7 @@ Maximum number of speakers in multi-speaker models.
 
 #### visibility
 
-acoustic
+acoustic, variance
 
 #### scope
 
@@ -1459,7 +1990,7 @@ Number of validation plots in each validation. Plots will be chosen from the sta
 
 #### visibility
 
-acoustic
+acoustic, variance
 
 #### scope
 
@@ -1645,6 +2176,162 @@ int
 
 120000
 
+### pitch_prediction_args
+
+Arguments for pitch prediction.
+
+#### type
+
+dict
+
+### pitch_prediction_args.dilation_cycle_length
+
+Equivalent to [dilation_cycle_length](#dilation_cycle_length) but only for the PitchDiffusion model.
+
+#### visibility
+
+variance
+
+#### default
+
+5
+
+### pitch_prediction_args.pitd_clip_max
+
+Maximum clipping value (in semitones) of pitch delta between actual pitch and base pitch.
+
+#### visibility
+
+variance
+
+#### scope
+
+inference
+
+#### type
+
+float
+
+#### default
+
+12.0
+
+### pitch_prediction_args.pitd_clip_min
+
+Minimum clipping value (in semitones) of pitch delta between actual pitch and base pitch.
+
+#### visibility
+
+variance
+
+#### scope
+
+inference
+
+#### type
+
+float
+
+#### default
+
+-12.0
+
+### pitch_prediction_args.pitd_norm_max
+
+Maximum pitch delta value in semitones used for normalization to [-1, 1].
+
+#### visibility
+
+variance
+
+#### scope
+
+inference
+
+#### customizability
+
+recommended
+
+#### type
+
+float
+
+#### default
+
+8.0
+
+### pitch_prediction_args.pitd_norm_min
+
+Minimum pitch delta value in semitones used for normalization to [-1, 1].
+
+#### visibility
+
+variance
+
+#### scope
+
+inference
+
+#### customizability
+
+recommended
+
+#### type
+
+float
+
+#### default
+
+-8.0
+
+### pitch_prediction_args.repeat_bins
+
+Number of repeating bins in PitchDiffusion.
+
+#### visibility
+
+variance
+
+#### scope
+
+nn, inference
+
+#### customizability
+
+recommended
+
+#### type
+
+int
+
+#### default
+
+64
+
+### pitch_prediction_args.residual_channels
+
+Equivalent to [residual_channels](#residual_channels) but only for PitchDiffusion.
+
+#### visibility
+
+variance
+
+#### default
+
+256
+
+### pitch_prediction_args.residual_layers
+
+Equivalent to [residual_layers](#residual_layers) but only for PitchDiffusion.
+
+#### visibility
+
+variance
+
+#### default
+
+20
+
 ### pl_trainer_accelerator
 
 Type of Lightning trainer hardware accelerator.
@@ -1657,7 +2344,7 @@ all
 
 training
 
-#### customization
+#### customizability
 
 not recommended
 
@@ -1687,7 +2374,7 @@ all
 
 training
 
-#### customization
+#### customizability
 
 not recommended
 
@@ -1711,7 +2398,7 @@ all
 
 training
 
-#### customization
+#### customizability
 
 normal
 
@@ -1739,7 +2426,7 @@ all
 
 training
 
-#### customization
+#### customizability
 
 reserved
 
@@ -1763,7 +2450,7 @@ all
 
 training
 
-#### customization
+#### customizability
 
 reserved
 
@@ -1781,7 +2468,7 @@ Diffusion sampling speed-up ratio. 1 means no speeding up.
 
 #### visibility
 
-all
+acoustic, variance
 
 #### type
 
@@ -1794,6 +2481,102 @@ int
 #### constraints
 
 Must be a factor of [K_step](#K_step).
+
+### predict_breathiness
+
+Whether to enable breathiness prediction.
+
+#### visibility
+
+variance
+
+#### scope
+
+nn, preprocessing, training, inference
+
+#### customizability
+
+recommended
+
+#### type
+
+bool
+
+#### default
+
+false
+
+### predict_dur
+
+Whether to enable phoneme duration prediction.
+
+#### visibility
+
+variance
+
+#### scope
+
+nn, preprocessing, training, inference
+
+#### customizability
+
+recommended
+
+#### type
+
+bool
+
+#### default
+
+true
+
+### predict_energy
+
+Whether to enable energy prediction.
+
+#### visibility
+
+variance
+
+#### scope
+
+nn, preprocessing, training, inference
+
+#### customizability
+
+recommended
+
+#### type
+
+bool
+
+#### default
+
+false
+
+### predict_pitch
+
+Whether to enable pitch prediction.
+
+#### visibility
+
+variance
+
+#### scope
+
+nn, preprocessing, training, inference
+
+#### customizability
+
+recommended
+
+#### type
+
+bool
+
+#### default
+
+true
 
 ### raw_data_dir
 
@@ -1821,7 +2604,7 @@ Whether to use relative positional encoding in FastSpeech2 module.
 
 #### visibility
 
-all
+acoustic, variance
 
 #### scope
 
@@ -1899,7 +2682,7 @@ Training performance on some datasets may be very sensitive to this value. Chang
 
 #### visibility
 
-all
+acoustic, variance
 
 #### scope
 
@@ -1947,7 +2730,7 @@ The diffusion schedule type.
 
 #### visibility
 
-acoustic
+acoustic, variance
 
 #### scope
 
@@ -1999,7 +2782,7 @@ Whether to apply the _sorting by similar length_ algorithm described in [sampler
 
 #### visibility
 
-all
+acoustic, variance
 
 #### scope
 
@@ -2023,7 +2806,7 @@ The names of speakers in a multi-speaker model. Speaker names are mapped to spea
 
 #### visibility
 
-acoustic
+acoustic, variance
 
 #### scope
 
@@ -2043,7 +2826,7 @@ Minimum mel spectrogram value used for normalization to [-1, 1]. Different mel b
 
 #### visibility
 
-all
+acoustic
 
 #### scope
 
@@ -2067,7 +2850,7 @@ Maximum mel spectrogram value used for normalization to [-1, 1]. Different mel b
 
 #### visibility
 
-all
+acoustic
 
 #### scope
 
@@ -2158,6 +2941,54 @@ str
 
 train
 
+### use_breathiness_embed
+
+Whether to accept and embed breathiness values into the model.
+
+#### visibility
+
+acoustic
+
+#### scope
+
+nn, preprocessing, inference
+
+#### customizability
+
+recommended
+
+#### type
+
+boolean
+
+#### default
+
+false
+
+### use_energy_embed
+
+Whether to accept and embed energy values into the model.
+
+#### visibility
+
+acoustic
+
+#### scope
+
+nn, preprocessing, inference
+
+#### customizability
+
+recommended
+
+#### type
+
+boolean
+
+#### default
+
+false
+
 ### use_key_shift_embed
 
 Whether to embed key shifting values introduced by random pitch shifting augmentation.
@@ -2192,7 +3023,7 @@ Whether to use SinusoidalPositionalEmbedding in FastSpeech2 encoder.
 
 #### visibility
 
-acoustic
+acoustic, variance
 
 #### scope
 
@@ -2236,7 +3067,7 @@ Whether embed the speaker id from a multi-speaker dataset.
 
 #### visibility
 
-acoustic
+acoustic, variance
 
 #### scope
 
@@ -2326,6 +3157,78 @@ str
 
 valid
 
+### variances_prediction_args
+
+Arguments for prediction of variance parameters other than pitch, like energy, breathiness, etc.
+
+#### type
+
+dict
+
+### variances_prediction_args.dilation_cycle_length
+
+Equivalent to [dilation_cycle_length](#dilation_cycle_length) but only for the MultiVarianceDiffusion model.
+
+#### visibility
+
+variance
+
+#### default
+
+4
+
+### variances_prediction_args.repeat_bins
+
+Number of repeating bins of each parameter in MultiVarianceDiffusion. Total repeating bins in MultiVarianceDiffusion are calculated as follows:
+$$
+B=N\times B'
+$$
+where $B'$ is the number of bins of each parameter, $N$ is the number of parameters.
+
+#### visibility
+
+variance
+
+#### scope
+
+nn, inference
+
+#### customizability
+
+recommended
+
+#### type
+
+int
+
+#### default
+
+24
+
+### variances_prediction_args.residual_channels
+
+Equivalent to [residual_channels](#residual_channels) but only for MultiVarianceDiffusion.
+
+#### visibility
+
+variance
+
+#### default
+
+192
+
+### variances_prediction_args.residual_layers
+
+Equivalent to [residual_layers](#residual_layers) but only for MultiVarianceDiffusion.
+
+#### visibility
+
+variance
+
+#### default
+
+10
+
 ### vocoder
 
 The vocoder class name.
@@ -2380,7 +3283,7 @@ Window size for mel or feature extraction.
 
 #### visibility
 
-all
+acoustic, variance
 
 #### scope
 

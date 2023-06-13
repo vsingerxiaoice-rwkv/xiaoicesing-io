@@ -4,7 +4,6 @@ from math import sqrt
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
-from torch.nn import Mish
 
 from utils.hparams import hparams
 
@@ -64,37 +63,41 @@ class ResidualBlock(nn.Module):
 
 
 class WaveNet(nn.Module):
-    def __init__(self, in_dims):
+    def __init__(self, in_dims, n_feats, *, n_layers=20, n_chans=256, n_dilates=4):
         super().__init__()
-        dim = hparams['residual_channels']
-        self.input_projection = Conv1d(in_dims, dim, 1)
-        self.diffusion_embedding = SinusoidalPosEmb(dim)
+        self.in_dims = in_dims
+        self.n_feats = n_feats
+        self.input_projection = Conv1d(in_dims * n_feats, n_chans, 1)
+        self.diffusion_embedding = SinusoidalPosEmb(n_chans)
         self.mlp = nn.Sequential(
-            nn.Linear(dim, dim * 4),
-            Mish(),
-            nn.Linear(dim * 4, dim)
+            nn.Linear(n_chans, n_chans * 4),
+            nn.Mish(),
+            nn.Linear(n_chans * 4, n_chans)
         )
         self.residual_layers = nn.ModuleList([
             ResidualBlock(
                 encoder_hidden=hparams['hidden_size'],
-                residual_channels=dim,
-                dilation=2 ** (i % hparams['dilation_cycle_length'])
+                residual_channels=n_chans,
+                dilation=2 ** (i % n_dilates)
             )
-            for i in range(hparams['residual_layers'])
+            for i in range(n_layers)
         ])
-        self.skip_projection = Conv1d(dim, dim, 1)
-        self.output_projection = Conv1d(dim, in_dims, 1)
+        self.skip_projection = Conv1d(n_chans, n_chans, 1)
+        self.output_projection = Conv1d(n_chans, in_dims * n_feats, 1)
         nn.init.zeros_(self.output_projection.weight)
 
     def forward(self, spec, diffusion_step, cond):
         """
-        :param spec: [B, 1, M, T]
+        :param spec: [B, F, M, T]
         :param diffusion_step: [B, 1]
-        :param cond: [B, M, T]
+        :param cond: [B, H, T]
         :return:
         """
-        x = spec.squeeze(1)
-        x = self.input_projection(x)  # [B, residual_channel, T]
+        if self.n_feats == 1:
+            x = spec.squeeze(1)  # [B, M, T]
+        else:
+            x = spec.flatten(start_dim=1, end_dim=2)  # [B, F x M, T]
+        x = self.input_projection(x)  # [B, C, T]
 
         x = F.relu(x)
         diffusion_step = self.diffusion_embedding(diffusion_step)
@@ -107,5 +110,12 @@ class WaveNet(nn.Module):
         x = torch.sum(torch.stack(skip), dim=0) / sqrt(len(self.residual_layers))
         x = self.skip_projection(x)
         x = F.relu(x)
-        x = self.output_projection(x)  # [B, mel_bins, T]
-        return x[:, None, :, :]
+        x = self.output_projection(x)  # [B, M, T]
+        if self.n_feats == 1:
+            x = x[:, None, :, :]
+        else:
+            # This is the temporary solution since PyTorch 1.13
+            # does not support exporting aten::unflatten to ONNX
+            # x = x.unflatten(dim=1, sizes=(self.n_feats, self.in_dims))
+            x = x.reshape(-1, self.n_feats, self.in_dims, x.shape[2])
+        return x

@@ -64,10 +64,11 @@ class DurationPredictor(torch.nn.Module):
         the outputs are calculated in log domain but in `inference`, those are calculated in linear domain.
     """
 
-    def __init__(self, idim, n_layers=2, n_chans=384, kernel_size=3, dropout_rate=0.1, offset=1.0, padding='SAME'):
-        """Initilize duration predictor module.
+    def __init__(self, in_dims, n_layers=2, n_chans=384, kernel_size=3,
+                 dropout_rate=0.1, offset=1.0, padding='SAME', dur_loss_type='mse'):
+        """Initialize duration predictor module.
         Args:
-            idim (int): Input dimension.
+            in_dims (int): Input dimension.
             n_layers (int, optional): Number of convolutional layers.
             n_chans (int, optional): Number of channels of convolutional layers.
             kernel_size (int, optional): Kernel size of convolutional layers.
@@ -80,7 +81,7 @@ class DurationPredictor(torch.nn.Module):
         self.kernel_size = kernel_size
         self.padding = padding
         for idx in range(n_layers):
-            in_chans = idim if idx == 0 else n_chans
+            in_chans = in_dims if idx == 0 else n_chans
             self.conv += [torch.nn.Sequential(
                 torch.nn.ConstantPad1d(((kernel_size - 1) // 2, (kernel_size - 1) // 2)
                                        if padding == 'SAME'
@@ -90,70 +91,207 @@ class DurationPredictor(torch.nn.Module):
                 LayerNorm(n_chans, dim=1),
                 torch.nn.Dropout(dropout_rate)
             )]
-        if hparams['dur_loss'] in ['mse', 'huber']:
-            odims = 1
-        elif hparams['dur_loss'] == 'mog':
-            odims = 15
-        elif hparams['dur_loss'] == 'crf':
-            odims = 32
-            from torchcrf import CRF
-            self.crf = CRF(odims, batch_first=True)
-        self.linear = torch.nn.Linear(n_chans, odims)
 
-    def _forward(self, xs, x_masks=None, is_inference=False):
-        xs = xs.transpose(1, -1)  # (B, idim, Tmax)
-        for f in self.conv:
-            xs = f(xs)  # (B, C, Tmax)
-            if x_masks is not None:
-                xs = xs * (1 - x_masks.float())[:, None, :]
-
-        xs = self.linear(xs.transpose(1, -1))  # [B, T, C]
-        xs = xs * (1 - x_masks.float())[:, :, None]  # (B, T, C)
-        if is_inference:
-            return self.out2dur(xs), xs
+        self.loss_type = dur_loss_type
+        if self.loss_type in ['mse', 'huber']:
+            self.out_dims = 1
+        # elif hparams['dur_loss_type'] == 'mog':
+        #     out_dims = 15
+        # elif hparams['dur_loss_type'] == 'crf':
+        #     out_dims = 32
+        #     from torchcrf import CRF
+        #     self.crf = CRF(out_dims, batch_first=True)
         else:
-            if hparams['dur_loss'] in ['mse']:
-                xs = xs.squeeze(-1)  # (B, Tmax)
-        return xs
+            raise NotImplementedError()
+        self.linear = torch.nn.Linear(n_chans, self.out_dims)
 
     def out2dur(self, xs):
-        if hparams['dur_loss'] in ['mse']:
-            # NOTE: calculate in log domain
-            xs = xs.squeeze(-1)  # (B, Tmax)
-            dur = torch.clamp(torch.round(xs.exp() - self.offset), min=0).long()  # avoid negative value
-        elif hparams['dur_loss'] == 'mog':
-            return NotImplementedError
-        elif hparams['dur_loss'] == 'crf':
-            dur = torch.LongTensor(self.crf.decode(xs)).cuda()
+        if self.loss_type in ['mse', 'huber']:
+            # NOTE: calculate loss in log domain
+            dur = xs.squeeze(-1).exp() - self.offset  # (B, Tmax)
+        # elif hparams['dur_loss_type'] == 'crf':
+        #     dur = torch.LongTensor(self.crf.decode(xs)).cuda()
+        else:
+            raise NotImplementedError()
         return dur
 
-    def forward(self, xs, x_masks=None):
+    def forward(self, xs, x_masks=None, infer=True):
         """Calculate forward propagation.
         Args:
             xs (Tensor): Batch of input sequences (B, Tmax, idim).
-            x_masks (ByteTensor, optional): Batch of masks indicating padded part (B, Tmax).
+            x_masks (BoolTensor, optional): Batch of masks indicating padded part (B, Tmax).
+            infer (bool): Whether inference
         Returns:
-            Tensor: Batch of predicted durations in log domain (B, Tmax).
+            (train) FloatTensor, (infer) LongTensor: Batch of predicted durations in linear domain (B, Tmax).
         """
-        return self._forward(xs, x_masks, False)
+        xs = xs.transpose(1, -1)  # (B, idim, Tmax)
+        masks = 1 - x_masks.float()
+        masks_ = masks[:, None, :]
+        for f in self.conv:
+            xs = f(xs)  # (B, C, Tmax)
+            if x_masks is not None:
+                xs = xs * masks_
+        xs = self.linear(xs.transpose(1, -1))  # [B, T, C]
+        xs = xs * masks[:, :, None]  # (B, T, C)
 
-    def inference(self, xs, x_masks=None):
-        """Inference duration.
+        dur_pred = self.out2dur(xs)
+        if infer:
+            dur_pred = dur_pred.clamp(min=0.)  # avoid negative value
+        return dur_pred
+
+
+class VariancePredictor(torch.nn.Module):
+    def __init__(self, vmin, vmax, in_dims,
+                 n_layers=5, n_chans=512, kernel_size=5,
+                 dropout_rate=0.1, padding='SAME'):
+        """Initialize variance predictor module.
         Args:
-            xs (Tensor): Batch of input sequences (B, Tmax, idim).
-            x_masks (ByteTensor, optional): Batch of masks indicating padded part (B, Tmax).
-        Returns:
-            LongTensor: Batch of predicted durations in linear domain (B, Tmax).
+            in_dims (int): Input dimension.
+            n_layers (int, optional): Number of convolutional layers.
+            n_chans (int, optional): Number of channels of convolutional layers.
+            kernel_size (int, optional): Kernel size of convolutional layers.
+            dropout_rate (float, optional): Dropout rate.
         """
-        return self._forward(xs, x_masks, True)
+        super(VariancePredictor, self).__init__()
+
+        self.vmin = vmin
+        self.vmax = vmax
+        self.conv = torch.nn.ModuleList()
+        self.kernel_size = kernel_size
+        self.padding = padding
+        for idx in range(n_layers):
+            in_chans = in_dims if idx == 0 else n_chans
+            self.conv += [torch.nn.Sequential(
+                torch.nn.ConstantPad1d(((kernel_size - 1) // 2, (kernel_size - 1) // 2)
+                                       if padding == 'SAME'
+                                       else (kernel_size - 1, 0), 0),
+                torch.nn.Conv1d(in_chans, n_chans, kernel_size, stride=1, padding=0),
+                torch.nn.ReLU(),
+                LayerNorm(n_chans, dim=1),
+                torch.nn.Dropout(dropout_rate)
+            )]
+        self.linear = torch.nn.Linear(n_chans, 1)
+        self.embed_positions = SinusoidalPositionalEmbedding(in_dims, 0, init_size=4096)
+        self.pos_embed_alpha = nn.Parameter(torch.Tensor([1]))
+
+    def out2value(self, xs):
+        return (xs + 1) / 2 * (self.vmax - self.vmin) + self.vmin
+
+    def forward(self, xs, infer=True):
+        """
+        :param xs: [B, T, H]
+        :param infer: whether inference
+        :return: [B, T]
+        """
+        positions = self.pos_embed_alpha * self.embed_positions(xs[..., 0])
+        xs = xs + positions
+        xs = xs.transpose(1, -1)  # (B, idim, Tmax)
+        for f in self.conv:
+            xs = f(xs)  # (B, C, Tmax)
+        xs = self.linear(xs.transpose(1, -1)).squeeze(-1)  # (B, Tmax)
+        if infer:
+            xs = self.out2value(xs)
+        return xs
+
+
+class PitchPredictor(torch.nn.Module):
+    def __init__(self, vmin, vmax, num_bins, deviation,
+                 in_dims, n_layers=5, n_chans=384, kernel_size=5,
+                 dropout_rate=0.1, padding='SAME'):
+        """Initialize pitch predictor module.
+        Args:
+            in_dims (int): Input dimension.
+            n_layers (int, optional): Number of convolutional layers.
+            n_chans (int, optional): Number of channels of convolutional layers.
+            kernel_size (int, optional): Kernel size of convolutional layers.
+            dropout_rate (float, optional): Dropout rate.
+        """
+        super(PitchPredictor, self).__init__()
+        self.vmin = vmin
+        self.vmax = vmax
+        self.interval = (vmax - vmin) / (num_bins - 1)  # align with centers of bins
+        self.sigma = deviation / self.interval
+        self.register_buffer('x', torch.arange(num_bins).float().reshape(1, 1, -1))  # [1, 1, N]
+
+        self.base_pitch_embed = torch.nn.Linear(1, in_dims)
+        self.conv = torch.nn.ModuleList()
+        self.kernel_size = kernel_size
+        self.padding = padding
+        for idx in range(n_layers):
+            in_chans = in_dims if idx == 0 else n_chans
+            self.conv += [torch.nn.Sequential(
+                torch.nn.ConstantPad1d(((kernel_size - 1) // 2, (kernel_size - 1) // 2)
+                                       if padding == 'SAME'
+                                       else (kernel_size - 1, 0), 0),
+                torch.nn.Conv1d(in_chans, n_chans, kernel_size, stride=1, padding=0),
+                torch.nn.ReLU(),
+                LayerNorm(n_chans, dim=1),
+                torch.nn.Dropout(dropout_rate)
+            )]
+        self.linear = torch.nn.Linear(n_chans, num_bins)
+        self.embed_positions = SinusoidalPositionalEmbedding(in_dims, 0, init_size=4096)
+        self.pos_embed_alpha = nn.Parameter(torch.Tensor([1]))
+
+    def bins_to_values(self, bins):
+        return bins * self.interval + self.vmin
+
+    def out2pitch(self, probs):
+        logits = probs.sigmoid()  # [B, T, N]
+        # return logits
+        # logits_sum = logits.sum(dim=2)  # [B, T]
+        bins = torch.sum(self.x * logits, dim=2) / torch.sum(logits, dim=2)  # [B, T]
+        pitch = self.bins_to_values(bins)
+        # uv = logits_sum / (self.sigma * math.sqrt(2 * math.pi)) < 0.3
+        # pitch[uv] = torch.nan
+        return pitch
+
+    def forward(self, xs, base):
+        """
+        :param xs: [B, T, H]
+        :param base: [B, T]
+        :return: [B, T, N]
+        """
+        xs = xs + self.base_pitch_embed(base[..., None])
+        positions = self.pos_embed_alpha * self.embed_positions(xs[..., 0])
+        xs = xs + positions
+        xs = xs.transpose(1, -1)  # (B, idim, Tmax)
+        for f in self.conv:
+            xs = f(xs)  # (B, C, Tmax)
+        xs = self.linear(xs.transpose(1, -1))  # (B, Tmax, H)
+        return self.out2pitch(xs) + base, xs
+
+
+class RhythmRegulator(torch.nn.Module):
+    def __init__(self, eps=1e-5):
+        super().__init__()
+        self.eps = eps
+
+    def forward(self, ph_dur, ph2word, word_dur):
+        """
+        Example (no batch dim version):
+            1. ph_dur = [4,2,3,2]
+            2. word_dur = [3,4,2], ph2word = [1,2,2,3]
+            3. word_dur_in = [4,5,2]
+            4. alpha_w = [0.75,0.8,1], alpha_ph = [0.75,0.8,0.8,1]
+            5. ph_dur_out = [3,1.6,2.4,2]
+        :param ph_dur: [B, T_ph]
+        :param ph2word: [B, T_ph]
+        :param word_dur: [B, T_w]
+        """
+        ph_dur = ph_dur.float() * (ph2word > 0)
+        word_dur = word_dur.float()
+        word_dur_in = ph_dur.new_zeros(ph_dur.shape[0], ph2word.max() + 1).scatter_add(
+            1, ph2word, ph_dur
+        )[:, 1:]  # [B, T_ph] => [B, T_w]
+        alpha_w = word_dur / word_dur_in.clamp(min=self.eps)  # avoid dividing by zero
+        alpha_ph = torch.gather(F.pad(alpha_w, [1, 0]), 1, ph2word)  # [B, T_w] => [B, T_ph]
+        ph_dur_out = ph_dur * alpha_ph
+        return ph_dur_out.round().long()
 
 
 class LengthRegulator(torch.nn.Module):
-    def __init__(self, pad_value=0.0):
-        super(LengthRegulator, self).__init__()
-        self.pad_value = pad_value
-
-    def forward(self, dur, dur_padding=None, alpha=1.0):
+    # noinspection PyMethodMayBeStatic
+    def forward(self, dur, dur_padding=None, alpha=None):
         """
         Example (no batch dim version):
             1. dur = [2,2,3]
@@ -172,8 +310,9 @@ class LengthRegulator(torch.nn.Module):
         :return:
             mel2ph (B, T_speech)
         """
-        assert alpha > 0
-        dur = torch.round(dur.float() * alpha).long()
+        assert alpha is None or alpha > 0
+        if alpha is not None:
+            dur = torch.round(dur.float() * alpha).long()
         if dur_padding is not None:
             dur = dur * (1 - dur_padding.long())
         token_idx = torch.arange(1, dur.shape[1] + 1)[None, :, None].to(dur.device)
@@ -187,7 +326,8 @@ class LengthRegulator(torch.nn.Module):
 
 
 class StretchRegulator(torch.nn.Module):
-    def forward(self, dur, mel2ph):
+    # noinspection PyMethodMayBeStatic
+    def forward(self, mel2ph, dur=None):
         """
         Example (no batch dim version):
             1. dur = [2,4,3]
@@ -202,6 +342,8 @@ class StretchRegulator(torch.nn.Module):
         :return:
             stretch (B, T_speech)
         """
+        if dur is None:
+            dur = mel2ph_to_dur(mel2ph, mel2ph.max())
         dur = F.pad(dur, [1, 0], value=1)  # Avoid dividing by zero
         mel2dur = torch.gather(dur, 1, mel2ph)
         bound_mask = torch.gt(mel2ph[:, 1:], mel2ph[:, :-1])

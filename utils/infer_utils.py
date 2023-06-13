@@ -1,13 +1,20 @@
 import re
+import warnings
 
 import librosa
 import numpy as np
 from scipy.io import wavfile
 
-head_list = ["C", "C#", "D", "D#", "E", "F", "F#", "G", "G#", "A", "A#", "B"]
-
 
 def merge_slurs(param):
+    if not param.get('is_slur_seq'):
+        return
+    warnings.warn(
+        'You are running inference from a DS file in old format. Please re-export it in new format '
+        'or ask for a new version from the provider of this file.',
+        category=DeprecationWarning
+    )
+    warnings.filterwarnings(action='default')
     ph_seq = param['ph_seq'].split()
     note_seq = param['note_seq'].split()
     note_dur_seq = param['note_dur_seq'].split()
@@ -28,26 +35,12 @@ def merge_slurs(param):
     param['note_seq'] = ' '.join(note_seq)
     param['note_dur_seq'] = ' '.join(note_dur_seq)
     param['is_slur_seq'] = ' '.join([str(s) for s in is_slur_seq])
-    param['ph_dur'] = ' '.join([str(d) for d in ph_dur])
+    param['ph_dur'] = ' '.join([str(round(d, 4)) for d in ph_dur])
 
 
 def trans_f0_seq(feature_pit, transform):
     feature_pit = feature_pit * 2 ** (transform / 12)
     return round(feature_pit, 1)
-
-
-def move_key(raw_data, mv_key):
-    head = raw_data[:-1]
-    body = int(raw_data[-1])
-    new_head_index = head_list.index(head) + mv_key
-    while new_head_index < 0:
-        body -= 1
-        new_head_index += 12
-    while new_head_index > 11:
-        body += 1
-        new_head_index -= 12
-    result_data = head_list[new_head_index] + str(body)
-    return result_data
 
 
 def trans_key(raw_data, key):
@@ -63,7 +56,7 @@ def trans_key(raw_data, key):
             else:
                 new_note_seq_list.append(note_seq)
         i["note_seq"] = " ".join(new_note_seq_list)
-        if i["f0_seq"]:
+        if i.get("f0_seq"):
             f0_seq_list = i["f0_seq"].split(" ")
             f0_seq_list = [float(x) for x in f0_seq_list]
             new_f0_seq_list = []

@@ -1,6 +1,7 @@
 from collections import deque
 from functools import partial
 from inspect import isfunction
+from typing import List, Tuple
 
 import numpy as np
 import torch
@@ -11,16 +12,12 @@ from modules.diffusion.wavenet import WaveNet
 from utils.hparams import hparams
 
 DIFF_DENOISERS = {
-    'wavenet': lambda hp: WaveNet(hp['audio_num_mel_bins']),
+    'wavenet': WaveNet
 }
 
 
-def exists(x):
-    return x is not None
-
-
 def default(val, d):
-    if exists(val):
+    if val is not None:
         return val
     return d() if isfunction(d) else d
 
@@ -65,14 +62,15 @@ beta_schedule = {
 
 
 class GaussianDiffusion(nn.Module):
-    def __init__(self, out_dims, timesteps=1000, k_step=1000,
-                 denoiser_type=None, betas=None,
+    def __init__(self, out_dims, num_feats=1, timesteps=1000, k_step=1000,
+                 denoiser_type=None, denoiser_args=None, betas=None,
                  spec_min=None, spec_max=None):
         super().__init__()
-        self.denoise_fn: nn.Module = DIFF_DENOISERS[denoiser_type](hparams)
+        self.denoise_fn: nn.Module = DIFF_DENOISERS[denoiser_type](out_dims, num_feats, **denoiser_args)
         self.out_dims = out_dims
+        self.num_feats = num_feats
 
-        if exists(betas):
+        if betas is not None:
             betas = betas.detach().cpu().numpy() if isinstance(betas, torch.Tensor) else betas
         else:
             betas = beta_schedule[hparams['schedule_type']](timesteps)
@@ -81,10 +79,7 @@ class GaussianDiffusion(nn.Module):
         alphas_cumprod = np.cumprod(alphas, axis=0)
         alphas_cumprod_prev = np.append(1., alphas_cumprod[:-1])
 
-        timesteps, = betas.shape
-        self.num_timesteps = int(timesteps)
         self.k_step = k_step
-
         self.noise_list = deque(maxlen=4)
 
         to_torch = partial(torch.tensor, dtype=torch.float32)
@@ -111,8 +106,12 @@ class GaussianDiffusion(nn.Module):
         self.register_buffer('posterior_mean_coef2', to_torch(
             (1. - alphas_cumprod_prev) * np.sqrt(alphas) / (1. - alphas_cumprod)))
 
-        self.register_buffer('spec_min', torch.FloatTensor(spec_min)[None, None, :hparams['audio_num_mel_bins']])
-        self.register_buffer('spec_max', torch.FloatTensor(spec_max)[None, None, :hparams['audio_num_mel_bins']])
+        # spec: [B, T, M] or [B, F, T, M]
+        # spec_min and spec_max: [1, 1, M] or [1, 1, F, M] => transpose(-3, -2) => [1, 1, M] or [1, F, 1, M]
+        spec_min = torch.FloatTensor(spec_min)[None, None, :out_dims].transpose(-3, -2)
+        spec_max = torch.FloatTensor(spec_max)[None, None, :out_dims].transpose(-3, -2)
+        self.register_buffer('spec_min', spec_min)
+        self.register_buffer('spec_max', spec_max)
 
     def q_mean_variance(self, x_start, t):
         mean = extract(self.sqrt_alphas_cumprod, t, x_start.shape) * x_start
@@ -152,19 +151,21 @@ class GaussianDiffusion(nn.Module):
         # no noise when t == 0
         nonzero_mask = (1 - (t == 0).float()).reshape(b, *((1,) * (len(x.shape) - 1)))
         return model_mean + nonzero_mask * (0.5 * model_log_variance).exp() * noise
-    
+
     @torch.no_grad()
     def p_sample_plms(self, x, t, interval, cond, clip_denoised=True, repeat_noise=False):
         """
-        Use the PLMS method from [Pseudo Numerical Methods for Diffusion Models on Manifolds](https://arxiv.org/abs/2202.09778).
+        Use the PLMS method from
+        [Pseudo Numerical Methods for Diffusion Models on Manifolds](https://arxiv.org/abs/2202.09778).
         """
 
         def get_x_pred(x, noise_t, t):
             a_t = extract(self.alphas_cumprod, t, x.shape)
-            a_prev = extract(self.alphas_cumprod, torch.max(t-interval, torch.zeros_like(t)), x.shape)
+            a_prev = extract(self.alphas_cumprod, torch.max(t - interval, torch.zeros_like(t)), x.shape)
             a_t_sq, a_prev_sq = a_t.sqrt(), a_prev.sqrt()
 
-            x_delta = (a_prev - a_t) * ((1 / (a_t_sq * (a_t_sq + a_prev_sq))) * x - 1 / (a_t_sq * (((1 - a_prev) * a_t).sqrt() + ((1 - a_t) * a_prev).sqrt())) * noise_t)
+            x_delta = (a_prev - a_t) * ((1 / (a_t_sq * (a_t_sq + a_prev_sq))) * x - 1 / (
+                    a_t_sq * (((1 - a_prev) * a_t).sqrt() + ((1 - a_t) * a_prev).sqrt())) * noise_t)
             x_pred = x + x_delta
 
             return x_pred
@@ -174,7 +175,7 @@ class GaussianDiffusion(nn.Module):
 
         if len(noise_list) == 0:
             x_pred = get_x_pred(x, noise_pred, t)
-            noise_pred_prev = self.denoise_fn(x_pred, max(t-interval, 0), cond=cond)
+            noise_pred_prev = self.denoise_fn(x_pred, max(t - interval, 0), cond=cond)
             noise_pred_prime = (noise_pred + noise_pred_prev) / 2
         elif len(noise_list) == 1:
             noise_pred_prime = (3 * noise_pred - noise_list[-1]) / 2
@@ -202,45 +203,28 @@ class GaussianDiffusion(nn.Module):
 
         return x_recon, noise
 
-    def forward(self, condition, gt_spec=None, infer=True):
-        """
-            conditioning diffusion, use fastspeech2 encoder output as the condition
-        """
-        cond = condition.transpose(1, 2)
-        b, device = condition.shape[0], condition.device
-
-        if not infer:
-            spec = self.norm_spec(gt_spec)
-            t = torch.randint(0, self.k_step, (b,), device=device).long()
-            norm_spec = spec.transpose(1, 2)[:, None, :, :]  # [B, 1, M, T]
-            return self.p_losses(norm_spec, t, cond=cond)
-        else:
-            t = self.k_step
-            shape = (cond.shape[0], 1, self.out_dims, cond.shape[2])
-            x = torch.randn(shape, device=device)
-            if hparams.get('pndm_speedup') and hparams['pndm_speedup'] > 1:
-                # obsolete: pndm_speedup, now use dpm_solver.
-                # self.noise_list = deque(maxlen=4)
-                # iteration_interval = hparams['pndm_speedup']
-                # for i in tqdm(reversed(range(0, t, iteration_interval)), desc='sample time step',
-                #               total=t // iteration_interval):
-                #     x = self.p_sample_plms(x, torch.full((b,), i, device=device, dtype=torch.long), iteration_interval,
-                #                            cond)
-                
+    def inference(self, cond, b=1, device=None):
+        t = self.k_step
+        shape = (b, self.num_feats, self.out_dims, cond.shape[2])
+        x = torch.randn(shape, device=device)
+        if hparams.get('pndm_speedup') and hparams['pndm_speedup'] > 1:
+            algorithm = hparams.get('diff_accelerator', 'dpm-solver')
+            if algorithm == 'dpm-solver':
                 from inference.dpm_solver_pytorch import NoiseScheduleVP, model_wrapper, DPM_Solver
-                ## 1. Define the noise schedule.
+                # 1. Define the noise schedule.
                 noise_schedule = NoiseScheduleVP(schedule='discrete', betas=self.betas)
 
-                ## 2. Convert your discrete-time `model` to the continuous-time
+                # 2. Convert your discrete-time `model` to the continuous-time
                 # noise prediction model. Here is an example for a diffusion model
-                ## `model` with the noise prediction type ("noise") .
+                # `model` with the noise prediction type ("noise") .
                 def my_wrapper(fn):
                     def wrapped(x, t, **kwargs):
                         ret = fn(x, t, **kwargs)
                         self.bar.update(1)
                         return ret
+
                     return wrapped
-                    
+
                 model_fn = model_wrapper(
                     my_wrapper(self.denoise_fn),
                     noise_schedule,
@@ -248,14 +232,14 @@ class GaussianDiffusion(nn.Module):
                     model_kwargs={"cond": cond}
                 )
 
-                ## 3. Define dpm-solver and sample by singlestep DPM-Solver.
-                ## (We recommend singlestep DPM-Solver for unconditional sampling)
-                ## You can adjust the `steps` to balance the computation
-                ## costs and the sample quality.
+                # 3. Define dpm-solver and sample by singlestep DPM-Solver.
+                # (We recommend singlestep DPM-Solver for unconditional sampling)
+                # You can adjust the `steps` to balance the computation
+                # costs and the sample quality.
                 dpm_solver = DPM_Solver(model_fn, noise_schedule)
 
                 steps = t // hparams["pndm_speedup"]
-                self.bar = tqdm(desc="sample time step", total=steps, disable=not hparams['infer'])
+                self.bar = tqdm(desc="sample time step", total=steps, disable=not hparams['infer'], leave=False)
                 x = dpm_solver.sample(
                     x,
                     steps=steps,
@@ -264,10 +248,42 @@ class GaussianDiffusion(nn.Module):
                     method="singlestep",
                 )
                 self.bar.close()
+            elif algorithm == 'pndm':
+                self.noise_list = deque(maxlen=4)
+                iteration_interval = hparams['pndm_speedup']
+                for i in tqdm(
+                        reversed(range(0, t, iteration_interval)), desc='sample time step',
+                        total=t // iteration_interval, disable=not hparams['infer'], leave=False
+                ):
+                    x = self.p_sample_plms(
+                        x, torch.full((b,), i, device=device, dtype=torch.long),
+                        iteration_interval, cond=cond
+                    )
             else:
-                for i in tqdm(reversed(range(0, t)), desc='sample time step', total=t, disable=not hparams['infer']):
-                    x = self.p_sample(x, torch.full((b,), i, device=device, dtype=torch.long), cond)
-            x = x.squeeze(1).transpose(1, 2)  # [B, T, M]
+                raise NotImplementedError(algorithm)
+        else:
+            for i in tqdm(reversed(range(0, t)), desc='sample time step', total=t,
+                          disable=not hparams['infer'], leave=False):
+                x = self.p_sample(x, torch.full((b,), i, device=device, dtype=torch.long), cond)
+        x = x.transpose(2, 3).squeeze(1)  # [B, F, M, T] => [B, T, M] or [B, F, T, M]
+        return x
+
+    def forward(self, condition, gt_spec=None, infer=True):
+        """
+            conditioning diffusion, use fastspeech2 encoder output as the condition
+        """
+        cond = condition.transpose(1, 2)
+        b, device = condition.shape[0], condition.device
+
+        if not infer:
+            # gt_spec: [B, T, M] or [B, F, T, M]
+            spec = self.norm_spec(gt_spec).transpose(-2, -1)  # [B, M, T] or [B, F, M, T]
+            if self.num_feats == 1:
+                spec = spec[:, None, :, :]  # [B, F=1, M, T]
+            t = torch.randint(0, self.k_step, (b,), device=device).long()
+            return self.p_losses(spec, t, cond=cond)
+        else:
+            x = self.inference(cond, b=b, device=device)
             return self.denorm_spec(x)
 
     def norm_spec(self, x):
@@ -275,3 +291,125 @@ class GaussianDiffusion(nn.Module):
 
     def denorm_spec(self, x):
         return (x + 1) / 2 * (self.spec_max - self.spec_min) + self.spec_min
+
+
+class RepetitiveDiffusion(GaussianDiffusion):
+    def __init__(self, vmin: float | int | list, vmax: float | int | list, repeat_bins: int,
+                 timesteps=1000, k_step=1000,
+                 denoiser_type=None, denoiser_args=None,
+                 betas=None):
+        assert (isinstance(vmin, float | int) and isinstance(vmin, float | int)) or len(vmin) == len(vmax)
+        num_feats = 1 if isinstance(vmin, float | int) else len(vmin)
+        spec_min = [vmin] if num_feats == 1 else [[v] for v in vmin]
+        spec_max = [vmax] if num_feats == 1 else [[v] for v in vmax]
+        self.repeat_bins = repeat_bins
+        super().__init__(
+            out_dims=repeat_bins, num_feats=num_feats,
+            timesteps=timesteps, k_step=k_step,
+            denoiser_type=denoiser_type, denoiser_args=denoiser_args,
+            betas=betas, spec_min=spec_min, spec_max=spec_max
+        )
+
+    def norm_spec(self, x):
+        """
+
+        :param x: [B, T] or [B, F, T]
+        :return [B, T, R] or [B, F, T, R]
+        """
+        if self.num_feats == 1:
+            repeats = [1, 1, self.repeat_bins]
+        else:
+            repeats = [1, 1, 1, self.repeat_bins]
+        return super().norm_spec(x.unsqueeze(-1).repeat(repeats))
+
+    def denorm_spec(self, x):
+        """
+
+        :param x: [B, T, R] or [B, F, T, R]
+        :return [B, T] or [B, F, T]
+        """
+        return super().denorm_spec(x).mean(dim=-1)
+
+
+class PitchDiffusion(RepetitiveDiffusion):
+    def __init__(self, vmin: float, vmax: float,
+                 cmin: float, cmax: float, repeat_bins,
+                 timesteps=1000, k_step=1000,
+                 denoiser_type=None, denoiser_args=None,
+                 betas=None):
+        self.vmin = vmin  # norm min
+        self.vmax = vmax  # norm max
+        self.cmin = cmin  # clip min
+        self.cmax = cmax  # clip max
+        super().__init__(
+            vmin=vmin, vmax=vmax, repeat_bins=repeat_bins,
+            timesteps=timesteps, k_step=k_step,
+            denoiser_type=denoiser_type, denoiser_args=denoiser_args,
+            betas=betas
+        )
+
+    def norm_spec(self, x):
+        return super().norm_spec(x.clamp(min=self.cmin, max=self.cmax))
+
+    def denorm_spec(self, x):
+        return super().denorm_spec(x).clamp(min=self.cmin, max=self.cmax)
+
+
+class MultiVarianceDiffusion(RepetitiveDiffusion):
+    def __init__(
+            self, ranges: List[Tuple[float, float]],
+            clamps: List[Tuple[float | None, float | None] | None],
+            repeat_bins, timesteps=1000, k_step=1000,
+            denoiser_type=None, denoiser_args=None,
+            betas=None
+    ):
+        assert len(ranges) == len(clamps)
+        self.clamps = clamps
+        vmin = [r[0] for r in ranges]
+        vmax = [r[1] for r in ranges]
+        if len(vmin) == 1:
+            vmin = vmin[0]
+        if len(vmax) == 1:
+            vmax = vmax[0]
+        super().__init__(
+            vmin=vmin, vmax=vmax, repeat_bins=repeat_bins,
+            timesteps=timesteps, k_step=k_step,
+            denoiser_type=denoiser_type, denoiser_args=denoiser_args,
+            betas=betas
+        )
+
+    def clamp_spec(self, xs: list | tuple):
+        clamped = []
+        for x, c in zip(xs, self.clamps):
+            if c is None:
+                clamped.append(x)
+                continue
+            clamped.append(x.clamp(min=c[0], max=c[1]))
+        return clamped
+
+    def norm_spec(self, xs: list | tuple):
+        """
+
+        :param xs: sequence of [B, T]
+        :return: [B, F, T] => super().norm_spec(xs) => [B, F, T, R]
+        """
+        assert len(xs) == self.num_feats
+        clamped = self.clamp_spec(xs)
+        xs = torch.stack(clamped, dim=1)  # [B, F, T]
+        if self.num_feats == 1:
+            xs = xs.squeeze(1)  # [B, T]
+        return super().norm_spec(xs)
+
+    def denorm_spec(self, xs):
+        """
+
+        :param xs: [B, T, R] or [B, F, T, R] => super().denorm_spec(xs) => [B, T] or [B, F, T]
+        :return: sequence of [B, T]
+        """
+        xs = super().denorm_spec(xs)
+        if self.num_feats == 1:
+            xs = [xs]
+        else:
+            xs = xs.unbind(dim=1)
+        assert len(xs) == self.num_feats
+        return self.clamp_spec(xs)

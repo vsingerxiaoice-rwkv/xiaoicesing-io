@@ -19,18 +19,39 @@ import torch
 from basics.base_binarizer import BaseBinarizer, BinarizationError
 from modules.fastspeech.tts_modules import LengthRegulator
 from modules.vocoders.registry import VOCODERS
-from utils.binarizer_utils import get_pitch_parselmouth, get_mel2ph_torch
+from utils.binarizer_utils import (
+    SinusoidalSmoothingConv1d,
+    get_mel2ph_torch,
+    get_pitch_parselmouth,
+    get_energy_librosa,
+    get_breathiness_pyworld
+)
 from utils.hparams import hparams
 from utils.phoneme_utils import build_phoneme_list
 
 os.environ["OMP_NUM_THREADS"] = "1"
-ACOUSTIC_ITEM_ATTRIBUTES = ['spk_id', 'mel', 'tokens', 'mel2ph', 'f0', 'key_shift', 'speed']
+ACOUSTIC_ITEM_ATTRIBUTES = [
+    'spk_id',
+    'mel',
+    'tokens',
+    'mel2ph',
+    'f0',
+    'energy',
+    'breathiness',
+    'key_shift',
+    'speed'
+]
+
+energy_smooth: SinusoidalSmoothingConv1d = None
+breathiness_smooth: SinusoidalSmoothingConv1d = None
 
 
 class AcousticBinarizer(BaseBinarizer):
     def __init__(self):
         super().__init__(data_attrs=ACOUSTIC_ITEM_ATTRIBUTES)
         self.lr = LengthRegulator()
+        self.need_energy = hparams.get('use_energy_embed', False)
+        self.need_breathiness = hparams.get('use_breathiness_embed', False)
 
     def load_meta_data(self, raw_data_dir: pathlib.Path, ds_id):
         meta_data_dict = {}
@@ -111,6 +132,7 @@ class AcousticBinarizer(BaseBinarizer):
                                     f' (+) {sorted(unrecognizable_phones)}\n'
                                     f' (-) {sorted(missing_phones)}')
 
+    @torch.no_grad()
     def process_item(self, item_name, meta_data, binarization_args):
         if hparams['vocoder'] in VOCODERS:
             wav, mel = VOCODERS[hparams['vocoder']].wav2spec(meta_data['wav_fn'])
@@ -129,6 +151,11 @@ class AcousticBinarizer(BaseBinarizer):
             'ph_dur': np.array(meta_data['ph_dur']).astype(np.float32),
         }
 
+        # get ground truth dur
+        processed_input['mel2ph'] = get_mel2ph_torch(
+            self.lr, torch.from_numpy(processed_input['ph_dur']), length, self.timestep, device=self.device
+        ).cpu().numpy()
+
         # get ground truth f0
         gt_f0, uv = get_pitch_parselmouth(
             wav, length, hparams, interp_uv=hparams['interp_uv']
@@ -138,10 +165,31 @@ class AcousticBinarizer(BaseBinarizer):
             return None
         processed_input['f0'] = gt_f0.astype(np.float32)
 
-        # get ground truth dur
-        processed_input['mel2ph'] = get_mel2ph_torch(
-            self.lr, torch.from_numpy(processed_input['ph_dur']), length, self.timestep, device=self.device
-        ).cpu().numpy()
+        if self.need_energy:
+            # get ground truth energy
+            energy = get_energy_librosa(wav, length, hparams).astype(np.float32)
+
+            global energy_smooth
+            if energy_smooth is None:
+                energy_smooth = SinusoidalSmoothingConv1d(
+                    round(hparams['energy_smooth_width'] / self.timestep)
+                ).eval().to(self.device)
+            energy = energy_smooth(torch.from_numpy(energy).to(self.device)[None])[0]
+
+            processed_input['energy'] = energy.cpu().numpy()
+
+        if self.need_breathiness:
+            # get ground truth energy
+            breathiness = get_breathiness_pyworld(wav, gt_f0 * ~uv, length, hparams).astype(np.float32)
+
+            global breathiness_smooth
+            if breathiness_smooth is None:
+                breathiness_smooth = SinusoidalSmoothingConv1d(
+                    round(hparams['breathiness_smooth_width'] / self.timestep)
+                ).eval().to(self.device)
+            breathiness = breathiness_smooth(torch.from_numpy(breathiness).to(self.device)[None])[0]
+
+            processed_input['breathiness'] = breathiness.cpu().numpy()
 
         if hparams.get('use_key_shift_embed', False):
             processed_input['key_shift'] = 0.

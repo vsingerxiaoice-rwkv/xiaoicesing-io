@@ -14,6 +14,24 @@ sys.path.insert(0, str(root_dir))
 from utils.hparams import set_hparams, hparams
 
 
+def find_exp(exp):
+    if not (root_dir / 'checkpoints' / exp).exists():
+        for subdir in (root_dir / 'checkpoints').iterdir():
+            if not subdir.is_dir():
+                continue
+            if subdir.name.startswith(exp):
+                print(f'| match ckpt by prefix: {subdir.name}')
+                exp = subdir.name
+                break
+        else:
+            assert False, \
+                f'There are no matching exp starting with \'{exp}\' in \'checkpoints\' folder. ' \
+                'Please specify \'--exp\' as the folder name or prefix.'
+    else:
+        print(f'| found ckpt by name: {exp}')
+    return exp
+
+
 @click.group()
 def main():
     pass
@@ -51,20 +69,7 @@ def acoustic(
         exit(-1)
     if freeze_gender is not None:
         assert -1. <= freeze_gender <= 1., 'Frozen gender must be in [-1, 1].'
-    if not (root_dir / 'checkpoints' / exp).exists():
-        for subdir in (root_dir / 'checkpoints').iterdir():
-            if not subdir.is_dir():
-                continue
-            if subdir.name.startswith(exp):
-                print(f'| match ckpt by prefix: {subdir.name}')
-                exp = subdir.name
-                break
-        else:
-            assert False, \
-                f'There are no matching exp starting with \'{exp}\' in \'checkpoints\' folder. ' \
-                'Please specify \'--exp\' as the folder name or prefix.'
-    else:
-        print(f'| found ckpt by name: {exp}')
+    exp = find_exp(exp)
     if out is None:
         out = root_dir / 'artifacts' / exp
     else:
@@ -118,6 +123,41 @@ def acoustic(
         expose_velocity=expose_velocity,
         export_spk=export_spk_mix,
         freeze_spk=freeze_spk_mix
+    )
+    exporter.export(out)
+
+
+@main.command(help='Export DiffSinger variance model to ONNX format.')
+@click.option('--exp', type=str, required=True, metavar='<exp>', help='Choose an experiment to export.')
+@click.option('--ckpt', type=int, required=False, metavar='<steps>', help='Checkpoint training steps.')
+@click.option('--out', type=str, required=False, metavar='<dir>', help='Output directory for the artifacts.')
+def variance(
+        exp: str,
+        ckpt: int = None,
+        out: str = None,
+):
+    # Validate arguments
+    exp = find_exp(exp)
+    if out is None:
+        out = root_dir / 'artifacts' / exp
+    else:
+        out = Path(out)
+    out = out.resolve()
+
+    # Load configurations
+    sys.argv = [
+        sys.argv[0],
+        '--exp_name',
+        exp,
+        '--infer'
+    ]
+    set_hparams()
+    from deployment.exporters import DiffSingerVarianceExporter
+    print(f'| Exporter: {DiffSingerVarianceExporter}')
+    exporter = DiffSingerVarianceExporter(
+        device=torch.device('cuda' if torch.cuda.is_available() else 'cpu'),
+        cache_dir=root_dir / 'deployment' / 'cache',
+        ckpt_steps=ckpt,
     )
     exporter.export(out)
 

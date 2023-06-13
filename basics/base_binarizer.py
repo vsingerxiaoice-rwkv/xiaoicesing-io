@@ -214,7 +214,7 @@ class BaseBinarizer:
         else:
             print(f'| {prefix} total duration: {total_raw_sec:.2f}s')
 
-    def arrange_data_augmentation(self, prefix):
+    def arrange_data_augmentation(self, data_iterator):
         """
         Code for all types of data augmentation should be added here.
         """

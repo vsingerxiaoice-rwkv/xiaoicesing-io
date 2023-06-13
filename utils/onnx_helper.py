@@ -69,11 +69,11 @@ def model_add_prefixes(
     def _record_initializers_and_value_infos_recursive(subgraph):
         # Record names in current graph
         for initializer in subgraph.initializer:
-            if re.match(ignored_pattern, initializer.name):
+            if ignored_pattern is not None and re.match(ignored_pattern, initializer.name):
                 continue
             initializers.add(initializer.name)
         for value_info in subgraph.value_info:
-            if re.match(ignored_pattern, value_info.name):
+            if ignored_pattern is not None and re.match(ignored_pattern, value_info.name):
                 continue
             value_infos.add(value_info.name)
         for node in subgraph.node:
@@ -92,7 +92,7 @@ def model_add_prefixes(
         # Add prefixes in current graph
         if initializer_prefix is not None:
             for initializer in subgraph.initializer:
-                if re.match(ignored_pattern, initializer.name):
+                if ignored_pattern is not None and re.match(ignored_pattern, initializer.name):
                     continue
                 new_name = initializer_prefix + initializer.name
                 _verbose('| add prefix:', initializer.name, '->', new_name)
@@ -101,13 +101,15 @@ def model_add_prefixes(
         for value_info in subgraph.value_info:
             if dim_prefix is not None:
                 for dim in value_info.type.tensor_type.shape.dim:
-                    if dim.dim_param is None or dim.dim_param == '' or re.match(ignored_pattern, dim.dim_param):
+                    if dim.dim_param is None or dim.dim_param == '' or \
+                            ignored_pattern is not None and re.match(ignored_pattern, dim.dim_param):
                         continue
                     new_dim_param = dim_prefix + dim.dim_param
                     _verbose('| add prefix:', dim.dim_param, '->', new_dim_param)
                     dim.dim_param = new_dim_param
 
-            if value_info_prefix is None or re.match(ignored_pattern, value_info.name):
+            if value_info_prefix is None or \
+                    ignored_pattern is not None and re.match(ignored_pattern, value_info.name):
                 continue
             new_name = value_info_prefix + value_info.name
             _verbose('| add prefix:', value_info.name, '->', new_name)
@@ -115,7 +117,7 @@ def model_add_prefixes(
         
         if node_prefix is not None:
             for node in subgraph.node:
-                if re.match(ignored_pattern, node.name):
+                if ignored_pattern is not None and re.match(ignored_pattern, node.name):
                     continue
                 new_name = node_prefix + node.name
                 _verbose('| add prefix:', node.name, '->', new_name)

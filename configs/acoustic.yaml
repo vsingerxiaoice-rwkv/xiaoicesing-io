@@ -51,9 +51,13 @@ spec_max: [0]
 mel_vmin: -6. #-6.
 mel_vmax: 1.5
 interp_uv: true
+energy_smooth_width: 0.12
+breathiness_smooth_width: 0.12
 
 use_spk_id: false
 f0_embed_type: continuous
+use_energy_embed: false
+use_breathiness_embed: false
 use_key_shift_embed: false
 use_speed_embed: false
 
@@ -61,6 +65,7 @@ K_step: 1000
 timesteps: 1000
 max_beta: 0.02
 rel_pos: true
+diff_accelerator: dpm-solver
 pndm_speedup: 10
 hidden_size: 256
 residual_layers: 20
@@ -83,5 +88,6 @@ val_with_vocoder: true
 val_check_interval: 2000
 num_valid_plots: 10
 max_updates: 320000
+num_ckpt_keep: 5
 permanent_ckpt_start: 120000
 permanent_ckpt_interval: 40000

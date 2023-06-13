@@ -1,9 +1,11 @@
-from typing import List
+from typing import List, Tuple
 
 import torch
 from torch import Tensor
 
-from modules.diffusion.ddpm import GaussianDiffusion
+from modules.diffusion.ddpm import (
+    GaussianDiffusion, PitchDiffusion, MultiVarianceDiffusion
+)
 
 
 def extract(a, t):
@@ -29,7 +31,7 @@ class GaussianDiffusionONNX(GaussianDiffusion):
         # no noise when t == 0
         nonzero_mask = ((t > 0).float()).reshape(1, 1, 1, 1)
         return model_mean + nonzero_mask * (0.5 * model_log_variance).exp() * noise
-    
+
     def plms_get_x_pred(self, x, noise_t, t, t_prev):
         a_t = extract(self.alphas_cumprod, t)
         a_prev = extract(self.alphas_cumprod, t_prev)
@@ -70,7 +72,7 @@ class GaussianDiffusionONNX(GaussianDiffusion):
         n_frames = condition.shape[2]
 
         step_range = torch.arange(0, self.k_step, speedup, dtype=torch.long, device=device).flip(0)[:, None]
-        x = torch.randn((1, 1, self.out_dims, n_frames), device=device)
+        x = torch.randn((1, self.num_feats, self.out_dims, n_frames), device=device)
 
         if speedup > 1:
             plms_noise_stage: int = 0
@@ -93,6 +95,68 @@ class GaussianDiffusionONNX(GaussianDiffusion):
             for t in step_range:
                 x = self.p_sample(x, t, cond=condition)
 
-        x = x.squeeze(1).permute(0, 2, 1)  # [B, T, M]
+        if self.num_feats == 1:
+            x = x.squeeze(1).permute(0, 2, 1)  # [B, 1, M, T] => [B, T, M]
+        else:
+            x = x.permute(0, 1, 3, 2)  # [B, F, M, T] => [B, F, T, M]
         x = self.denorm_spec(x)
+        return x
+
+
+class PitchDiffusionONNX(GaussianDiffusionONNX, PitchDiffusion):
+    def __init__(self, vmin: float, vmax: float,
+                 cmin: float, cmax: float, repeat_bins,
+                 timesteps=1000, k_step=1000,
+                 denoiser_type=None, denoiser_args=None,
+                 betas=None):
+        self.vmin = vmin
+        self.vmax = vmax
+        self.cmin = cmin
+        self.cmax = cmax
+        super(PitchDiffusion, self).__init__(
+            vmin=vmin, vmax=vmax, repeat_bins=repeat_bins,
+            timesteps=timesteps, k_step=k_step,
+            denoiser_type=denoiser_type, denoiser_args=denoiser_args,
+            betas=betas
+        )
+
+    def clamp_spec(self, x):
+        return x.clamp(min=self.cmin, max=self.cmax)
+
+    def denorm_spec(self, x):
+        d = (self.spec_max - self.spec_min) / 2.
+        m = (self.spec_max + self.spec_min) / 2.
+        x = x * d + m
+        x = x.mean(dim=-1)
+        return x
+
+
+class MultiVarianceDiffusionONNX(GaussianDiffusionONNX, MultiVarianceDiffusion):
+    def __init__(
+            self, ranges: List[Tuple[float, float]],
+            clamps: List[Tuple[float | None, float | None] | None],
+            repeat_bins, timesteps=1000, k_step=1000,
+            denoiser_type=None, denoiser_args=None,
+            betas=None
+    ):
+        assert len(ranges) == len(clamps)
+        self.clamps = clamps
+        vmin = [r[0] for r in ranges]
+        vmax = [r[1] for r in ranges]
+        if len(vmin) == 1:
+            vmin = vmin[0]
+        if len(vmax) == 1:
+            vmax = vmax[0]
+        super(MultiVarianceDiffusion, self).__init__(
+            vmin=vmin, vmax=vmax, repeat_bins=repeat_bins,
+            timesteps=timesteps, k_step=k_step,
+            denoiser_type=denoiser_type, denoiser_args=denoiser_args,
+            betas=betas
+        )
+
+    def denorm_spec(self, x):
+        d = (self.spec_max - self.spec_min) / 2.
+        m = (self.spec_max + self.spec_min) / 2.
+        x = x * d + m
+        x = x.mean(dim=-1)
         return x

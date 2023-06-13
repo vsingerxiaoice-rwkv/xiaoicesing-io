@@ -69,8 +69,8 @@ class DiffSingerAcousticExporter(BaseExporter):
             vocab_size=len(self.vocab),
             out_dims=hparams['audio_num_mel_bins']
         ).eval().to(self.device)
-        load_ckpt(model, hparams['work_dir'], ckpt_steps=self.ckpt_steps, required_category='acoustic',
-                  prefix_in_ckpt='model', strict=True, device=self.device)
+        load_ckpt(model, hparams['work_dir'], ckpt_steps=self.ckpt_steps,
+                  prefix_in_ckpt='model', strict=False, device=self.device)
         return model
 
     def export(self, path: Path):
@@ -92,11 +92,13 @@ class DiffSingerAcousticExporter(BaseExporter):
         print(f'| export model => {path}')
 
     def export_attachments(self, path: Path):
-        path_model_name = path / self.model_name
         for spk in self.export_spk:
-            self._export_spk_embed(path_model_name.with_suffix(f'.{spk[0]}.emb'), self._perform_spk_mix(spk[1]))
+            self._export_spk_embed(
+                (path / 'dummy').with_suffix(f'.{spk[0]}.emb').with_stem(self.model_name),
+                self._perform_spk_mix(spk[1])
+            )
         self._export_dictionary(path / 'dictionary.txt')
-        self._export_phonemes(path_model_name.with_suffix('.phonemes.txt'))
+        self._export_phonemes((path / 'dummy').with_suffix('.phonemes.txt').with_stem(self.model_name))
 
     @torch.no_grad()
     def _torch_export_model(self):
@@ -105,9 +107,13 @@ class DiffSingerAcousticExporter(BaseExporter):
         tokens = torch.LongTensor([[1]]).to(self.device)
         durations = torch.LongTensor([[n_frames]]).to(self.device)
         f0 = torch.FloatTensor([[440.] * n_frames]).to(self.device)
+        variances = {
+            v_name: torch.zeros(1, n_frames, dtype=torch.float32, device=self.device)
+            for v_name in self.model.fs2.variance_embed_list
+        }
         kwargs: dict[str, torch.Tensor] = {}
-        arguments = (tokens, durations, f0, kwargs)
-        input_names = ['tokens', 'durations', 'f0']
+        arguments = (tokens, durations, f0, variances, kwargs)
+        input_names = ['tokens', 'durations', 'f0'] + self.model.fs2.variance_embed_list
         dynamix_axes = {
             'tokens': {
                 1: 'n_tokens'
@@ -117,6 +123,12 @@ class DiffSingerAcousticExporter(BaseExporter):
             },
             'f0': {
                 1: 'n_frames'
+            },
+            **{
+                v_name: {
+                    1: 'n_frames'
+                }
+                for v_name in self.model.fs2.variance_embed_list
             }
         }
         if hparams.get('use_key_shift_embed', False):
@@ -238,7 +250,7 @@ class DiffSingerAcousticExporter(BaseExporter):
         return spk_mix_embed
 
     def _optimize_fs2_graph(self, fs2: onnx.ModelProto) -> onnx.ModelProto:
-        print(f'Running ONNX simplifier for {self.fs2_class_name}...')
+        print(f'Running ONNX Simplifier on {self.fs2_class_name}...')
         fs2, check = onnxsim.simplify(fs2, include_subgraph=True)
         assert check, 'Simplified ONNX model could not be validated'
         print(f'| optimize graph: {self.fs2_class_name}')
@@ -248,7 +260,7 @@ class DiffSingerAcousticExporter(BaseExporter):
         onnx_helper.model_override_io_shapes(diffusion, output_shapes={
             'mel': (1, 'n_frames', hparams['audio_num_mel_bins'])
         })
-        print(f'Running ONNX simplifier #1 for {self.diffusion_class_name}...')
+        print(f'Running ONNX Simplifier #1 on {self.diffusion_class_name}...')
         diffusion, check = onnxsim.simplify(diffusion, include_subgraph=True)
         assert check, 'Simplified ONNX model could not be validated'
         onnx_helper.graph_fold_back_to_squeeze(diffusion.graph)
@@ -258,13 +270,13 @@ class DiffSingerAcousticExporter(BaseExporter):
             alias_prefix='/diffusion/denoise_fn/cache'
         )
         onnx_helper.graph_remove_unused_values(diffusion.graph)
-        print(f'Running ONNX simplifier #2 for {self.diffusion_class_name}...')
+        print(f'Running ONNX Simplifier #2 on {self.diffusion_class_name}...')
         diffusion, check = onnxsim.simplify(
             diffusion,
             include_subgraph=True
         )
-        print(f'| optimize graph: {self.diffusion_class_name}')
         assert check, 'Simplified ONNX model could not be validated'
+        print(f'| optimize graph: {self.diffusion_class_name}')
         return diffusion
 
     def _merge_fs2_diffusion_graphs(self, fs2: onnx.ModelProto, diffusion: onnx.ModelProto) -> onnx.ModelProto:
