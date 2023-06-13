@@ -42,7 +42,6 @@ This [pipeline](preparation/acoustic_preparation.ipynb) will guide you from inst
 The following is **only an example** for [opencpop](http://wenet.org.cn/opencpop/) dataset.
 
 ```sh
-export PYTHONPATH=.
 CUDA_VISIBLE_DEVICES=0 python scripts/binarize.py --config configs/acoustic.yaml
 ```
 ### Training
