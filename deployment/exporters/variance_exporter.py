@@ -271,7 +271,7 @@ class DiffSingerVarianceExporter(BaseExporter):
             )
 
             # Prepare inputs for denoiser tracing and PitchDiffusion scripting
-            shape = (1, 1, hparams['pitch_prediction_args']['num_pitch_bins'], 15)
+            shape = (1, 1, hparams['pitch_prediction_args']['repeat_bins'], 15)
             noise = torch.randn(shape, device=self.device)
             condition = torch.rand((1, hparams['hidden_size'], 15), device=self.device)
             step = (torch.rand((1,), device=self.device) * hparams['K_step']).long()
