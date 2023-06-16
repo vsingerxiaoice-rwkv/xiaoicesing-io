@@ -33,6 +33,7 @@ Tuning: 笛鹿FlutyDeer https://space.bilibili.com/386270936
 ## 06_不谓侠
 
 MIDI: 帝国妖月
+Tuning: ZhiBinShyu with PitchDiffusion https://www.bilibili.com/video/BV12T411t7Qg
 
 
 ## 07_春江花月夜
