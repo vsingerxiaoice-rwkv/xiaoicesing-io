@@ -660,6 +660,7 @@ str
 
 Diffusion sampling acceleration method. The following method are currently available:
 
+- DDIM: the DDIM method from [DENOISING DIFFUSION IMPLICIT MODELS](https://arxiv.org/abs/2010.02502)
 - PNDM: the PLMS method from [Pseudo Numerical Methods for Diffusion Models on Manifolds](https://arxiv.org/abs/2202.09778)
 - DPM-Solver 2.0 adapted from [DPM-Solver: A Fast ODE Solver for Diffusion Probabilistic Model Sampling in Around 10 Steps](https://github.com/LuChengTHU/dpm-solver)
 
@@ -685,7 +686,7 @@ dpm-solver
 
 #### constraints
 
-Choose from 'pndm', 'dpm-solver'.
+Choose from 'ddim', 'pndm', 'dpm-solver'
 
 ### diff_decoder_type
 
