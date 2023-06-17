@@ -662,7 +662,8 @@ Diffusion sampling acceleration method. The following method are currently avail
 
 - DDIM: the DDIM method from [DENOISING DIFFUSION IMPLICIT MODELS](https://arxiv.org/abs/2010.02502)
 - PNDM: the PLMS method from [Pseudo Numerical Methods for Diffusion Models on Manifolds](https://arxiv.org/abs/2202.09778)
-- DPM-Solver 2.0 adapted from [DPM-Solver: A Fast ODE Solver for Diffusion Probabilistic Model Sampling in Around 10 Steps](https://github.com/LuChengTHU/dpm-solver)
+- DPM-Solver++ adapted from [DPM-Solver: A Fast ODE Solver for Diffusion Probabilistic Model Sampling in Around 10 Steps](https://github.com/LuChengTHU/dpm-solver)
+- UniPC adapted from [UniPC: A Unified Predictor-Corrector Framework for Fast Sampling of Diffusion Models](https://github.com/wl-zhao/UniPC)
 
 #### visibility
 
@@ -686,7 +687,7 @@ dpm-solver
 
 #### constraints
 
-Choose from 'ddim', 'pndm', 'dpm-solver'
+Choose from 'ddim', 'pndm', 'dpm-solver', 'unipc'
 
 ### diff_decoder_type
 
