@@ -45,7 +45,7 @@ class GaussianDiffusionONNX(GaussianDiffusion):
 
         return x_pred
 
-    def p_sample_plms(self, x_prev, t, interval, cond, noise_list: List[Tensor], stage: int):
+    def p_sample_plms(self, x_prev, t, interval: int, cond, noise_list: List[Tensor], stage: int):
         noise_pred = self.denoise_fn(x_prev, t, cond)
         t_prev = t - interval
         t_prev = t_prev * (t_prev > 0)
