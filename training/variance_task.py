@@ -18,34 +18,37 @@ matplotlib.use('Agg')
 
 
 class VarianceDataset(BaseDataset):
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        need_energy = hparams['predict_energy']
+        need_breathiness = hparams['predict_breathiness']
+        self.predict_variances = need_energy or need_breathiness
+
     def collater(self, samples):
         batch = super().collater(samples)
 
         tokens = utils.collate_nd([s['tokens'] for s in samples], 0)
         ph_dur = utils.collate_nd([s['ph_dur'] for s in samples], 0)
-        midi = utils.collate_nd([s['midi'] for s in samples], 0)
-        ph2word = utils.collate_nd([s['ph2word'] for s in samples], 0)
-        mel2ph = utils.collate_nd([s['mel2ph'] for s in samples], 0)
-        base_pitch = utils.collate_nd([s['base_pitch'] for s in samples], 0)
-        pitch = utils.collate_nd([s['pitch'] for s in samples], 0)
         batch.update({
             'tokens': tokens,
-            'ph_dur': ph_dur,
-            'midi': midi,
-            'ph2word': ph2word,
-            'mel2ph': mel2ph,
-            'base_pitch': base_pitch,
-            'pitch': pitch,
+            'ph_dur': ph_dur
         })
-        if hparams['predict_energy']:
-            energy = utils.collate_nd([s['energy'] for s in samples], 0)
-            batch['energy'] = energy
-        if hparams['predict_breathiness']:
-            breathiness = utils.collate_nd([s['breathiness'] for s in samples], 0)
-            batch['breathiness'] = breathiness
+
         if hparams['use_spk_id']:
-            spk_ids = torch.LongTensor([s['spk_id'] for s in samples])
-            batch['spk_ids'] = spk_ids
+            batch['spk_ids'] = torch.LongTensor([s['spk_id'] for s in samples])
+        if hparams['predict_dur']:
+            batch['ph2word'] = utils.collate_nd([s['ph2word'] for s in samples], 0)
+            batch['midi'] = utils.collate_nd([s['midi'] for s in samples], 0)
+            if hparams['predict_pitch'] or self.predict_variances:
+                batch['mel2ph'] = utils.collate_nd([s['mel2ph'] for s in samples], 0)
+        if hparams['predict_pitch']:
+            batch['base_pitch'] = utils.collate_nd([s['base_pitch'] for s in samples], 0)
+        if hparams['predict_pitch'] or self.predict_variances:
+            batch['pitch'] = utils.collate_nd([s['pitch'] for s in samples], 0)
+        if hparams['predict_energy']:
+            batch['energy'] = utils.collate_nd([s['energy'] for s in samples], 0)
+        if hparams['predict_breathiness']:
+            batch['breathiness'] = utils.collate_nd([s['breathiness'] for s in samples], 0)
 
         return batch
 
