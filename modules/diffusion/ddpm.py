@@ -155,6 +155,15 @@ class GaussianDiffusion(nn.Module):
         return model_mean + nonzero_mask * (0.5 * model_log_variance).exp() * noise
 
     @torch.no_grad()
+    def p_sample_ddim(self, x, t, interval, cond):
+        a_t = extract(self.alphas_cumprod, t, x.shape)
+        a_prev = extract(self.alphas_cumprod, torch.max(t - interval, torch.zeros_like(t)), x.shape)
+        
+        noise_pred = self.denoise_fn(x, t, cond=cond)
+        x_prev = a_prev.sqrt() * (x / a_t.sqrt() + (((1 - a_prev) / a_prev).sqrt()-((1 - a_t) / a_t).sqrt()) * noise_pred)
+        return x_prev
+        
+    @torch.no_grad()
     def p_sample_plms(self, x, t, interval, cond, clip_denoised=True, repeat_noise=False):
         """
         Use the PLMS method from
@@ -258,6 +267,17 @@ class GaussianDiffusion(nn.Module):
                         total=t // iteration_interval, disable=not hparams['infer'], leave=False
                 ):
                     x = self.p_sample_plms(
+                        x, torch.full((b,), i, device=device, dtype=torch.long),
+                        iteration_interval, cond=cond
+                    )
+            elif algorithm == 'ddim':
+                self.noise_list = deque(maxlen=4)
+                iteration_interval = hparams['pndm_speedup']
+                for i in tqdm(
+                        reversed(range(0, t, iteration_interval)), desc='sample time step',
+                        total=t // iteration_interval, disable=not hparams['infer'], leave=False
+                ):
+                    x = self.p_sample_ddim(
                         x, torch.full((b,), i, device=device, dtype=torch.long),
                         iteration_interval, cond=cond
                     )
