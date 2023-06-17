@@ -8,7 +8,7 @@ import torch
 
 from basics.base_exporter import BaseExporter
 from deployment.modules.toplevel import DiffSingerAcousticONNX
-from utils import load_ckpt, onnx_helper
+from utils import load_ckpt, onnx_helper, remove_suffix
 from utils.hparams import hparams
 from utils.phoneme_utils import locate_dictionary, build_phoneme_list
 from utils.text_encoder import TokenTextEncoder
@@ -37,9 +37,9 @@ class DiffSingerAcousticExporter(BaseExporter):
         self.diffusion_cache_path = self.cache_dir / 'diffusion.onnx'
 
         # Attributes for logging
-        self.fs2_class_name = self.model.fs2.__class__.__name__[:-len('ONNX')]
-        self.denoiser_class_name = self.model.diffusion.denoise_fn.__class__.__name__[:-len('ONNX')]
-        self.diffusion_class_name = self.model.diffusion.__class__.__name__[:-len('ONNX')]
+        self.fs2_class_name = remove_suffix(self.model.fs2.__class__.__name__, 'ONNX')
+        self.denoiser_class_name = remove_suffix(self.model.diffusion.denoise_fn.__class__.__name__, 'ONNX')
+        self.diffusion_class_name = remove_suffix(self.model.diffusion.__class__.__name__, 'ONNX')
 
         # Attributes for exporting
         self.expose_gender = expose_gender

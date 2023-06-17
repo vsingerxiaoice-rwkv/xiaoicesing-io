@@ -258,3 +258,10 @@ def simulate_lr_scheduler(optimizer_args, scheduler_args, last_epoch=-1, num_par
         return scheduler._get_closed_form_lr()
     else:
         return scheduler.get_lr()
+
+
+def remove_suffix(string: str, suffix: str):
+    #  Just for Python 3.8 compatibility, since `str.removesuffix()` API of is available since Python 3.9
+    if string.endswith(suffix):
+        string = string[:-len(suffix)]
+    return string
