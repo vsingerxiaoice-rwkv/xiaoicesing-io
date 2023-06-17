@@ -68,7 +68,7 @@ class GaussianDiffusionONNX(GaussianDiffusion):
         m = (self.spec_max + self.spec_min) / 2.
         return x * d + m
 
-    def forward(self, condition, speedup):
+    def forward(self, condition, speedup: int):
         condition = condition.transpose(1, 2)  # [1, T, H] => [1, H, T]
         device = condition.device
         n_frames = condition.shape[2]
