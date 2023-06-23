@@ -74,8 +74,8 @@ class BaseBinarizer:
         self.timestep = hparams['hop_size'] / hparams['audio_sample_rate']
 
         # load each dataset
-        for ds_id, data_dir in zip(self.spk_ids, self.raw_data_dirs):
-            self.load_meta_data(pathlib.Path(data_dir), ds_id)
+        for spk_id, data_dir in zip(self.spk_ids, self.raw_data_dirs):
+            self.load_meta_data(pathlib.Path(data_dir), spk_id)
         self.item_names = sorted(list(self.items.keys()))
         self._train_item_names, self._valid_item_names = self.split_train_valid_set()
 
@@ -83,7 +83,7 @@ class BaseBinarizer:
             random.seed(hparams['seed'])
             random.shuffle(self.item_names)
 
-    def load_meta_data(self, raw_data_dir: pathlib.Path, ds_id):
+    def load_meta_data(self, raw_data_dir: pathlib.Path, spk_id):
         raise NotImplementedError()
 
     def split_train_valid_set(self):

@@ -2921,7 +2921,7 @@ List of data item names or name prefixes for the validation set. For each string
 - If `s` equals to an actual item name, add that item to validation set.
 - If `s` does not equal to any item names, add all items whose names start with `s` to validation set.
 
-For multi-speaker datasets, "spk_id:name_prefix" can be used to apply the rules above within data from a specific speaker, where spk_id represents the speaker index.
+For multi-speaker combined datasets, "ds_id:name_prefix" can be used to apply the rules above within data from a specific sub-dataset, where ds_id represents the dataset index.
 
 #### visibility
 
