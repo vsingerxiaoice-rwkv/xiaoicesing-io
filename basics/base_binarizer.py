@@ -49,16 +49,16 @@ class BaseBinarizer:
         if not isinstance(data_dir, list):
             data_dir = [data_dir]
 
-        speakers = hparams['speakers']
-        assert isinstance(speakers, list), 'Speakers must be a list'
-        assert len(speakers) == len(set(speakers)), 'Speakers cannot contain duplicate names'
+        self.speakers = hparams['speakers']
+        assert isinstance(self.speakers, list), 'Speakers must be a list'
+        assert len(self.speakers) == len(set(self.speakers)), 'Speakers cannot contain duplicate names'
 
         self.raw_data_dirs = [pathlib.Path(d) for d in data_dir]
         self.binary_data_dir = pathlib.Path(hparams['binary_data_dir'])
         self.data_attrs = [] if data_attrs is None else data_attrs
 
         if hparams['use_spk_id']:
-            assert len(speakers) == len(self.raw_data_dirs), \
+            assert len(self.speakers) == len(self.raw_data_dirs), \
                 'Number of raw data dirs must equal number of speaker names!'
 
         self.binarization_args = hparams['binarization_args']
@@ -66,12 +66,15 @@ class BaseBinarizer:
         self.device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
 
         self.spk_map = None
+        self.spk_ids = hparams['spk_ids']
+        self.build_spk_map()
+
         self.items = {}
         self.phone_encoder = TokenTextEncoder(vocab_list=build_phoneme_list())
         self.timestep = hparams['hop_size'] / hparams['audio_sample_rate']
 
         # load each dataset
-        for ds_id, data_dir in enumerate(self.raw_data_dirs):
+        for ds_id, data_dir in zip(self.spk_ids, self.raw_data_dirs):
             self.load_meta_data(pathlib.Path(data_dir), ds_id)
         self.item_names = sorted(list(self.items.keys()))
         self._train_item_names, self._valid_item_names = self.split_train_valid_set()
@@ -127,9 +130,15 @@ class BaseBinarizer:
         return self._valid_item_names
 
     def build_spk_map(self):
-        spk_map = {x: i for i, x in enumerate(hparams['speakers'])}
-        assert len(spk_map) <= hparams['num_spk'], 'Actual number of speakers should be smaller than num_spk!'
-        self.spk_map = spk_map
+        if not self.spk_ids:
+            self.spk_ids = list(range(len(self.raw_data_dirs)))
+        else:
+            assert len(self.spk_ids) == len(self.raw_data_dirs), \
+                'Length of explicitly given spk_ids must equal the number of raw datasets.'
+        assert max(self.spk_ids) < hparams['num_spk'], \
+            f'Index in spk_id sequence {self.spk_ids} is out of range. All values should be smaller than num_spk.'
+        self.spk_map = {x: i for x, i in zip(self.speakers, self.spk_ids)}
+        print("| spk_map: ", self.spk_map)
 
     def meta_data_iterator(self, prefix):
         if prefix == 'train':
@@ -144,8 +153,6 @@ class BaseBinarizer:
         os.makedirs(hparams['binary_data_dir'], exist_ok=True)
 
         # Copy spk_map and dictionary to binary data dir
-        self.build_spk_map()
-        print("| spk_map: ", self.spk_map)
         spk_map_fn = f"{hparams['binary_data_dir']}/spk_map.json"
         json.dump(self.spk_map, open(spk_map_fn, 'w', encoding='utf-8'))
         shutil.copy(locate_dictionary(), self.binary_data_dir / 'dictionary.txt')

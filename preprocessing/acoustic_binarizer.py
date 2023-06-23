@@ -241,20 +241,22 @@ class AcousticBinarizer(BaseBinarizer):
             aug_args = self.augmentation_args['fixed_pitch_shifting']
             targets = aug_args['targets']
             scale = aug_args['scale']
+            spk_id_size = max(self.spk_ids) + 1
+            min_num_spk = (1 + len(targets)) * spk_id_size
             assert not self.augmentation_args['random_pitch_shifting']['enabled'], \
                 'Fixed pitch shifting augmentation is not compatible with random pitch shifting.'
             assert len(targets) == len(set(targets)), \
                 'Fixed pitch shifting augmentation requires having no duplicate targets.'
             assert hparams['use_spk_id'], 'Fixed pitch shifting augmentation requires use_spk_id == True.'
-            assert hparams['num_spk'] >= (1 + len(targets)) * len(self.spk_map), \
-                'Fixed pitch shifting augmentation requires num_spk >= (1 + len(targets)) * len(speakers).'
+            assert hparams['num_spk'] >= min_num_spk, \
+                f'Fixed pitch shifting augmentation requires num_spk >= (1 + len(targets)) * (max(spk_ids) + 1).'
             assert scale < 1, 'Fixed pitch shifting augmentation requires scale < 1.'
 
             aug_ins = SpectrogramStretchAugmentation(self.raw_data_dirs, aug_args)
             for i, target in enumerate(targets):
                 aug_item_names = random.choices(all_item_names, k=int(scale * len(all_item_names)))
                 for aug_item_name in aug_item_names:
-                    replace_spk_id = int(aug_item_name.split(':', maxsplit=1)[0]) + (i + 1) * len(self.spk_map)
+                    replace_spk_id = int(aug_item_name.split(':', maxsplit=1)[0]) + (i + 1) * spk_id_size
                     aug_task = {
                         'name': aug_item_name,
                         'func': aug_ins.process_item,

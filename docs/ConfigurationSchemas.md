@@ -2822,6 +2822,30 @@ required
 
 list
 
+### spk_ids
+
+The IDs of speakers in a multi-speaker model. If an empty list is given, speaker IDs will be automatically generated as $0,1,2,...,N_{spk}-1$. IDs can be duplicate or discontinuous.
+
+#### visibility
+
+acoustic, variance
+
+#### scope
+
+preprocessing
+
+#### customizability
+
+required
+
+#### type
+
+List[int]
+
+#### default
+
+[]
+
 ### spec_min
 
 Minimum mel spectrogram value used for normalization to [-1, 1]. Different mel bins can have different minimum values.

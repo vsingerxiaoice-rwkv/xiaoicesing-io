@@ -5,6 +5,7 @@ task_cls: training.variance_task.VarianceTask
 num_spk: 1
 speakers:
   - opencpop
+spk_ids: []
 test_prefixes: [
     '2044',
     '2086',
