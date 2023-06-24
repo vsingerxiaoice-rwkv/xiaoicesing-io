@@ -358,7 +358,8 @@ class DiffSingerVarianceExporter(BaseExporter):
             )
 
         if self.model.predict_variances:
-            repeat_bins = hparams['variances_prediction_args']['repeat_bins']
+            total_repeat_bins = hparams['variances_prediction_args']['total_repeat_bins']
+            repeat_bins = total_repeat_bins // len(self.model.variance_prediction_list)
 
             # Prepare inputs for preprocessor of MultiVarianceDiffusion
             pitch = torch.FloatTensor([[60.] * 15]).to(self.device)

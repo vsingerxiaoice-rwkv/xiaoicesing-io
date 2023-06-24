@@ -3203,14 +3203,9 @@ variance
 
 4
 
-### variances_prediction_args.repeat_bins
+### variances_prediction_args.total_repeat_bins
 
-Number of repeating bins of each parameter in MultiVarianceDiffusion. Total repeating bins in MultiVarianceDiffusion are calculated as follows:
-$$
-B=N\times B'
-$$
-where $B'$ is the number of bins of each parameter, $N$ is the number of parameters.
-
+Total number of repeating bins in MultiVarianceDiffusion. Repeating bins are distributed evenly to each variance parameter.
 #### visibility
 
 variance
@@ -3229,7 +3224,7 @@ int
 
 #### default
 
-24
+48
 
 ### variances_prediction_args.residual_channels
 

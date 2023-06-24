@@ -70,7 +70,7 @@ breathiness_db_max: -20.0
 breathiness_smooth_width: 0.12
 
 variances_prediction_args:
-  repeat_bins: 48
+  total_repeat_bins: 48
   residual_layers: 10
   residual_channels: 192
   dilation_cycle_length: 4  # *
