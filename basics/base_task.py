@@ -345,7 +345,7 @@ class BaseTask(pl.LightningModule):
                     code_dir = work_dir / 'codes' / datetime.now().strftime('%Y%m%d%H%M%S')
                     code_dir.mkdir(exist_ok=True, parents=True)
                     for c in hparams['save_codes']:
-                        shutil.copytree(c, code_dir, dirs_exist_ok=True)
+                        shutil.copytree(c, code_dir / c, dirs_exist_ok=True)
                     print(f'| Copied codes to {code_dir}.')
                 # Copy spk_map.json and dictionary.txt to work dir
                 binary_dir = pathlib.Path(hparams['binary_data_dir'])
