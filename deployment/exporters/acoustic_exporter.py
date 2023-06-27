@@ -56,7 +56,7 @@ class DiffSingerAcousticExporter(BaseExporter):
                 # In case the user did not specify any speaker settings:
                 if len(self.spk_map) == 1:
                     # If there is only one speaker, freeze him/her.
-                    first_spk = next(self.spk_map.keys())
+                    first_spk = next(iter(self.spk_map.keys()))
                     self.freeze_spk = (first_spk, {first_spk: 1.0})
                 else:
                     # If there are multiple speakers, export them all.
