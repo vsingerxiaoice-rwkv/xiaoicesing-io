@@ -53,7 +53,7 @@ class AcousticBinarizer(BaseBinarizer):
         self.need_energy = hparams.get('use_energy_embed', False)
         self.need_breathiness = hparams.get('use_breathiness_embed', False)
 
-    def load_meta_data(self, raw_data_dir: pathlib.Path, spk_id):
+    def load_meta_data(self, raw_data_dir: pathlib.Path, ds_id, spk_id):
         meta_data_dict = {}
         if (raw_data_dir / 'transcriptions.csv').exists():
             for utterance_label in csv.DictReader(
@@ -68,7 +68,7 @@ class AcousticBinarizer(BaseBinarizer):
                 }
                 assert len(temp_dict['ph_seq']) == len(temp_dict['ph_dur']), \
                     f'Lengths of ph_seq and ph_dur mismatch in \'{item_name}\'.'
-                meta_data_dict[f'{spk_id}:{item_name}'] = temp_dict
+                meta_data_dict[f'{ds_id}:{item_name}'] = temp_dict
         else:
             raise FileNotFoundError(
                 f'transcriptions.csv not found in {raw_data_dir}. '

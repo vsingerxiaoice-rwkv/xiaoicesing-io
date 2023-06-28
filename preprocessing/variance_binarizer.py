@@ -50,7 +50,7 @@ class VarianceBinarizer(BaseBinarizer):
         self.lr = LengthRegulator().to(self.device)
         # self.smooth: nn.Conv1d = None
 
-    def load_meta_data(self, raw_data_dir: pathlib.Path, spk_id):
+    def load_meta_data(self, raw_data_dir: pathlib.Path, ds_id, spk_id):
         meta_data_dict = {}
         for utterance_label in csv.DictReader(
                 open(raw_data_dir / 'transcriptions.csv', 'r', encoding='utf8')
@@ -79,7 +79,7 @@ class VarianceBinarizer(BaseBinarizer):
                 assert any([note != 'rest' for note in temp_dict['note_seq']]), \
                     f'All notes are rest in \'{item_name}\'.'
 
-            meta_data_dict[f'{spk_id}:{item_name}'] = temp_dict
+            meta_data_dict[f'{ds_id}:{item_name}'] = temp_dict
 
         self.items.update(meta_data_dict)
 
