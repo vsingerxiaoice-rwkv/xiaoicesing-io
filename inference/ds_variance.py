@@ -11,6 +11,7 @@ import torch
 import torch.nn as nn
 import torch.nn.functional as F
 from scipy import interpolate
+from typing import List, Tuple
 
 from basics.base_svs_infer import BaseSVSInfer
 from modules.fastspeech.tts_modules import (
@@ -288,7 +289,7 @@ class DiffSingerVarianceInfer(BaseSVSInfer):
             seed: int = -1
     ):
         batches = []
-        predictor_flags: list[tuple[bool, bool, bool]] = []
+        predictor_flags: List[Tuple[bool, bool, bool]] = []
 
         for i, param in enumerate(params):
             param: dict
