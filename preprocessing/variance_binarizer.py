@@ -110,7 +110,7 @@ class VarianceBinarizer(BaseBinarizer):
             self.lr, ph_dur_sec, length, self.timestep, device=self.device
         )
 
-        if hparams['predict_dur'] and (hparams['predict_pitch'] or self.predict_variances):
+        if hparams['predict_pitch'] or self.predict_variances:
             processed_input['mel2ph'] = mel2ph.cpu().numpy()
 
         # Below: extract actual f0, convert to pitch and calculate delta pitch
