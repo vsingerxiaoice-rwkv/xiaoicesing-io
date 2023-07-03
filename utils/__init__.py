@@ -1,3 +1,5 @@
+from __future__ import annotations
+
 import pathlib
 import re
 import time
@@ -32,6 +34,19 @@ def collate_nd(values, pad_value=0, max_len=None):
     for i, v in enumerate(values):
         res[i, :len(v), ...] = v
     return res
+
+
+def random_continuous_masks(*shape: int, dim: int, device: str | torch.device = 'cpu'):
+    start, end = torch.sort(
+        torch.randint(
+            low=0, high=shape[dim] + 1, size=(*shape[:dim], 2, *((1,) * (len(shape) - dim - 1))), device=device
+        ).expand(*((-1,) * (dim + 1)), *shape[dim + 1:]), dim=dim
+    )[0].split(1, dim=dim)
+    idx = torch.arange(
+        0, shape[dim], dtype=torch.long, device=device
+    ).reshape(*((1,) * dim), shape[dim], *((1,) * (len(shape) - dim - 1)))
+    masks = (idx >= start) & (idx < end)
+    return masks
 
 
 def _is_batch_full(batch, num_frames, max_batch_frames, max_batch_size):
