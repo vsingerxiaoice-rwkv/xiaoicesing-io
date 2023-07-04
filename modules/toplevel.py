@@ -151,9 +151,11 @@ class DiffSingerVariance(ParameterAdaptorModule, CategorizedModule):
 
         if self.predict_pitch:
             if pitch_retake is None:
-                pitch_retake = torch.ones_like(mel2ph, dtype=torch.bool)
-            pitch_cond = condition + self.pitch_retake_embed(pitch_retake.long())
-            base_pitch = base_pitch * pitch_retake + pitch * ~pitch_retake
+                pitch_retake_embed = self.pitch_retake_embed(torch.ones_like(mel2ph))
+            else:
+                pitch_retake_embed = self.pitch_retake_embed(pitch_retake.long())
+                base_pitch = base_pitch * pitch_retake + pitch * ~pitch_retake
+            pitch_cond = condition + pitch_retake_embed
             pitch_cond += self.base_pitch_embed(base_pitch[:, :, None])
             if infer:
                 pitch_pred_out = self.pitch_predictor(pitch_cond, infer=True)
