@@ -33,7 +33,7 @@ VARIANCE_ITEM_ATTRIBUTES = [
     'breathiness',  # frame-level RMS of aperiodic parts (dB), float32[T_s,]
 ]
 
-# These operators are used as global variable due to a PyTorch shared memory bug on Windows.
+# These operators are used as global variables due to a PyTorch shared memory bug on Windows platforms.
 # See https://github.com/pytorch/pytorch/issues/100358
 midi_smooth: SinusoidalSmoothingConv1d = None
 energy_smooth: SinusoidalSmoothingConv1d = None
@@ -48,7 +48,6 @@ class VarianceBinarizer(BaseBinarizer):
         predict_breathiness = hparams['predict_breathiness']
         self.predict_variances = predict_energy or predict_breathiness
         self.lr = LengthRegulator().to(self.device)
-        # self.smooth: nn.Conv1d = None
 
     def load_meta_data(self, raw_data_dir: pathlib.Path, ds_id, spk_id):
         meta_data_dict = {}
