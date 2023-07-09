@@ -37,6 +37,7 @@ class DiffSingerAcousticExporter(BaseExporter):
         self.diffusion_cache_path = self.cache_dir / 'diffusion.onnx'
 
         # Attributes for logging
+        self.model_class_name = remove_suffix(self.model.__class__.__name__, 'ONNX')
         self.fs2_class_name = remove_suffix(self.model.fs2.__class__.__name__, 'ONNX')
         self.denoiser_class_name = remove_suffix(self.model.diffusion.denoise_fn.__class__.__name__, 'ONNX')
         self.diffusion_class_name = remove_suffix(self.model.diffusion.__class__.__name__, 'ONNX')
@@ -283,7 +284,7 @@ class DiffSingerAcousticExporter(BaseExporter):
         onnx_helper.model_add_prefixes(fs2, dim_prefix='fs2.', ignored_pattern=r'(n_tokens)|(n_frames)')
         onnx_helper.model_add_prefixes(diffusion, dim_prefix='diffusion.', ignored_pattern='n_frames')
         print(f'Merging {self.fs2_class_name} and {self.diffusion_class_name} '
-              f'back into {self.model.__class__.__name__}...')
+              f'back into {self.model_class_name}...')
         merged = onnx.compose.merge_models(
             fs2, diffusion, io_map=[('condition', 'condition')],
             prefix1='', prefix2='', doc_string='',

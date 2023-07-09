@@ -49,7 +49,8 @@ def main():
               help='(for random time stretching) Expose velocity control functionality.')
 @click.option('--export_spk', type=str, required=False, multiple=True, metavar='<mix>',
               help='(for multi-speaker models) Export one or more speaker or speaker mix keys.')
-@click.option('--freeze_spk', type=str, required=False)
+@click.option('--freeze_spk', type=str, required=False, metavar='<mix>',
+              help='(for multi-speaker models) Freeze one speaker or speaker mix into the model.')
 def acoustic(
         exp: str,
         ckpt: int = None,
