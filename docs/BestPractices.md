@@ -14,14 +14,14 @@ A dictionary is a .txt file, in which each line represents a mapping rule from o
 
 Syllable names and phoneme names can be customized, but with the following limitations/suggestions:
 
-- `SP` (rest), `AP` (breath) and `<PAD>` (padding) cannot be phoneme names because they are reserved.
-- `-` and `+` cannot be phoneme names because they are defined as slur tags in most singing voice synthesis editors.
+- `SP` (rest), `AP` (breath) and `<PAD>` (padding) cannot be used because they are reserved.
+- `-` and `+` cannot be used because they are defined as slur tags in most singing voice synthesis editors.
 - Special characters including but not limited to `@`, `#`, `&`, `|`, `/`, `<`, `>`, etc. should be avoided because they may be used as special tags in the future format changes. Using them now is okay, and all modifications will be notified in advance.
-- ASCII characters are preferred for the most encoding compatibility, but all UTF-8 characters are acceptable.
+- ASCII characters are preferred for the best encoding compatibility, but all UTF-8 characters are acceptable.
 
 ### Add a dictionary
 
-Assume you have made a dictionary file named `my_dict.txt`. Edit your  configuration file:
+Assume that you have made a dictionary file named `my_dict.txt`. Edit your  configuration file:
 
 ```yaml
 dictionary: my_dict.txt
@@ -51,7 +51,7 @@ The dictionary used to binarize the dataset will be copied to the binary data di
 
 ### Preset dictionaries
 
-There are currently some preset dictionaries for users to use directly:
+There are currently some preset dictionaries for you to use directly:
 
 |     dictionary     |        filename        | description                                                                                                                                                                                                                                                                                                                                                                                                                                                                                         |
 |:------------------:|:----------------------:|:----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------|
@@ -66,7 +66,7 @@ You can submit or propose a new dictionary by raising a topic in [Discussions](h
 - All syllables and phonemes in the dictionary should have linguistic meanings. Style tags (vocal fry, falsetto, etc.) should not appear in the dictionary.
 - Its syllables should be standard spelling or phonetic transcriptions (like pinyin in mandarin Chinese and romaji in Japanese) for easy integration with G2P modules.
 - Its phonemes should cover all (or almost all) possible pronunciations in that language.
-- Every syllable and every phoneme should have one, and only one certain pronunciation, in all or almost all situations in that language. Some slightly context-based pronunciation differences are allowed as the networks can learn.
+- Every syllable and every phoneme should have one, and only one certain pronunciation, in all or almost all situations in that language. Some slight context-based pronunciation differences are allowed as the networks can learn.
 - Most native speakers/singers of that language should be able to easily cover all phonemes in the dictionary. This means the dictionary should not contain extremely rare or highly customized phonemes of some dialects or accents.
 - It should not bring too much difficulty and complexity to the data labeling workflow, and it should be easy to use for end users of voicebanks.
 

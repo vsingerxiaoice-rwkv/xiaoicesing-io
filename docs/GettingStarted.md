@@ -6,13 +6,13 @@
 
 DiffSinger requires Python 3.8 or later. We strongly recommend you create a virtual environment via Conda or venv before installing dependencies.
 
-Install PyTorch 1.13 or later following the [official instructions](https://pytorch.org/get-started/locally/) according to your OS and hardware.
+1. Install PyTorch 1.13 or later following the [official instructions](https://pytorch.org/get-started/locally/) according to your OS and hardware.
 
-Install other dependencies via the following command:
+2. Install other dependencies via the following command:
 
-```bash
-pip install -r requirements.txt
-```
+   ```bash
+   pip install -r requirements.txt
+   ```
 
 ### Pretrained models
 
