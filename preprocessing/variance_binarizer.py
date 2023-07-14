@@ -82,10 +82,6 @@ class VarianceBinarizer(BaseBinarizer):
 
         self.items.update(meta_data_dict)
 
-    def check_coverage(self):
-        print('Coverage checks are temporarily skipped.')
-        pass
-
     @torch.no_grad()
     def process_item(self, item_name, meta_data, binarization_args):
         seconds = sum(meta_data['ph_dur'])
