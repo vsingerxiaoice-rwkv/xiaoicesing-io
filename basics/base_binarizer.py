@@ -185,6 +185,7 @@ class BaseBinarizer:
                 continue
             phoneme_map[ph] += 1
         ph_occurred = set(ph_occurred)
+
         print('===== Phoneme Distribution Summary =====')
         for i, key in enumerate(sorted(phoneme_map.keys())):
             if i == len(ph_required) - 1:
