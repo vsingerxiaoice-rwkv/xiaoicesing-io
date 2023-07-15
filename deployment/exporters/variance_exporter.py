@@ -58,8 +58,10 @@ class DiffSingerVarianceExporter(BaseExporter):
             if self.model.predict_variances else None
 
         # Attributes for exporting
-        self.freeze_spk: Tuple[str, Dict[str, float]] = freeze_spk
-        self.export_spk: List[Tuple[str, Dict[str, float]]] = export_spk if export_spk is not None else []
+        self.freeze_spk: Tuple[str, Dict[str, float]] = freeze_spk \
+            if hparams['use_spk_id'] else None
+        self.export_spk: List[Tuple[str, Dict[str, float]]] = export_spk \
+            if hparams['use_spk_id'] and export_spk is not None else []
         if hparams['use_spk_id']:
             if not self.export_spk and self.freeze_spk is None:
                 # In case the user did not specify any speaker settings:

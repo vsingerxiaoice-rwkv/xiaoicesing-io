@@ -45,8 +45,10 @@ class DiffSingerAcousticExporter(BaseExporter):
         # Attributes for exporting
         self.expose_gender = expose_gender
         self.expose_velocity = expose_velocity
-        self.freeze_spk: Tuple[str, Dict[str, float]] = freeze_spk
-        self.export_spk: List[Tuple[str, Dict[str, float]]] = export_spk if export_spk is not None else []
+        self.freeze_spk: Tuple[str, Dict[str, float]] = freeze_spk \
+            if hparams['use_spk_id'] else None
+        self.export_spk: List[Tuple[str, Dict[str, float]]] = export_spk \
+            if hparams['use_spk_id'] and export_spk is not None else []
         if hparams.get('use_key_shift_embed', False) and not self.expose_gender:
             shift_min, shift_max = hparams['augmentation_args']['random_pitch_shifting']['range']
             key_shift = freeze_gender * shift_max if freeze_gender >= 0. else freeze_gender * abs(shift_min)
