@@ -132,11 +132,20 @@ class DiffSingerVarianceONNX(DiffSingerVariance):
         smooth.weight.data = smooth_kernel[None, None]
         self.smooth = smooth.to(device)
 
+    def embed_frozen_spk(self, encoder_out):
+        if hparams['use_spk_id'] and hasattr(self, 'frozen_spk_embed'):
+            encoder_out += self.frozen_spk_embed
+        return encoder_out
+
     def forward_linguistic_encoder_word(self, tokens, word_div, word_dur):
-        return self.fs2.forward_encoder_word(tokens, word_div, word_dur)
+        encoder_out, x_masks = self.fs2.forward_encoder_word(tokens, word_div, word_dur)
+        encoder_out = self.embed_frozen_spk(encoder_out)
+        return encoder_out, x_masks
 
     def forward_linguistic_encoder_phoneme(self, tokens, ph_dur):
-        return self.fs2.forward_encoder_phoneme(tokens, ph_dur)
+        encoder_out, x_masks = self.fs2.forward_encoder_phoneme(tokens, ph_dur)
+        encoder_out = self.embed_frozen_spk(encoder_out)
+        return encoder_out, x_masks
 
     def forward_dur_predictor(self, encoder_out, x_masks, ph_midi):
         return self.fs2.forward_dur_predictor(encoder_out, x_masks, ph_midi)

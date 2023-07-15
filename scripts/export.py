@@ -32,6 +32,36 @@ def find_exp(exp):
     return exp
 
 
+def parse_spk_settings(export_spk, freeze_spk):
+    if export_spk is None:
+        export_spk = []
+    else:
+        export_spk = list(export_spk)
+    from utils.infer_utils import parse_commandline_spk_mix
+    spk_name_pattern = r'[0-9A-Za-z_-]+'
+    export_spk_mix = []
+    for spk in export_spk:
+        assert '=' in spk or '|' not in spk, \
+            'You must specify an alias with \'NAME=\' for each speaker mix.'
+        if '=' in spk:
+            alias, mix = spk.split('=', maxsplit=1)
+            assert re.fullmatch(spk_name_pattern, alias) is not None, f'Invalid alias \'{alias}\' for speaker mix.'
+            export_spk_mix.append((alias, parse_commandline_spk_mix(mix)))
+        else:
+            export_spk_mix.append((spk, {spk: 1.0}))
+    freeze_spk_mix = None
+    if freeze_spk is not None:
+        assert '=' in freeze_spk or '|' not in freeze_spk, \
+            'You must specify an alias with \'NAME=\' for each speaker mix.'
+        if '=' in freeze_spk:
+            alias, mix = freeze_spk.split('=', maxsplit=1)
+            assert re.fullmatch(spk_name_pattern, alias) is not None, f'Invalid alias \'{alias}\' for speaker mix.'
+            freeze_spk_mix = (alias, parse_commandline_spk_mix(mix))
+        else:
+            freeze_spk_mix = (freeze_spk, {freeze_spk: 1.0})
+    return export_spk_mix, freeze_spk_mix
+
+
 @click.group()
 def main():
     pass
@@ -76,32 +106,7 @@ def acoustic(
     else:
         out = Path(out)
     out = out.resolve()
-    if export_spk is None:
-        export_spk = []
-    else:
-        export_spk = list(export_spk)
-    from utils.infer_utils import parse_commandline_spk_mix
-    spk_name_pattern = r'[0-9A-Za-z_-]+'
-    export_spk_mix = []
-    for spk in export_spk:
-        assert '=' in spk or '|' not in spk, \
-            'You must specify an alias with \'NAME=\' for each speaker mix.'
-        if '=' in spk:
-            alias, mix = spk.split('=', maxsplit=1)
-            assert re.fullmatch(spk_name_pattern, alias) is not None, f'Invalid alias \'{alias}\' for speaker mix.'
-            export_spk_mix.append((alias, parse_commandline_spk_mix(mix)))
-        else:
-            export_spk_mix.append((spk, {spk: 1.0}))
-    freeze_spk_mix = None
-    if freeze_spk is not None:
-        assert '=' in freeze_spk or '|' not in freeze_spk, \
-            'You must specify an alias with \'NAME=\' for each speaker mix.'
-        if '=' in freeze_spk:
-            alias, mix = freeze_spk.split('=', maxsplit=1)
-            assert re.fullmatch(spk_name_pattern, alias) is not None, f'Invalid alias \'{alias}\' for speaker mix.'
-            freeze_spk_mix = (alias, parse_commandline_spk_mix(mix))
-        else:
-            freeze_spk_mix = (freeze_spk, {freeze_spk: 1.0})
+    export_spk_mix, freeze_spk_mix = parse_spk_settings(export_spk, freeze_spk)
 
     # Load configurations
     sys.argv = [
@@ -132,18 +137,28 @@ def acoustic(
 @click.option('--exp', type=str, required=True, metavar='<exp>', help='Choose an experiment to export.')
 @click.option('--ckpt', type=int, required=False, metavar='<steps>', help='Checkpoint training steps.')
 @click.option('--out', type=str, required=False, metavar='<dir>', help='Output directory for the artifacts.')
+@click.option('--export_spk', type=str, required=False, multiple=True, metavar='<mix>',
+              help='(for multi-speaker models) Export one or more speaker or speaker mix keys.')
+@click.option('--freeze_spk', type=str, required=False, metavar='<mix>',
+              help='(for multi-speaker models) Freeze one speaker or speaker mix into the model.')
 def variance(
         exp: str,
         ckpt: int = None,
         out: str = None,
+        export_spk: List[str] = None,
+        freeze_spk: str = None
 ):
     # Validate arguments
+    if export_spk and freeze_spk:
+        print('--export_spk is exclusive to --freeze_spk.')
+        exit(-1)
     exp = find_exp(exp)
     if out is None:
         out = root_dir / 'artifacts' / exp
     else:
         out = Path(out)
     out = out.resolve()
+    export_spk_mix, freeze_spk_mix = parse_spk_settings(export_spk, freeze_spk)
 
     # Load configurations
     sys.argv = [
@@ -159,6 +174,8 @@ def variance(
         device=torch.device('cuda' if torch.cuda.is_available() else 'cpu'),
         cache_dir=root_dir / 'deployment' / 'cache',
         ckpt_steps=ckpt,
+        export_spk=export_spk_mix,
+        freeze_spk=freeze_spk_mix
     )
     exporter.export(out)
 
