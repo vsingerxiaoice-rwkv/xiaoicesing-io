@@ -221,7 +221,7 @@ class GaussianDiffusion(nn.Module):
         shape = (b, self.num_feats, self.out_dims, cond.shape[2])
         x = torch.randn(shape, device=device)
         if hparams.get('pndm_speedup') and hparams['pndm_speedup'] > 1:
-            algorithm = hparams.get('diff_accelerator', 'dpm-solver')
+            algorithm = hparams.get('diff_accelerator', 'ddim')
             if algorithm == 'dpm-solver':
                 from inference.dpm_solver_pytorch import NoiseScheduleVP, model_wrapper, DPM_Solver
                 # 1. Define the noise schedule.
