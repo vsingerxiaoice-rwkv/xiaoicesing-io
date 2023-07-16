@@ -19,6 +19,12 @@ DiffSinger requires Python 3.8 or later. We strongly recommend you create a virt
 - **(Required)** Get the pretrained vocoder from the [DiffSinger Community Vocoders Project](https://openvpi.github.io/vocoders) and unzip it into `checkpoints/` folder, or train a ultra-lightweight [DDSP](https://github.com/yxlllc/pc-ddsp) vocoder first by yourself, then configure it according to the relevant [instructions](https://github.com/yxlllc/pc-ddsp/blob/master/DiffSinger.md).
 - Get acoustic or variance models from [Releases](https://github.com/openvpi/DiffSinger/releases) or elsewhere and unzip them into the `checkpoints/` folder.
 
+## Configuration
+
+Every model needs a configuration file to run preprocessing, training, inference and deployment. Templates of configurations files are in [configs/templates](../configs/templates/). Please **copy** the templates to your own data directory before you edit them.
+
+For more details about configurable parameters, see [Configuration Schemas](ConfigurationSchemas.md).
+
 ## Preprocessing
 
 Raw data pieces and transcriptions should be binarized into dataset files before training.
