@@ -1,22 +1,33 @@
-from datetime import datetime
+import logging
+import os
+import pathlib
 import shutil
+import sys
+from datetime import datetime
+from typing import Dict
 
 import matplotlib
 
+import utils
+from utils.text_encoder import TokenTextEncoder
+
 matplotlib.use('Agg')
 
-from utils.hparams import hparams, set_hparams
-import random
-import sys
-import numpy as np
-import torch.distributed as dist
-from pytorch_lightning.loggers import TensorBoardLogger
-from utils.pl_utils import LatestModelCheckpoint, BaseTrainer, data_loader, DDP
-from torch import nn
 import torch.utils.data
-import utils
-import logging
-import os
+from torchmetrics import Metric, MeanMetric
+import lightning.pytorch as pl
+from lightning.pytorch.callbacks import LearningRateMonitor
+from lightning.pytorch.loggers import TensorBoardLogger
+from lightning.pytorch.utilities.rank_zero import rank_zero_debug, rank_zero_info, rank_zero_only
+
+from basics.base_module import CategorizedModule
+from utils.hparams import hparams
+from utils.training_utils import (
+    DsModelCheckpoint, DsTQDMProgressBar,
+    DsBatchSampler, DsEvalBatchSampler,
+    get_latest_checkpoint_path, get_strategy
+)
+from utils.phoneme_utils import locate_dictionary, build_phoneme_list
 
 torch.multiprocessing.set_sharing_strategy(os.getenv('TORCH_SHARE_STRATEGY', 'file_system'))
 
@@ -25,8 +36,8 @@ logging.basicConfig(stream=sys.stdout, level=logging.INFO,
                     format=log_format, datefmt='%m/%d %I:%M:%S %p')
 
 
-class BaseTask(nn.Module):
-    '''
+class BaseTask(pl.LightningModule):
+    """
         Base class for training tasks.
         1. *load_ckpt*:
             load checkpoint;
@@ -44,147 +55,233 @@ class BaseTask(nn.Module):
             how to build the model, the optimizer and the training scheduler;
         2. *_training_step*:
             one training step of the model;
-        3. *validation_end* and *_validation_end*:
+        3. *on_validation_end* and *_on_validation_end*:
             postprocess the validation output.
-    '''
+    """
 
     def __init__(self, *args, **kwargs):
         # dataset configs
-        super(BaseTask, self).__init__(*args, **kwargs)
-        self.current_epoch = 0
-        self.global_step = 0
-        self.loaded_optimizer_states_dict = {}
-        self.trainer = None
-        self.logger = None
-        self.on_gpu = False
-        self.use_dp = False
-        self.use_ddp = False
-        self.example_input_array = None
+        super().__init__(*args, **kwargs)
+        self.dataset_cls = None
+        self.max_batch_frames = hparams['max_batch_frames']
+        self.max_batch_size = hparams['max_batch_size']
+        self.max_val_batch_frames = hparams['max_val_batch_frames']
+        if self.max_val_batch_frames == -1:
+            hparams['max_val_batch_frames'] = self.max_val_batch_frames = self.max_batch_frames
+        self.max_val_batch_size = hparams['max_val_batch_size']
+        if self.max_val_batch_size == -1:
+            hparams['max_val_batch_size'] = self.max_val_batch_size = self.max_batch_size
 
-        self.max_tokens = hparams['max_tokens']
-        self.max_sentences = hparams['max_sentences']
-        self.max_eval_tokens = hparams['max_eval_tokens']
-        if self.max_eval_tokens == -1:
-            hparams['max_eval_tokens'] = self.max_eval_tokens = self.max_tokens
-        self.max_eval_sentences = hparams['max_eval_sentences']
-        if self.max_eval_sentences == -1:
-            hparams['max_eval_sentences'] = self.max_eval_sentences = self.max_sentences
-
+        self.training_sampler = None
         self.model = None
-        self.training_losses_meter = None
+        self.skip_immediate_validation = False
+        self.skip_immediate_ckpt_save = False
+
+        self.valid_metrics: Dict[str, Metric] = {
+            'total_loss': MeanMetric()
+        }
 
     ###########
     # Training, validation and testing
     ###########
+    def setup(self, stage):
+        self.phone_encoder = self.build_phone_encoder()
+        self.model = self.build_model()
+        self.print_arch()
+        self.build_losses()
+        self.train_dataset = self.dataset_cls(hparams['train_set_name'])
+        self.valid_dataset = self.dataset_cls(hparams['valid_set_name'])
+
+    @staticmethod
+    def build_phone_encoder():
+        phone_list = build_phoneme_list()
+        return TokenTextEncoder(vocab_list=phone_list)
+
     def build_model(self):
-        raise NotImplementedError
+        raise NotImplementedError()
 
-    def load_ckpt(self, ckpt_base_dir, current_model_name=None, model_name='model', force=True, strict=True):
-        # This function is updated on 2021.12.13
-        if current_model_name is None:
-            current_model_name = model_name
-        utils.load_ckpt(self.__getattr__(current_model_name), ckpt_base_dir, current_model_name, force, strict)
+    @rank_zero_only
+    def print_arch(self):
+        utils.print_arch(self.model)
 
-    def on_epoch_start(self):
-        self.training_losses_meter = {'total_loss': utils.AvgrageMeter()}
+    def build_losses(self):
+        raise NotImplementedError()
 
-    def _training_step(self, sample, batch_idx, optimizer_idx):
+    def run_model(self, sample, infer=False):
+        """
+        steps:
+            1. run the full model
+            2. calculate losses if not infer
+        """
+        raise NotImplementedError()
+
+    def on_train_epoch_start(self):
+        if self.training_sampler is not None:
+            self.training_sampler.set_epoch(self.current_epoch)
+
+    def _training_step(self, sample):
+        """
+        :return: total loss: torch.Tensor, loss_log: dict, other_log: dict
+        """
+        losses = self.run_model(sample)
+        total_loss = sum(losses.values())
+        return total_loss, {**losses, 'batch_size': sample['size']}
+
+    def training_step(self, sample, batch_idx, optimizer_idx=-1):
+        total_loss, log_outputs = self._training_step(sample)
+
+        # logs to progress bar
+        self.log_dict(log_outputs, prog_bar=True, logger=False, on_step=True, on_epoch=False)
+        self.log('lr', self.lr_schedulers().get_lr()[0], prog_bar=True, logger=False, on_step=True, on_epoch=False)
+        # logs to tensorboard
+        tb_log = {f'tr/{k}': v for k, v in log_outputs.items()}
+        if self.global_step % self.trainer.log_every_n_steps == 0:
+            self.logger.log_metrics(tb_log, step=self.global_step)
+
+        return total_loss
+
+    # def on_before_optimizer_step(self, *args, **kwargs):
+    #     self.log_dict(grad_norm(self, norm_type=2))
+
+    def _on_validation_start(self):
+        pass
+
+    def on_validation_start(self):
+        self._on_validation_start()
+        for metric in self.valid_metrics.values():
+            metric.to(self.device)
+            metric.reset()
+
+    def _validation_step(self, sample, batch_idx):
         """
 
         :param sample:
         :param batch_idx:
-        :return: total loss: torch.Tensor, loss_log: dict
+        :return: loss_log: dict, weight: int
         """
-        raise NotImplementedError
-
-    def training_step(self, sample, batch_idx, optimizer_idx=-1):
-        loss_ret = self._training_step(sample, batch_idx, optimizer_idx)
-        self.opt_idx = optimizer_idx
-        if loss_ret is None:
-            return {'loss': None}
-        total_loss, log_outputs = loss_ret
-        log_outputs = utils.tensors_to_scalars(log_outputs)
-        for k, v in log_outputs.items():
-            if k not in self.training_losses_meter:
-                self.training_losses_meter[k] = utils.AvgrageMeter()
-            if not np.isnan(v):
-                self.training_losses_meter[k].update(v)
-        self.training_losses_meter['total_loss'].update(total_loss.item())
-
-        try:
-            log_outputs['lr'] = self.scheduler.get_lr()
-            if isinstance(log_outputs['lr'], list):
-                log_outputs['lr'] = log_outputs['lr'][0]
-        except:
-            pass
-
-        # log_outputs['all_loss'] = total_loss.item()
-        progress_bar_log = log_outputs
-        tb_log = {f'tr/{k}': v for k, v in log_outputs.items()}
-        return {
-            'loss': total_loss,
-            'progress_bar': progress_bar_log,
-            'log': tb_log
-        }
-
-    def optimizer_step(self, epoch, batch_idx, optimizer, optimizer_idx):
-        optimizer.step()
-        optimizer.zero_grad()
-        if self.scheduler is not None:
-            self.scheduler.step(self.global_step // hparams['accumulate_grad_batches'])
-
-    def on_epoch_end(self):
-        loss_outputs = {k: round(v.avg, 4) for k, v in self.training_losses_meter.items()}
-        print(f"\n==============\n "
-              f"Epoch {self.current_epoch} ended. Steps: {self.global_step}. {loss_outputs}"
-              f"\n==============\n")
+        raise NotImplementedError()
 
     def validation_step(self, sample, batch_idx):
         """
 
         :param sample:
         :param batch_idx:
-        :return: output: dict
         """
-        raise NotImplementedError
-
-    def _validation_end(self, outputs):
-        """
-
-        :param outputs:
-        :return: loss_output: dict
-        """
-        raise NotImplementedError
-
-    def validation_end(self, outputs):
-        loss_output = self._validation_end(outputs)
-        print(f"\n==============\n "
-              f"valid results: {loss_output}"
-              f"\n==============\n")
-        return {
-            'log': {f'val/{k}': v for k, v in loss_output.items()},
-            'val_loss': loss_output['total_loss']
+        if self.skip_immediate_validation:
+            rank_zero_debug(f"Skip validation {batch_idx}")
+            return {}
+        with torch.autocast(self.device.type, enabled=False):
+            outputs, weight = self._validation_step(sample, batch_idx)
+        outputs = {
+            'total_loss': sum(outputs.values()),
+            **outputs
         }
+        for k, v in outputs.items():
+            if k not in self.valid_metrics:
+                self.valid_metrics[k] = MeanMetric().to(self.device)
+            self.valid_metrics[k].update(v, weight=weight)
+        return outputs
 
+    def on_validation_epoch_end(self):
+        if self.skip_immediate_validation:
+            self.skip_immediate_validation = False
+            self.skip_immediate_ckpt_save = True
+            return
+        metric_vals = {k: v.compute() for k, v in self.valid_metrics.items()}
+        self.log('val_loss', metric_vals['total_loss'], on_epoch=True, prog_bar=True, logger=False)
+        self.logger.log_metrics({f'val/{k}': v for k, v in metric_vals.items()}, step=self.global_step)
+        for metric in self.valid_metrics.values():
+            metric.reset()
+
+    # noinspection PyMethodMayBeStatic
     def build_scheduler(self, optimizer):
-        raise NotImplementedError
+        from utils import build_object_from_config
 
+        scheduler_args = hparams['lr_scheduler_args']
+        assert scheduler_args['scheduler_cls'] != ''
+        scheduler = build_object_from_config(
+            scheduler_args['scheduler_cls'],
+            optimizer,
+            **scheduler_args
+        )
+        return scheduler
+
+    # noinspection PyMethodMayBeStatic
     def build_optimizer(self, model):
-        raise NotImplementedError
+        from utils import build_object_from_config
+
+        optimizer_args = hparams['optimizer_args']
+        assert optimizer_args['optimizer_cls'] != ''
+        if 'beta1' in optimizer_args and 'beta2' in optimizer_args and 'betas' not in optimizer_args:
+            optimizer_args['betas'] = (optimizer_args['beta1'], optimizer_args['beta2'])
+        optimizer = build_object_from_config(
+            optimizer_args['optimizer_cls'],
+            filter(lambda p: p.requires_grad, model.parameters()),
+            **optimizer_args
+        )
+        return optimizer
 
     def configure_optimizers(self):
         optm = self.build_optimizer(self.model)
-        self.scheduler = self.build_scheduler(optm)
-        return [optm]
+        scheduler = self.build_scheduler(optm)
+        if scheduler is None:
+            return optm
+        return {
+            "optimizer": optm,
+            "lr_scheduler": {
+                "scheduler": scheduler,
+                "interval": "step",
+                "frequency": 1
+            }
+        }
 
-    def test_start(self):
-        pass
+    def train_dataloader(self):
+        self.training_sampler = DsBatchSampler(
+            self.train_dataset,
+            max_batch_frames=self.max_batch_frames,
+            max_batch_size=self.max_batch_size,
+            num_replicas=(self.trainer.distributed_sampler_kwargs or {}).get('num_replicas', 1),
+            rank=(self.trainer.distributed_sampler_kwargs or {}).get('rank', 0),
+            sort_by_similar_size=hparams['sort_by_len'],
+            required_batch_count_multiple=hparams['accumulate_grad_batches'],
+            shuffle_sample=True,
+            shuffle_batch=False,
+            seed=hparams['seed']
+        )
+        return torch.utils.data.DataLoader(self.train_dataset,
+                                           collate_fn=self.train_dataset.collater,
+                                           batch_sampler=self.training_sampler,
+                                           num_workers=hparams['ds_workers'],
+                                           prefetch_factor=hparams['dataloader_prefetch_factor'],
+                                           pin_memory=True,
+                                           persistent_workers=True)
+
+    def val_dataloader(self):
+        sampler = DsEvalBatchSampler(
+            self.valid_dataset,
+            max_batch_frames=self.max_val_batch_frames,
+            max_batch_size=self.max_val_batch_size,
+            rank=(self.trainer.distributed_sampler_kwargs or {}).get('rank', 0),
+            batch_by_size=False
+        )
+        return torch.utils.data.DataLoader(self.valid_dataset,
+                                           collate_fn=self.valid_dataset.collater,
+                                           batch_sampler=sampler,
+                                           num_workers=hparams['ds_workers'],
+                                           prefetch_factor=hparams['dataloader_prefetch_factor'],
+                                           shuffle=False)
+
+    def test_dataloader(self):
+        return self.val_dataloader()
+
+    def on_test_start(self):
+        self.on_validation_start()
 
     def test_step(self, sample, batch_idx):
         return self.validation_step(sample, batch_idx)
 
-    def test_end(self, outputs):
-        return self.validation_end(outputs)
+    def on_test_end(self):
+        return self.on_validation_end()
 
     ###########
     # Running configuration
@@ -192,154 +289,134 @@ class BaseTask(nn.Module):
 
     @classmethod
     def start(cls):
-        set_hparams()
-        os.environ['MASTER_PORT'] = str(random.randint(15000, 30000))
-        random.seed(hparams['seed'])
-        np.random.seed(hparams['seed'])
+        pl.seed_everything(hparams['seed'], workers=True)
         task = cls()
-        work_dir = hparams['work_dir']
-        trainer = BaseTrainer(
-            checkpoint_callback=LatestModelCheckpoint(
-                filepath=work_dir,
-                verbose=True,
-                monitor='val_loss',
-                mode='min',
-                num_ckpt_keep=hparams['num_ckpt_keep'],
-                permanent_ckpt_start=hparams.get('permanent_ckpt_start', 0),
-                permanent_ckpt_interval=hparams.get('permanent_ckpt_interval', -1),
-                save_best=hparams['save_best'],
-                period=1 if hparams['save_ckpt'] else 100000
+        work_dir = pathlib.Path(hparams['work_dir'])
+        trainer = pl.Trainer(
+            accelerator=hparams['pl_trainer_accelerator'],
+            devices=hparams['pl_trainer_devices'],
+            num_nodes=hparams['pl_trainer_num_nodes'],
+            strategy=get_strategy(
+                accelerator=hparams['pl_trainer_accelerator'],
+                devices=hparams['pl_trainer_devices'],
+                num_nodes=hparams['pl_trainer_num_nodes'],
+                strategy=hparams['pl_trainer_strategy'],
+                backend=hparams['ddp_backend']
             ),
+            precision=hparams['pl_trainer_precision'],
+            callbacks=[
+                DsModelCheckpoint(
+                    dirpath=work_dir,
+                    filename='model_ckpt_steps_{step}',
+                    auto_insert_metric_name=False,
+                    monitor='step',
+                    mode='max',
+                    save_last=False,
+                    # every_n_train_steps=hparams['val_check_interval'],
+                    save_top_k=hparams['num_ckpt_keep'],
+                    permanent_ckpt_start=hparams['permanent_ckpt_start'],
+                    permanent_ckpt_interval=hparams['permanent_ckpt_interval'],
+                    verbose=True
+                ),
+                LearningRateMonitor(logging_interval='step'),
+                DsTQDMProgressBar(),
+            ],
             logger=TensorBoardLogger(
-                save_dir=work_dir,
+                save_dir=str(work_dir),
                 name='lightning_logs',
                 version='lastest'
             ),
             gradient_clip_val=hparams['clip_grad_norm'],
-            val_check_interval=hparams['val_check_interval'],
-            row_log_interval=hparams['log_interval'],
-            max_updates=hparams['max_updates'],
-            num_sanity_val_steps=hparams['num_sanity_val_steps'] if not hparams['validate'] else 10000,
+            val_check_interval=hparams['val_check_interval'] * hparams['accumulate_grad_batches'],
+            # so this is global_steps
+            check_val_every_n_epoch=None,
+            log_every_n_steps=hparams['log_interval'],
+            max_steps=hparams['max_updates'],
+            use_distributed_sampler=False,
+            num_sanity_val_steps=hparams['num_sanity_val_steps'],
             accumulate_grad_batches=hparams['accumulate_grad_batches']
         )
         if not hparams['infer']:  # train
-            # copy_code = input(f'{hparams["save_codes"]} code backup? y/n: ') == 'y'
-            copy_code = True  # backup code every time
-            if copy_code:
-                t = datetime.now().strftime('%Y%m%d%H%M%S')
-                code_dir = f'{work_dir}/codes/{t}'
-                os.makedirs(code_dir, exist_ok=True)
-                for c in hparams['save_codes']:
-                    shutil.copytree(c, code_dir, dirs_exist_ok=True)
-                print(f"| Copied codes to {code_dir}.")
-            # Copy spk_map.json to work dir
-            spk_map = os.path.join(work_dir, 'spk_map.json')
-            spk_map_orig = os.path.join(hparams['binary_data_dir'], 'spk_map.json')
-            if not os.path.exists(spk_map) and os.path.exists(spk_map_orig):
-                shutil.copy(spk_map_orig, spk_map)
-                print(f"| Copied spk map to {spk_map}.")
-            trainer.checkpoint_callback.task = task
-            trainer.fit(task)
+            @rank_zero_only
+            def train_payload_copy():
+                # copy_code = input(f'{hparams["save_codes"]} code backup? y/n: ') == 'y'
+                copy_code = True  # backup code every time
+                if copy_code:
+                    code_dir = work_dir / 'codes' / datetime.now().strftime('%Y%m%d%H%M%S')
+                    code_dir.mkdir(exist_ok=True, parents=True)
+                    for c in hparams['save_codes']:
+                        shutil.copytree(c, code_dir / c, dirs_exist_ok=True)
+                    print(f'| Copied codes to {code_dir}.')
+                # Copy spk_map.json and dictionary.txt to work dir
+                binary_dir = pathlib.Path(hparams['binary_data_dir'])
+                spk_map = work_dir / 'spk_map.json'
+                spk_map_src = binary_dir / 'spk_map.json'
+                if not spk_map.exists() and spk_map_src.exists():
+                    shutil.copy(spk_map_src, spk_map)
+                    print(f'| Copied spk map to {spk_map}.')
+                dictionary = work_dir / 'dictionary.txt'
+                dict_src = binary_dir / 'dictionary.txt'
+                if not dictionary.exists():
+                    if dict_src.exists():
+                        shutil.copy(dict_src, dictionary)
+                    else:
+                        shutil.copy(locate_dictionary(), dictionary)
+                    print(f'| Copied dictionary to {dictionary}.')
+
+            train_payload_copy()
+            trainer.fit(task, ckpt_path=get_latest_checkpoint_path(work_dir))
         else:
             trainer.test(task)
 
-    def configure_ddp(self, model, device_ids):
-        model = DDP(
-            model,
-            device_ids=device_ids,
-            find_unused_parameters=True
-        )
-        if dist.get_rank() != 0 and not hparams['debug']:
-            sys.stdout = open(os.devnull, "w")
-            sys.stderr = open(os.devnull, "w")
-        random.seed(hparams['seed'])
-        np.random.seed(hparams['seed'])
-        return model
-
-    def training_end(self, *args, **kwargs):
-        return None
-
-    def init_ddp_connection(self, proc_rank, world_size):
-        set_hparams(print_hparams=False)
-        # guarantees unique ports across jobs from same grid search
-        default_port = 12910
-        # if user gave a port number, use that one instead
-        try:
-            default_port = os.environ['MASTER_PORT']
-        except Exception:
-            os.environ['MASTER_PORT'] = str(default_port)
-
-        # figure out the root node addr
-        root_node = '127.0.0.2'
-        root_node = self.trainer.resolve_root_node_address(root_node)
-        os.environ['MASTER_ADDR'] = root_node
-        dist.init_process_group('nccl', rank=proc_rank, world_size=world_size)
-
-    @data_loader
-    def train_dataloader(self):
-        return None
-
-    @data_loader
-    def test_dataloader(self):
-        return None
-
-    @data_loader
-    def val_dataloader(self):
-        return None
+    def on_save_checkpoint(self, checkpoint):
+        if isinstance(self.model, CategorizedModule):
+            checkpoint['category'] = self.model.category
+        checkpoint['trainer_stage'] = self.trainer.state.stage.value
 
     def on_load_checkpoint(self, checkpoint):
-        pass
+        from lightning.pytorch.trainer.states import RunningStage
+        from utils import simulate_lr_scheduler
+        if checkpoint.get('trainer_stage', '') == RunningStage.VALIDATING.value:
+            self.skip_immediate_validation = True
+        
+        optimizer_args = hparams['optimizer_args']
+        scheduler_args = hparams['lr_scheduler_args']
+        
+        if 'beta1' in optimizer_args and 'beta2' in optimizer_args and 'betas' not in optimizer_args:
+            optimizer_args['betas'] = (optimizer_args['beta1'], optimizer_args['beta2'])
 
-    def on_save_checkpoint(self, checkpoint):
-        pass
+        if checkpoint.get('optimizer_states', None):
+            opt_states = checkpoint['optimizer_states']
+            assert len(opt_states) == 1 # only support one optimizer
+            opt_state = opt_states[0]
+            for param_group in opt_state['param_groups']:
+                for k, v in optimizer_args.items():
+                    if k in param_group and param_group[k] != v:
+                        if 'lr_schedulers' in checkpoint and checkpoint['lr_schedulers'] and k == 'lr':
+                            continue
+                        rank_zero_info(f'| Overriding optimizer parameter {k} from checkpoint: {param_group[k]} -> {v}')
+                        param_group[k] = v
+                if 'initial_lr' in param_group and param_group['initial_lr'] != optimizer_args['lr']:
+                    rank_zero_info(f'| Overriding optimizer parameter initial_lr from checkpoint: {param_group["initial_lr"]} -> {optimizer_args["lr"]}')
+                    param_group['initial_lr'] = optimizer_args['lr']
 
-    def on_sanity_check_start(self):
-        pass
-
-    def on_train_start(self):
-        pass
-
-    def on_train_end(self):
-        pass
-
-    def on_batch_start(self, batch):
-        pass
-
-    def on_batch_end(self):
-        pass
-
-    def on_pre_performance_check(self):
-        pass
-
-    def on_post_performance_check(self):
-        pass
-
-    def on_before_zero_grad(self, optimizer):
-        pass
-
-    def on_after_backward(self):
-        pass
-
-    def backward(self, loss, optimizer):
-        loss.backward()
-
-    def grad_norm(self, norm_type):
-        results = {}
-        total_norm = 0
-        for name, p in self.named_parameters():
-            if p.requires_grad:
-                try:
-                    param_norm = p.grad.data.norm(norm_type)
-                    total_norm += param_norm ** norm_type
-                    norm = param_norm ** (1 / norm_type)
-
-                    grad = round(norm.data.cpu().numpy().flatten()[0], 3)
-                    results['grad_{}_norm_{}'.format(norm_type, name)] = grad
-                except Exception:
-                    # this param had no grad
-                    pass
-
-        total_norm = total_norm ** (1. / norm_type)
-        grad = round(total_norm.data.cpu().numpy().flatten()[0], 3)
-        results['grad_{}_norm_total'.format(norm_type)] = grad
-        return results
+        if checkpoint.get('lr_schedulers', None):
+            assert checkpoint.get('optimizer_states', False)
+            schedulers = checkpoint['lr_schedulers']
+            assert len(schedulers) == 1 # only support one scheduler
+            scheduler = schedulers[0]
+            for k, v in scheduler_args.items():
+                if k in scheduler and scheduler[k] != v:
+                    rank_zero_info(f'| Overriding scheduler parameter {k} from checkpoint: {scheduler[k]} -> {v}')
+                    scheduler[k] = v
+            scheduler['base_lrs'] = [group['initial_lr'] for group in checkpoint['optimizer_states'][0]['param_groups']]
+            new_lrs = simulate_lr_scheduler(
+                optimizer_args, scheduler_args,
+                last_epoch=scheduler['last_epoch'],
+                num_param_groups=len(checkpoint['optimizer_states'][0]['param_groups'])
+            )
+            scheduler['_last_lr'] = new_lrs
+            for param_group, new_lr in zip(checkpoint['optimizer_states'][0]['param_groups'], new_lrs):
+                if param_group['lr'] != new_lr:
+                    rank_zero_info(f'| Overriding optimizer parameter lr from checkpoint: {param_group["lr"]} -> {new_lr}')
+                    param_group['lr'] = new_lr

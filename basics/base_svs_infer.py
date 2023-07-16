@@ -1,187 +1,131 @@
 # coding=utf8
-import json
-import os
-
+import numpy as np
 import torch
-from pypinyin import lazy_pinyin
+from torch import Tensor
+from typing import Tuple, Dict
 
-from src.vocoders.base_vocoder import VOCODERS
-from utils.hparams import set_hparams, hparams
-from utils.phoneme_utils import build_g2p_dictionary, build_phoneme_list
-from utils.text_encoder import TokenTextEncoder
+from utils.hparams import hparams
+from utils.infer_utils import resample_align_curve
 
 
 class BaseSVSInfer:
     """
         Base class for SVS inference models.
-        1. *example_run* and *infer_once*:
-            the overall pipeline;
-        2. *build_vocoder* and *run_vocoder*:
-            a HifiGAN vocoder;
-        3. *preprocess_word_level_input*:
-            convert words to phonemes, add slurs.
-
         Subclasses should define:
         1. *build_model*:
             how to build the model;
-        2. *forward_model*:
+        2. *run_model*:
             how to run the model (typically, generate a mel-spectrogram and
             pass it to the pre-built vocoder);
         3. *preprocess_input*:
             how to preprocess user input.
+        4. *infer_once*
+            infer from raw inputs to the final outputs
     """
 
-    def __init__(self, hparams, device=None, load_model=True, load_vocoder=True, ckpt_steps=None):
+    def __init__(self, device=None):
         if device is None:
             device = 'cuda' if torch.cuda.is_available() else 'cpu'
-        self.hparams = hparams
         self.device = device
+        self.timestep = hparams['hop_size'] / hparams['audio_sample_rate']
+        self.spk_map = {}
+        self.model: torch.nn.Module = None
 
-        if load_model:
-            phone_list = build_phoneme_list()
-            self.ph_encoder = TokenTextEncoder(vocab_list=phone_list, replace_oov=',')
-            self.pinyin2phs = build_g2p_dictionary()
-            if hparams['use_spk_id']:
-                with open(os.path.join(hparams['work_dir'], 'spk_map.json'), 'r', encoding='utf8') as f:
-                    self.spk_map = json.load(f)
-                assert isinstance(self.spk_map, dict) and len(self.spk_map) > 0, 'Invalid or empty speaker map!'
-                assert len(self.spk_map) == len(set(self.spk_map.values())), 'Duplicate speaker id in speaker map!'
-            self.model = self.build_model(ckpt_steps=ckpt_steps)
-            self.model.eval()
-            self.model.to(self.device)
-        if load_vocoder:
-            self.vocoder = self.build_vocoder()
-            self.vocoder.model.eval()
-            self.vocoder.model.to(self.device)
+    def build_model(self, ckpt_steps=None) -> torch.nn.Module:
+        raise NotImplementedError()
 
-    def build_model(self, ckpt_steps=None):
-        raise NotImplementedError
+    def load_speaker_mix(self, param_src: dict, summary_dst: dict,
+                         mix_mode: str = 'frame', mix_length: int = None) -> Tuple[Tensor, Tensor]:
+        """
 
-    def forward_model(self, inp, return_mel):
-        raise NotImplementedError
-
-    def build_vocoder(self):
-        if hparams['vocoder'] in VOCODERS:
-            vocoder = VOCODERS[hparams['vocoder']]()
+        :param param_src: param dict
+        :param summary_dst: summary dict
+        :param mix_mode: 'token' or 'frame'
+        :param mix_length: total tokens or frames to mix
+        :return: spk_mix_id [B=1, 1, N], spk_mix_value [B=1, T, N]
+        """
+        assert mix_mode == 'token' or mix_mode == 'frame'
+        param_key = 'spk_mix' if mix_mode == 'frame' else 'ph_spk_mix'
+        summary_solo_key = 'spk' if mix_mode == 'frame' else 'ph_spk'
+        spk_mix_map = param_src.get(param_key)  # { spk_name: value } or { spk_name: "value value value ..." }
+        dynamic = False
+        if spk_mix_map is None:
+            # Get the first speaker
+            for name in self.spk_map.keys():
+                spk_mix_map = {name: 1.0}
+                break
         else:
-            vocoder = VOCODERS[hparams['vocoder'].split('.')[-1]]()
-        return vocoder
+            for name in spk_mix_map:
+                assert name in self.spk_map, f'Speaker \'{name}\' not found.'
+        if len(spk_mix_map) == 1:
+            summary_dst[summary_solo_key] = list(spk_mix_map.keys())[0]
+        elif any([isinstance(val, str) for val in spk_mix_map.values()]):
+            print_mix = '|'.join(spk_mix_map.keys())
+            summary_dst[param_key] = f'dynamic({print_mix})'
+            dynamic = True
+        else:
+            print_mix = '|'.join([f'{n}:{"%.3f" % spk_mix_map[n]}' for n in spk_mix_map])
+            summary_dst[param_key] = f'static({print_mix})'
+        spk_mix_id_list = []
+        spk_mix_value_list = []
+        if dynamic:
+            for name, values in spk_mix_map.items():
+                spk_mix_id_list.append(self.spk_map[name])
+                if isinstance(values, str):
+                    # this speaker has a variable proportion
+                    if mix_mode == 'token':
+                        cur_spk_mix_value = values.split()
+                        assert len(cur_spk_mix_value) == mix_length, \
+                            'Speaker mix checks failed. In dynamic token-level mix, ' \
+                            'number of proportion values must equal number of tokens.'
+                        cur_spk_mix_value = torch.from_numpy(
+                            np.array(cur_spk_mix_value, 'float32')
+                        ).to(self.device)[None]  # => [B=1, T]
+                    else:
+                        cur_spk_mix_value = torch.from_numpy(resample_align_curve(
+                            np.array(values.split(), 'float32'),
+                            original_timestep=float(param_src['spk_mix_timestep']),
+                            target_timestep=self.timestep,
+                            align_length=mix_length
+                        )).to(self.device)[None]  # => [B=1, T]
+                    assert torch.all(cur_spk_mix_value >= 0.), \
+                        f'Speaker mix checks failed.\n' \
+                        f'Proportions of speaker \'{name}\' on some {mix_mode}s are negative.'
+                else:
+                    # this speaker has a constant proportion
+                    assert values >= 0., f'Speaker mix checks failed.\n' \
+                                         f'Proportion of speaker \'{name}\' is negative.'
+                    cur_spk_mix_value = torch.full(
+                        (1, mix_length), fill_value=values,
+                        dtype=torch.float32, device=self.device
+                    )
+                spk_mix_value_list.append(cur_spk_mix_value)
+            spk_mix_id = torch.LongTensor(spk_mix_id_list).to(self.device)[None, None]  # => [B=1, 1, N]
+            spk_mix_value = torch.stack(spk_mix_value_list, dim=2)  # [B=1, T] => [B=1, T, N]
+            spk_mix_value_sum = torch.sum(spk_mix_value, dim=2, keepdim=True)  # => [B=1, T, 1]
+            assert torch.all(spk_mix_value_sum > 0.), \
+                f'Speaker mix checks failed.\n' \
+                f'Proportions of speaker mix on some frames sum to zero.'
+            spk_mix_value /= spk_mix_value_sum  # normalize
+        else:
+            for name, value in spk_mix_map.items():
+                spk_mix_id_list.append(self.spk_map[name])
+                assert value >= 0., f'Speaker mix checks failed.\n' \
+                                    f'Proportion of speaker \'{name}\' is negative.'
+                spk_mix_value_list.append(value)
+            spk_mix_id = torch.LongTensor(spk_mix_id_list).to(self.device)[None, None]  # => [B=1, 1, N]
+            spk_mix_value = torch.FloatTensor(spk_mix_value_list).to(self.device)[None, None]  # => [B=1, 1, N]
+            spk_mix_value_sum = spk_mix_value.sum()
+            assert spk_mix_value_sum > 0., f'Speaker mix checks failed.\n' \
+                                           f'Proportions of speaker mix sum to zero.'
+            spk_mix_value /= spk_mix_value_sum  # normalize
+        return spk_mix_id, spk_mix_value
 
-    def run_vocoder(self, c, **kwargs):
-        y = self.vocoder.spec2wav_torch(c, **kwargs)
-        return y[None]
+    def preprocess_input(self, param: dict, idx=0) -> Dict[str, torch.Tensor]:
+        raise NotImplementedError()
 
-    def preprocess_word_level_input(self, inp):
-        # Pypinyin can't solve polyphonic words
-        text_raw = inp['text'].replace('最长', '最常').replace('长睫毛', '常睫毛') \
-            .replace('那么长', '那么常').replace('多长', '多常') \
-            .replace('很长',
-                     '很常')  # We hope someone could provide a better g2p module for us by opening pull requests.
+    def forward_model(self, sample: Dict[str, torch.Tensor]):
+        raise NotImplementedError()
 
-        # lyric
-        pinyins = lazy_pinyin(text_raw, strict=False)
-        ph_per_word_lst = [' '.join(self.pinyin2phs[pinyin.strip()])
-                           for pinyin in pinyins
-                           if pinyin.strip() in self.pinyin2phs]
-
-        # Note
-        note_per_word_lst = [x.strip() for x in inp['notes'].split('|') if x.strip() != '']
-        mididur_per_word_lst = [x.strip() for x in inp['notes_duration'].split('|') if x.strip() != '']
-
-        if not len(note_per_word_lst) == len(ph_per_word_lst) == len(mididur_per_word_lst):
-            raise RuntimeError('The number of words does\'t match the number of notes\' windows: '
-                               f'{len(ph_per_word_lst)} {len(note_per_word_lst)} {len(mididur_per_word_lst)}\n',
-                               'You should split the note(s) for each word by | mark.')
-
-        note_lst = []
-        ph_lst = []
-        midi_dur_lst = []
-        is_slur = []
-        for idx, ph_per_word in enumerate(ph_per_word_lst):
-            # for phs in one word:
-            # single ph like ['ai']  or multiple phs like ['n', 'i']
-            ph_in_this_word = ph_per_word.split()
-
-            # for notes in one word:
-            # single note like ['D4'] or multiple notes like ['D4', 'E4'] which means a 'slur' here.
-            note_in_this_word = note_per_word_lst[idx].split()
-            midi_dur_in_this_word = mididur_per_word_lst[idx].split()
-            # process for the model input
-            # Step 1.
-            #  Deal with note of 'not slur' case or the first note of 'slur' case
-            #  j        ie
-            #  F#4/Gb4  F#4/Gb4
-            #  0        0
-            for ph in ph_in_this_word:
-                ph_lst.append(ph)
-                note_lst.append(note_in_this_word[0])
-                midi_dur_lst.append(midi_dur_in_this_word[0])
-                is_slur.append(0)
-            # step 2.
-            #  Deal with the 2nd, 3rd... notes of 'slur' case
-            #  j        ie         ie
-            #  F#4/Gb4  F#4/Gb4    C#4/Db4
-            #  0        0          1
-            if len(note_in_this_word) > 1:  # is_slur = True, we should repeat the YUNMU to match the 2nd, 3rd... notes.
-                for idx in range(1, len(note_in_this_word)):
-                    ph_lst.append(ph_in_this_word[-1])
-                    note_lst.append(note_in_this_word[idx])
-                    midi_dur_lst.append(midi_dur_in_this_word[idx])
-                    is_slur.append(1)
-        ph_seq = ' '.join(ph_lst)
-
-        if not len(ph_lst) == len(note_lst) == len(midi_dur_lst):
-            raise RuntimeError('The number of words does\'t match the number of notes\' windows: '
-                               f'{len(ph_lst)} {len(note_lst)} {len(midi_dur_lst)}\n',
-                               'You should split the note(s) for each word by | mark.')
-        return ph_seq, note_lst, midi_dur_lst, is_slur
-
-    def preprocess_input(self, inp, input_type):
-        raise NotImplementedError
-
-    def postprocess_output(self, output):
-        return output
-
-    def infer_once(self, inp, return_mel=False):
-        inp = self.preprocess_input(inp, input_type=inp['input_type'] if inp.get('input_type') else 'word')
-        output = self.forward_model(inp, return_mel=return_mel)
-        output = self.postprocess_output(output)
-        return output
-
-    @classmethod
-    def example_run(cls, inp, target='infer_out/example_out.wav'):
-        # settings hparams
-        set_hparams(print_hparams=False)
-
-        # call the model
-        infer_ins = cls(hparams)
-        out = infer_ins.infer_once(inp)
-
-        # output to file
-        os.makedirs(os.path.dirname(target), exist_ok=True)
-        print(f'| save audio: {target}')
-        from utils.audio import save_wav
-        save_wav(out, target, hparams['audio_sample_rate'])
-
-# if __name__ == '__main__':
-# debug
-# a = BaseSVSInfer(hparams)
-# a.preprocess_input({'text': '你 说 你 不 SP 懂 为 何 在 这 时 牵 手 AP',
-#                     'notes': 'D#4/Eb4 | D#4/Eb4 | D#4/Eb4 | D#4/Eb4 | rest | D#4/Eb4 | D4 | D4 | D4 | D#4/Eb4 | F4 | D#4/Eb4 | D4 | rest',
-#                     'notes_duration': '0.113740 | 0.329060 | 0.287950 | 0.133480 | 0.150900 | 0.484730 | 0.242010 | 0.180820 | 0.343570 | 0.152050 | 0.266720 | 0.280310 | 0.633300 | 0.444590'
-#                     })
-
-# b = {
-#     'text': '小酒窝长睫毛AP是你最美的记号',
-#     'notes': 'C#4/Db4 | F#4/Gb4 | G#4/Ab4 | A#4/Bb4 F#4/Gb4 | F#4/Gb4 C#4/Db4 | C#4/Db4 | rest | C#4/Db4 | A#4/Bb4 | G#4/Ab4 | A#4/Bb4 | G#4/Ab4 | F4 | C#4/Db4',
-#     'notes_duration': '0.407140 | 0.376190 | 0.242180 | 0.509550 0.183420 | 0.315400 0.235020 | 0.361660 | 0.223070 | 0.377270 | 0.340550 | 0.299620 | 0.344510 | 0.283770 | 0.323390 | 0.360340'
-# }
-# c = {
-#     'text': '小酒窝长睫毛AP是你最美的记号',
-#     'ph_seq': 'x iao j iu w o ch ang ang j ie ie m ao AP sh i n i z ui m ei d e j i h ao',
-#     'note_seq': 'C#4/Db4 C#4/Db4 F#4/Gb4 F#4/Gb4 G#4/Ab4 G#4/Ab4 A#4/Bb4 A#4/Bb4 F#4/Gb4 F#4/Gb4 F#4/Gb4 C#4/Db4 C#4/Db4 C#4/Db4 rest C#4/Db4 C#4/Db4 A#4/Bb4 A#4/Bb4 G#4/Ab4 G#4/Ab4 A#4/Bb4 A#4/Bb4 G#4/Ab4 G#4/Ab4 F4 F4 C#4/Db4 C#4/Db4',
-#     'note_dur_seq': '0.407140 0.407140 0.376190 0.376190 0.242180 0.242180 0.509550 0.509550 0.183420 0.315400 0.315400 0.235020 0.361660 0.361660 0.223070 0.377270 0.377270 0.340550 0.340550 0.299620 0.299620 0.344510 0.344510 0.283770 0.283770 0.323390 0.323390 0.360340 0.360340',
-#     'is_slur_seq': '0 0 0 0 0 0 0 0 1 0 0 1 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0'
-# }  # input like Opencpop dataset.
-# a.preprocess_input(b)
-# a.preprocess_input(c, input_type='phoneme')
+    def run_inference(self, params, **kwargs):
+        raise NotImplementedError()

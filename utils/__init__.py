@@ -1,17 +1,16 @@
-import glob
-import logging
+from __future__ import annotations
+
+import pathlib
 import re
 import time
-from collections import defaultdict
-import os
-import sys
-import shutil
 import types
+from collections import OrderedDict
+
 import numpy as np
 import torch
 import torch.nn.functional as F
-import torch.distributed as dist
-from torch import nn
+
+from basics.base_module import CategorizedModule
 
 
 def tensors_to_scalars(metrics):
@@ -25,70 +24,44 @@ def tensors_to_scalars(metrics):
     return new_metrics
 
 
-class AvgrageMeter(object):
-
-    def __init__(self):
-        self.reset()
-
-    def reset(self):
-        self.avg = 0
-        self.sum = 0
-        self.cnt = 0
-
-    def update(self, val, n=1):
-        self.sum += val * n
-        self.cnt += n
-        self.avg = self.sum / self.cnt
-
-
-def collate_1d(values, pad_idx=0, left_pad=False, shift_right=False, max_len=None, shift_id=1):
-    """Convert a list of 1d tensors into a padded 2d tensor."""
-    size = max(v.size(0) for v in values) if max_len is None else max_len
-    res = values[0].new(len(values), size).fill_(pad_idx)
-
-    def copy_tensor(src, dst):
-        assert dst.numel() == src.numel()
-        if shift_right:
-            dst[1:] = src[:-1]
-            dst[0] = shift_id
-        else:
-            dst.copy_(src)
+def collate_nd(values, pad_value=0, max_len=None):
+    """
+    Pad a list of Nd tensors on their first dimension and stack them into a (N+1)d tensor.
+    """
+    size = ((max(v.size(0) for v in values) if max_len is None else max_len), *values[0].shape[1:])
+    res = torch.full((len(values), *size), fill_value=pad_value, dtype=values[0].dtype, device=values[0].device)
 
     for i, v in enumerate(values):
-        copy_tensor(v, res[i][size - len(v):] if left_pad else res[i][:len(v)])
+        res[i, :len(v), ...] = v
     return res
 
 
-def collate_2d(values, pad_idx=0, left_pad=False, shift_right=False, max_len=None):
-    """Convert a list of 2d tensors into a padded 3d tensor."""
-    size = max(v.size(0) for v in values) if max_len is None else max_len
-    res = values[0].new(len(values), size, values[0].shape[1]).fill_(pad_idx)
-
-    def copy_tensor(src, dst):
-        assert dst.numel() == src.numel()
-        if shift_right:
-            dst[1:] = src[:-1]
-        else:
-            dst.copy_(src)
-
-    for i, v in enumerate(values):
-        copy_tensor(v, res[i][size - len(v):] if left_pad else res[i][:len(v)])
-    return res
+def random_continuous_masks(*shape: int, dim: int, device: str | torch.device = 'cpu'):
+    start, end = torch.sort(
+        torch.randint(
+            low=0, high=shape[dim] + 1, size=(*shape[:dim], 2, *((1,) * (len(shape) - dim - 1))), device=device
+        ).expand(*((-1,) * (dim + 1)), *shape[dim + 1:]), dim=dim
+    )[0].split(1, dim=dim)
+    idx = torch.arange(
+        0, shape[dim], dtype=torch.long, device=device
+    ).reshape(*((1,) * dim), shape[dim], *((1,) * (len(shape) - dim - 1)))
+    masks = (idx >= start) & (idx < end)
+    return masks
 
 
-def _is_batch_full(batch, num_tokens, max_tokens, max_sentences):
+def _is_batch_full(batch, num_frames, max_batch_frames, max_batch_size):
     if len(batch) == 0:
         return 0
-    if len(batch) == max_sentences:
+    if len(batch) == max_batch_size:
         return 1
-    if num_tokens > max_tokens:
+    if num_frames > max_batch_frames:
         return 1
     return 0
 
 
 def batch_by_size(
-        indices, num_tokens_fn, max_tokens=None, max_sentences=None,
-        required_batch_size_multiple=1, distributed=False
+        indices, num_frames_fn, max_batch_frames=80000, max_batch_size=48,
+        required_batch_size_multiple=1
 ):
     """
     Yield mini-batches of indices bucketed by size. Batches may contain
@@ -96,17 +69,15 @@ def batch_by_size(
 
     Args:
         indices (List[int]): ordered list of dataset indices
-        num_tokens_fn (callable): function that returns the number of tokens at
+        num_frames_fn (callable): function that returns the number of frames at
             a given index
-        max_tokens (int, optional): max number of tokens in each batch
-            (default: None).
-        max_sentences (int, optional): max number of sentences in each
-            batch (default: None).
-        required_batch_size_multiple (int, optional): require batch size to
-            be a multiple of N (default: 1).
+        max_batch_frames (int, optional): max number of frames in each batch
+            (default: 80000).
+        max_batch_size (int, optional): max number of sentences in each
+            batch (default: 48).
+        required_batch_size_multiple: require the batch size to be multiple
+            of a given number
     """
-    max_tokens = max_tokens if max_tokens is not None else sys.maxsize
-    max_sentences = max_sentences if max_sentences is not None else sys.maxsize
     bsz_mult = required_batch_size_multiple
 
     if isinstance(indices, types.GeneratorType):
@@ -118,16 +89,16 @@ def batch_by_size(
     batches = []
     for i in range(len(indices)):
         idx = indices[i]
-        num_tokens = num_tokens_fn(idx)
-        sample_lens.append(num_tokens)
-        sample_len = max(sample_len, num_tokens)
-        assert sample_len <= max_tokens, (
-            "sentence at index {} of size {} exceeds max_tokens "
-            "limit of {}!".format(idx, sample_len, max_tokens)
+        num_frames = num_frames_fn(idx)
+        sample_lens.append(num_frames)
+        sample_len = max(sample_len, num_frames)
+        assert sample_len <= max_batch_frames, (
+            "sentence at index {} of size {} exceeds max_batch_samples "
+            "limit of {}!".format(idx, sample_len, max_batch_frames)
         )
-        num_tokens = (len(batch) + 1) * sample_len
+        num_frames = (len(batch) + 1) * sample_len
 
-        if _is_batch_full(batch, num_tokens, max_tokens, max_sentences):
+        if _is_batch_full(batch, num_frames, max_batch_frames, max_batch_size):
             mod_len = max(
                 bsz_mult * (len(batch) // bsz_mult),
                 len(batch) % bsz_mult,
@@ -152,9 +123,7 @@ def make_positions(tensor, padding_idx):
     # prefers ints, cumsum defaults to output longs, and ONNX doesn't know
     # how to handle the dtype kwarg in cumsum.
     mask = tensor.ne(padding_idx).int()
-    return (
-                   torch.cumsum(mask, dim=1).type_as(mask) * mask
-           ).long() + padding_idx
+    return (torch.cumsum(mask, dim=1).type_as(mask) * mask).long() + padding_idx
 
 
 def softmax(x, dim):
@@ -175,48 +144,68 @@ def unpack_dict_to_list(samples):
     return samples_
 
 
-def load_ckpt(cur_model, ckpt_base_dir, prefix_in_ckpt='model', ckpt_steps=None, force=True, strict=True):
-    if os.path.isfile(ckpt_base_dir):
-        ckpt_base_dir = os.path.dirname(ckpt_base_dir)
+def filter_kwargs(dict_to_filter, kwarg_obj):
+    import inspect
+
+    sig = inspect.signature(kwarg_obj)
+    filter_keys = [param.name for param in sig.parameters.values() if param.kind == param.POSITIONAL_OR_KEYWORD]
+    filtered_dict = {filter_key: dict_to_filter[filter_key] for filter_key in filter_keys if filter_key in dict_to_filter}
+    return filtered_dict
+
+
+def load_ckpt(
+        cur_model, ckpt_base_dir, ckpt_steps=None,
+        prefix_in_ckpt='model', key_in_ckpt='state_dict',
+        strict=True, device='cpu'
+):
+    if not isinstance(ckpt_base_dir, pathlib.Path):
+        ckpt_base_dir = pathlib.Path(ckpt_base_dir)
+    if ckpt_base_dir.is_file():
         checkpoint_path = [ckpt_base_dir]
     elif ckpt_steps is not None:
-        checkpoint_path = [os.path.join(ckpt_base_dir, f'model_ckpt_steps_{int(ckpt_steps)}.ckpt')]
+        checkpoint_path = [ckpt_base_dir / f'model_ckpt_steps_{int(ckpt_steps)}.ckpt']
     else:
         base_dir = ckpt_base_dir
-        checkpoint_path = [
-            os.path.join(base_dir, ckpt_file)
-            for ckpt_file in sorted(
-                [
-                    os.path.basename(ckpt)
-                    for ckpt in glob.glob(f'{base_dir}/model_ckpt_steps_*.ckpt')
-                ],
-                key=lambda x: int(re.findall(f'model_ckpt_steps_(\d+).ckpt', x.replace('\\', '/'))[0])
-            )
-        ]
-    if len(checkpoint_path) > 0:
-        checkpoint_path = checkpoint_path[-1]
-        state_dict = torch.load(checkpoint_path, map_location="cpu")["state_dict"]
-        state_dict = {k[len(prefix_in_ckpt) + 1:]: v for k, v in state_dict.items()
-                      if k.startswith(f'{prefix_in_ckpt}.')}
-        if not strict:
-            cur_model_state_dict = cur_model.state_dict()
-            unmatched_keys = []
-            for key, param in state_dict.items():
-                if key in cur_model_state_dict:
-                    new_param = cur_model_state_dict[key]
-                    if new_param.shape != param.shape:
-                        unmatched_keys.append(key)
-                        print("| Unmatched keys: ", key, new_param.shape, param.shape)
-            for key in unmatched_keys:
-                del state_dict[key]
-        cur_model.load_state_dict(state_dict, strict=strict)
-        print(f"| load '{prefix_in_ckpt}' from '{checkpoint_path}'.")
+        checkpoint_path = sorted(
+            [
+                ckpt_file
+                for ckpt_file in base_dir.iterdir()
+                if ckpt_file.is_file() and re.fullmatch(r'model_ckpt_steps_\d+\.ckpt', ckpt_file.name)
+            ],
+            key=lambda x: int(re.search(r'\d+', x.name).group(0))
+        )
+    assert len(checkpoint_path) > 0, f'| ckpt not found in {ckpt_base_dir}.'
+    checkpoint_path = checkpoint_path[-1]
+    ckpt_loaded = torch.load(checkpoint_path, map_location=device)
+    if isinstance(cur_model, CategorizedModule):
+        cur_model.check_category(ckpt_loaded.get('category'))
+    if key_in_ckpt is None:
+        state_dict = ckpt_loaded
     else:
-        e_msg = f"| ckpt not found in {ckpt_base_dir}."
-        if force:
-            assert False, e_msg
-        else:
-            print(e_msg)
+        state_dict = ckpt_loaded[key_in_ckpt]
+    if prefix_in_ckpt is not None:
+        state_dict = OrderedDict({
+            k[len(prefix_in_ckpt) + 1:]: v
+            for k, v in state_dict.items() if k.startswith(f'{prefix_in_ckpt}.')
+        })
+    if not strict:
+        cur_model_state_dict = cur_model.state_dict()
+        unmatched_keys = []
+        for key, param in state_dict.items():
+            if key in cur_model_state_dict:
+                new_param = cur_model_state_dict[key]
+                if new_param.shape != param.shape:
+                    unmatched_keys.append(key)
+                    print('| Unmatched keys: ', key, new_param.shape, param.shape)
+        for key in unmatched_keys:
+            del state_dict[key]
+    cur_model.load_state_dict(state_dict, strict=strict)
+    shown_model_name = 'state dict'
+    if prefix_in_ckpt is not None:
+        shown_model_name = f'\'{prefix_in_ckpt}\''
+    elif key_in_ckpt is not None:
+        shown_model_name = f'\'{key_in_ckpt}\''
+    print(f'| load {shown_model_name} from \'{checkpoint_path}\'.')
 
 
 def remove_padding(x, padding_idx=0):
@@ -249,7 +238,7 @@ class Timer:
 
 def print_arch(model, model_name='model'):
     print(f"| {model_name} Arch: ", model)
-    num_params(model, model_name=model_name)
+    # num_params(model, model_name=model_name)
 
 
 def num_params(model, print_out=True, model_name="model"):
@@ -258,3 +247,34 @@ def num_params(model, print_out=True, model_name="model"):
     if print_out:
         print(f'| {model_name} Trainable Parameters: %.3fM' % parameters)
     return parameters
+
+
+def build_object_from_config(cls_str, *args, **kwargs):
+    import importlib
+
+    pkg = ".".join(cls_str.split(".")[:-1])
+    cls_name = cls_str.split(".")[-1]
+    cls_type = getattr(importlib.import_module(pkg), cls_name)
+
+    return cls_type(*args, **filter_kwargs(kwargs, cls_type))
+
+
+def simulate_lr_scheduler(optimizer_args, scheduler_args, last_epoch=-1, num_param_groups=1):
+    optimizer = build_object_from_config(
+        optimizer_args['optimizer_cls'],
+        [{'params': torch.nn.Parameter(), 'initial_lr': optimizer_args['lr']} for _ in range(num_param_groups)],
+        **optimizer_args
+    )
+    scheduler = build_object_from_config(scheduler_args['scheduler_cls'], optimizer, last_epoch=last_epoch, **scheduler_args)
+
+    if hasattr(scheduler, '_get_closed_form_lr'):
+        return scheduler._get_closed_form_lr()
+    else:
+        return scheduler.get_lr()
+
+
+def remove_suffix(string: str, suffix: str):
+    #  Just for Python 3.8 compatibility, since `str.removesuffix()` API of is available since Python 3.9
+    if string.endswith(suffix):
+        string = string[:-len(suffix)]
+    return string

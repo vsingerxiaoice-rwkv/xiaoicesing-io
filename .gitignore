@@ -5,15 +5,14 @@ __pycache__/
 local_tools/
 *.ckpt
 *.pth
-(!/pipelines/assets)/*.wav
 infer_out/
 *.onnx
-data/*
-!data/.gitkeep
-checkpoints/
-venv/
+/data/*
+!/data/.gitkeep
+/checkpoints/*
+!/checkpoints/.gitkeep
+/venv/
+/artifacts/
 
 .vscode
-WPy64-38100
-Winpython64-3.8.10.0dot.exe
 .ipynb_checkpoints/

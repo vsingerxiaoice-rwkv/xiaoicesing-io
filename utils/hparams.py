@@ -1,14 +1,16 @@
 import argparse
-import multiprocessing
 import os
-import re
-import shutil
-
 import yaml
 
+try:
+    from lightning.pytorch.utilities.rank_zero import rank_zero_only
+except ModuleNotFoundError:
+    def rank_zero_only(f):
+        return f
+
+from utils.multiprocess_utils import is_main_process as mp_is_main_process
 global_print_hparams = True
 hparams = {}
-is_main_process = not bool(re.match(r'Process-\d+', multiprocessing.current_process().name))
 
 
 class Args:
@@ -41,13 +43,15 @@ def set_hparams(config='', exp_name='', hparams_str='', print_hparams=True, glob
         parser.add_argument('--hparams', type=str, default='',
                             help='location of the data corpus')
         parser.add_argument('--infer', action='store_true', help='infer')
-        parser.add_argument('--validate', action='store_true', help='validate')
         parser.add_argument('--reset', action='store_true', help='reset hparams')
-        parser.add_argument('--debug', action='store_true', help='debug')
         args, unknown = parser.parse_known_args()
+        
+        tmp_args_hparams = args.hparams.split(',') if args.hparams.strip() != '' else []
+        tmp_args_hparams.extend(hparams_str.split(',') if hparams_str.strip() != '' else [])
+        args.hparams = ','.join(tmp_args_hparams)
     else:
         args = Args(config=config, exp_name=exp_name, hparams=hparams_str,
-                    infer=False, validate=False, reset=False, debug=False)
+                    infer=False, reset=False)
 
     args_work_dir = ''
     if args.exp_name != '':
@@ -95,6 +99,8 @@ def set_hparams(config='', exp_name='', hparams_str='', print_hparams=True, glob
 
     if args.hparams != "":
         for new_hparam in args.hparams.split(","):
+            if new_hparam.strip() == "":
+                continue
             k, v = new_hparam.split("=")
             if k not in hparams_:
                 hparams_[k] = eval(v)
@@ -103,49 +109,38 @@ def set_hparams(config='', exp_name='', hparams_str='', print_hparams=True, glob
             else:
                 hparams_[k] = type(hparams_[k])(v)
 
-    dictionary = hparams_.get('g2p_dictionary')
-    if dictionary is None:
-        dictionary = 'dictionaries/opencpop.txt'
-    ckpt_dictionary = os.path.join(hparams_['work_dir'], os.path.basename(dictionary))
-    if args_work_dir != '' and (not os.path.exists(ckpt_config_path) or args.reset) and not args.infer:
-        os.makedirs(hparams_['work_dir'], exist_ok=True)
-        if is_main_process:
-            # Only the main process will save the config file and dictionary
-            with open(ckpt_config_path, 'w', encoding='utf-8') as f:
-                hparams_non_recursive = hparams_.copy()
-                hparams_non_recursive['base_config'] = []
-                yaml.safe_dump(hparams_non_recursive, f, allow_unicode=True, encoding='utf-8')
-            if hparams_.get('reset_phone_dict') or not os.path.exists(ckpt_dictionary):
-                shutil.copy(dictionary, ckpt_dictionary)
-
-    ckpt_dictionary_exists = os.path.exists(ckpt_dictionary)
-    if not os.path.exists(dictionary) and not ckpt_dictionary_exists:
-        raise FileNotFoundError(f'G2P dictionary not found in either of the following paths:\n'
-                                f' - \'{dictionary}\'\n'
-                                f' - \'{ckpt_dictionary}\'')
-    hparams_['original_g2p_dictionary'] = dictionary
-    if ckpt_dictionary_exists:
-        dictionary = ckpt_dictionary
-    hparams_['g2p_dictionary'] = dictionary
+    @rank_zero_only
+    def dump_hparams():
+        if args_work_dir != '' and (not os.path.exists(ckpt_config_path) or args.reset) and not args.infer:
+            os.makedirs(hparams_['work_dir'], exist_ok=True)
+            if mp_is_main_process:
+                # Only the main process will save the config file
+                with open(ckpt_config_path, 'w', encoding='utf-8') as f:
+                    hparams_non_recursive = hparams_.copy()
+                    hparams_non_recursive['base_config'] = []
+                    yaml.safe_dump(hparams_non_recursive, f, allow_unicode=True, encoding='utf-8')
+    dump_hparams()
 
     hparams_['infer'] = args.infer
-    hparams_['debug'] = args.debug
-    hparams_['validate'] = args.validate
-    global global_print_hparams
     if global_hparams:
         hparams.clear()
         hparams.update(hparams_)
-
-    if is_main_process and print_hparams and global_print_hparams and global_hparams:
-        print('| Hparams chains: ', config_chains)
-        print('| Hparams: ')
-        for i, (k, v) in enumerate(sorted(hparams_.items())):
-            print(f"\033[;33;m{k}\033[0m: {v}, ", end="\n" if i % 5 == 4 else "")
-        print("")
-        global_print_hparams = False
-    # print(hparams_.keys())
+    
     if hparams.get('exp_name') is None:
         hparams['exp_name'] = args.exp_name
     if hparams_.get('exp_name') is None:
         hparams_['exp_name'] = args.exp_name
+    
+    @rank_zero_only
+    def print_out_hparams():
+        global global_print_hparams
+        if mp_is_main_process and print_hparams and global_print_hparams and global_hparams:
+            print('| Hparams chains: ', config_chains)
+            print('| Hparams: ')
+            for i, (k, v) in enumerate(sorted(hparams_.items())):
+                print(f"\033[0;33m{k}\033[0m: {v}, ", end="\n" if i % 5 == 4 else "")
+            print("")
+            global_print_hparams = False
+    print_out_hparams()
+    
     return hparams_
