@@ -34,6 +34,17 @@ class GaussianDiffusionONNX(GaussianDiffusion):
         nonzero_mask = ((t > 0).float()).reshape(1, 1, 1, 1)
         return model_mean + nonzero_mask * (0.5 * model_log_variance).exp() * noise
 
+    def p_sample_ddim(self, x, t, interval, cond):
+        a_t = extract(self.alphas_cumprod, t)
+        t_prev = t - interval
+        a_prev = extract(self.alphas_cumprod, t_prev * (t_prev > 0))
+
+        noise_pred = self.denoise_fn(x, t, cond=cond)
+        x_prev = a_prev.sqrt() * (
+                x / a_t.sqrt() + (((1 - a_prev) / a_prev).sqrt() - ((1 - a_t) / a_t).sqrt()) * noise_pred
+        )
+        return x_prev
+
     def plms_get_x_pred(self, x, noise_t, t, t_prev):
         a_t = extract(self.alphas_cumprod, t)
         a_prev = extract(self.alphas_cumprod, t_prev)
@@ -44,16 +55,6 @@ class GaussianDiffusionONNX(GaussianDiffusion):
         x_pred = x + x_delta
 
         return x_pred
-
-    def p_sample_ddim(self, x, t, interval, cond):
-        a_t = extract(self.alphas_cumprod, t)
-        a_prev = extract(self.alphas_cumprod, torch.clip(t - interval, min=0))
-
-        noise_pred = self.denoise_fn(x, t, cond=cond)
-        x_prev = a_prev.sqrt() * (
-                x / a_t.sqrt() + (((1 - a_prev) / a_prev).sqrt() - ((1 - a_t) / a_t).sqrt()) * noise_pred
-        )
-        return x_prev
 
     def p_sample_plms(self, x_prev, t, interval: int, cond, noise_list: List[Tensor], stage: int):
         noise_pred = self.denoise_fn(x_prev, t, cond)
