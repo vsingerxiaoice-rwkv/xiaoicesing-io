@@ -47,7 +47,7 @@ class GaussianDiffusionONNX(GaussianDiffusion):
 
     def p_sample_ddim(self, x, t, interval, cond):
         a_t = extract(self.alphas_cumprod, t)
-        a_prev = extract(self.alphas_cumprod, torch.max(t - interval, torch.zeros_like(t)))
+        a_prev = extract(self.alphas_cumprod, torch.clip(t - interval, min=0))
 
         noise_pred = self.denoise_fn(x, t, cond=cond)
         x_prev = a_prev.sqrt() * (
