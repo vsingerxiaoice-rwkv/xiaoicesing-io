@@ -1,5 +1,6 @@
 import importlib
 import os
+
 import sys
 from pathlib import Path
 
@@ -22,6 +23,7 @@ def run_task():
     pkg = ".".join(hparams["task_cls"].split(".")[:-1])
     cls_name = hparams["task_cls"].split(".")[-1]
     task_cls = getattr(importlib.import_module(pkg), cls_name)
+
     task_cls.start()
 
 

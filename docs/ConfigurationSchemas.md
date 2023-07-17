@@ -1306,6 +1306,98 @@ int
 
 2048
 
+### finetune_enabled
+
+Whether to finetune from a pretrained model.
+
+#### visibility
+
+all
+
+#### scope
+
+training
+
+#### customizability
+
+normal
+
+#### type
+
+bool
+
+#### default
+
+False
+
+### finetune_ckpt_path
+
+Path to the pretrained model for finetuning.
+
+#### visibility
+
+all
+
+#### scope
+
+training
+
+#### customizability
+
+normal
+
+#### type
+
+str
+
+#### default
+
+null
+
+### finetune_ignored_params
+
+Prefixes of parameter key names in the state dict of the pretrained model that need to be dropped before finetuning.
+
+#### visibility
+
+all
+
+#### scope
+
+training
+
+#### customizability
+
+normal
+
+#### type
+
+list
+
+### finetune_strict_shapes
+
+Whether to raise error if the tensor shapes of any parameter of the pretrained model and the target model mismatch. If set to `False`, parameters with mismatching shapes will be skipped.
+
+#### visibility
+
+all
+
+#### scope
+
+training
+
+#### customizability
+
+normal
+
+#### type
+
+bool
+
+#### default
+
+True
+
 ### fmax
 
 Maximum frequency of mel extraction.
@@ -3323,4 +3415,5 @@ int
 #### default
 
 2048
+
 

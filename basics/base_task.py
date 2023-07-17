@@ -87,10 +87,69 @@ class BaseTask(pl.LightningModule):
     def setup(self, stage):
         self.phone_encoder = self.build_phone_encoder()
         self.model = self.build_model()
+        # utils.load_warp(self)
+        if hparams['finetune_enabled'] and get_latest_checkpoint_path(pathlib.Path(hparams['work_dir'])) is None:
+            self.load_finetune_ckpt( self.load_pre_train_model())
         self.print_arch()
         self.build_losses()
         self.train_dataset = self.dataset_cls(hparams['train_set_name'])
         self.valid_dataset = self.dataset_cls(hparams['valid_set_name'])
+
+    def load_finetune_ckpt(
+            self, state_dict
+    ):
+
+        adapt_shapes = hparams['finetune_strict_shapes']
+        if not adapt_shapes:
+            cur_model_state_dict = self.state_dict()
+            unmatched_keys = []
+            for key, param in state_dict.items():
+                if key in cur_model_state_dict:
+                    new_param = cur_model_state_dict[key]
+                    if new_param.shape != param.shape:
+                        unmatched_keys.append(key)
+                        print('| Unmatched keys: ', key, new_param.shape, param.shape)
+            for key in unmatched_keys:
+                del state_dict[key]
+        self.load_state_dict(state_dict, strict=False)
+
+    def load_pre_train_model(self):
+
+        pre_train_ckpt_path = hparams.get('finetune_ckpt_path')
+        blacklist = hparams.get('finetune_ignored_params')
+        # whitelist=hparams.get('pre_train_whitelist')
+        if blacklist is None:
+            blacklist = []
+        # if whitelist is  None:
+        #     raise RuntimeError("")
+
+        if pre_train_ckpt_path is not None:
+            ckpt = torch.load(pre_train_ckpt_path)
+            # if ckpt.get('category') is None:
+            #     raise RuntimeError("")
+
+            if isinstance(self.model, CategorizedModule):
+                self.model.check_category(ckpt.get('category'))
+
+            state_dict = {}
+            for i in ckpt['state_dict']:
+                # if 'diffusion' in i:
+                # if i in rrrr:
+                #     continue
+                skip = False
+                for b in blacklist:
+                    if i.startswith(b):
+                        skip = True
+                        break
+
+                if skip:
+                    continue
+
+                state_dict[i] = ckpt['state_dict'][i]
+                print(i)
+            return state_dict
+        else:
+            raise RuntimeError("")
 
     @staticmethod
     def build_phone_encoder():
@@ -292,6 +351,11 @@ class BaseTask(pl.LightningModule):
     def start(cls):
         pl.seed_everything(hparams['seed'], workers=True)
         task = cls()
+
+        # if pre_train is not None:
+        #     task.load_state_dict(pre_train,strict=False)
+        #     print("load success-------------------------------------------------------------------")
+
         work_dir = pathlib.Path(hparams['work_dir'])
         trainer = pl.Trainer(
             accelerator=hparams['pl_trainer_accelerator'],
@@ -379,16 +443,16 @@ class BaseTask(pl.LightningModule):
         from utils import simulate_lr_scheduler
         if checkpoint.get('trainer_stage', '') == RunningStage.VALIDATING.value:
             self.skip_immediate_validation = True
-        
+
         optimizer_args = hparams['optimizer_args']
         scheduler_args = hparams['lr_scheduler_args']
-        
+
         if 'beta1' in optimizer_args and 'beta2' in optimizer_args and 'betas' not in optimizer_args:
             optimizer_args['betas'] = (optimizer_args['beta1'], optimizer_args['beta2'])
 
         if checkpoint.get('optimizer_states', None):
             opt_states = checkpoint['optimizer_states']
-            assert len(opt_states) == 1 # only support one optimizer
+            assert len(opt_states) == 1  # only support one optimizer
             opt_state = opt_states[0]
             for param_group in opt_state['param_groups']:
                 for k, v in optimizer_args.items():
@@ -398,13 +462,14 @@ class BaseTask(pl.LightningModule):
                         rank_zero_info(f'| Overriding optimizer parameter {k} from checkpoint: {param_group[k]} -> {v}')
                         param_group[k] = v
                 if 'initial_lr' in param_group and param_group['initial_lr'] != optimizer_args['lr']:
-                    rank_zero_info(f'| Overriding optimizer parameter initial_lr from checkpoint: {param_group["initial_lr"]} -> {optimizer_args["lr"]}')
+                    rank_zero_info(
+                        f'| Overriding optimizer parameter initial_lr from checkpoint: {param_group["initial_lr"]} -> {optimizer_args["lr"]}')
                     param_group['initial_lr'] = optimizer_args['lr']
 
         if checkpoint.get('lr_schedulers', None):
             assert checkpoint.get('optimizer_states', False)
             schedulers = checkpoint['lr_schedulers']
-            assert len(schedulers) == 1 # only support one scheduler
+            assert len(schedulers) == 1  # only support one scheduler
             scheduler = schedulers[0]
             for k, v in scheduler_args.items():
                 if k in scheduler and scheduler[k] != v:
@@ -419,5 +484,6 @@ class BaseTask(pl.LightningModule):
             scheduler['_last_lr'] = new_lrs
             for param_group, new_lr in zip(checkpoint['optimizer_states'][0]['param_groups'], new_lrs):
                 if param_group['lr'] != new_lr:
-                    rank_zero_info(f'| Overriding optimizer parameter lr from checkpoint: {param_group["lr"]} -> {new_lr}')
+                    rank_zero_info(
+                        f'| Overriding optimizer parameter lr from checkpoint: {param_group["lr"]} -> {new_lr}')
                     param_group['lr'] = new_lr

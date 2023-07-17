@@ -103,3 +103,11 @@ max_updates: 288000
 num_ckpt_keep: 5
 permanent_ckpt_start: 180000
 permanent_ckpt_interval: 10000
+
+finetune_enabled: false
+finetune_ckpt_path: null
+finetune_ignored_params:
+  - model.spk_embed
+  - model.fs2.txt_embed
+  - model.fs2.encoder.embed_tokens
+finetune_strict_shapes: true

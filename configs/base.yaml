@@ -89,3 +89,14 @@ pl_trainer_precision: '32-true'
 pl_trainer_num_nodes: 1
 pl_trainer_strategy: 'auto'
 ddp_backend: 'nccl' # choose from 'gloo', 'nccl', 'nccl_no_p2p'
+
+###########
+# finetune
+###########
+
+finetune_enabled: false
+finetune_ckpt_path: null
+finetune_ignored_params: []
+
+
+finetune_strict_shapes: true

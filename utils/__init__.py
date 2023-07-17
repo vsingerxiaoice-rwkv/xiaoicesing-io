@@ -11,6 +11,8 @@ import torch
 import torch.nn.functional as F
 
 from basics.base_module import CategorizedModule
+from utils.hparams import hparams
+from utils.training_utils import get_latest_checkpoint_path
 
 
 def tensors_to_scalars(metrics):
@@ -149,7 +151,8 @@ def filter_kwargs(dict_to_filter, kwarg_obj):
 
     sig = inspect.signature(kwarg_obj)
     filter_keys = [param.name for param in sig.parameters.values() if param.kind == param.POSITIONAL_OR_KEYWORD]
-    filtered_dict = {filter_key: dict_to_filter[filter_key] for filter_key in filter_keys if filter_key in dict_to_filter}
+    filtered_dict = {filter_key: dict_to_filter[filter_key] for filter_key in filter_keys if
+                     filter_key in dict_to_filter}
     return filtered_dict
 
 
@@ -206,6 +209,14 @@ def load_ckpt(
     elif key_in_ckpt is not None:
         shown_model_name = f'\'{key_in_ckpt}\''
     print(f'| load {shown_model_name} from \'{checkpoint_path}\'.')
+
+
+
+
+
+
+
+    # return load_pre_train_model()
 
 
 def remove_padding(x, padding_idx=0):
@@ -265,7 +276,8 @@ def simulate_lr_scheduler(optimizer_args, scheduler_args, last_epoch=-1, num_par
         [{'params': torch.nn.Parameter(), 'initial_lr': optimizer_args['lr']} for _ in range(num_param_groups)],
         **optimizer_args
     )
-    scheduler = build_object_from_config(scheduler_args['scheduler_cls'], optimizer, last_epoch=last_epoch, **scheduler_args)
+    scheduler = build_object_from_config(scheduler_args['scheduler_cls'], optimizer, last_epoch=last_epoch,
+                                         **scheduler_args)
 
     if hasattr(scheduler, '_get_closed_form_lr'):
         return scheduler._get_closed_form_lr()
