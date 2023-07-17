@@ -125,17 +125,18 @@ class BaseTask(pl.LightningModule):
         """
         losses = self.run_model(sample)
         total_loss = sum(losses.values())
-        return total_loss, {**losses, 'batch_size': sample['size']}
+        return total_loss, {**losses, 'batch_size': float(sample['size'])}
 
     def training_step(self, sample, batch_idx, optimizer_idx=-1):
         total_loss, log_outputs = self._training_step(sample)
 
         # logs to progress bar
         self.log_dict(log_outputs, prog_bar=True, logger=False, on_step=True, on_epoch=False)
-        self.log('lr', self.lr_schedulers().get_lr()[0], prog_bar=True, logger=False, on_step=True, on_epoch=False)
+        self.log('lr', self.lr_schedulers().get_last_lr()[0], prog_bar=True, logger=False, on_step=True, on_epoch=False)
         # logs to tensorboard
-        tb_log = {f'tr/{k}': v for k, v in log_outputs.items()}
-        if self.global_step % self.trainer.log_every_n_steps == 0:
+        if self.global_step % hparams['log_interval'] == 0:
+            tb_log = {f'tr/{k}': v for k, v in log_outputs.items()}
+            tb_log['tr/lr'] = self.lr_schedulers().get_last_lr()[0]
             self.logger.log_metrics(tb_log, step=self.global_step)
 
         return total_loss
@@ -188,7 +189,7 @@ class BaseTask(pl.LightningModule):
             self.skip_immediate_ckpt_save = True
             return
         metric_vals = {k: v.compute() for k, v in self.valid_metrics.items()}
-        self.log('val_loss', metric_vals['total_loss'], on_epoch=True, prog_bar=True, logger=False)
+        self.log('val_loss', metric_vals['total_loss'], on_epoch=True, prog_bar=True, logger=False, sync_dist=True)
         self.logger.log_metrics({f'val/{k}': v for k, v in metric_vals.items()}, step=self.global_step)
         for metric in self.valid_metrics.values():
             metric.reset()
@@ -318,7 +319,7 @@ class BaseTask(pl.LightningModule):
                     permanent_ckpt_interval=hparams['permanent_ckpt_interval'],
                     verbose=True
                 ),
-                LearningRateMonitor(logging_interval='step'),
+                # LearningRateMonitor(logging_interval='step'),
                 DsTQDMProgressBar(),
             ],
             logger=TensorBoardLogger(
@@ -330,7 +331,7 @@ class BaseTask(pl.LightningModule):
             val_check_interval=hparams['val_check_interval'] * hparams['accumulate_grad_batches'],
             # so this is global_steps
             check_val_every_n_epoch=None,
-            log_every_n_steps=hparams['log_interval'],
+            log_every_n_steps=1,
             max_steps=hparams['max_updates'],
             use_distributed_sampler=False,
             num_sanity_val_steps=hparams['num_sanity_val_steps'],
