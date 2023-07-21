@@ -148,7 +148,7 @@ class DiffSingerVarianceONNX(DiffSingerVariance):
         return encoder_out, x_masks
 
     def forward_dur_predictor(self, encoder_out, x_masks, ph_midi, spk_embed=None):
-        return self.fs2.forward_dur_predictor(encoder_out, x_masks, ph_midi, spk_embed=None)
+        return self.fs2.forward_dur_predictor(encoder_out, x_masks, ph_midi, spk_embed=spk_embed)
 
     def forward_mel2x_gather(self, x_src, x_dur, x_dim=None):
         mel2x = self.lr(x_dur)
