@@ -153,6 +153,7 @@ class AcousticBinarizer(BaseBinarizer):
         aug_list = []
         all_item_names = [item_name for item_name, _ in data_iterator]
         total_scale = 0
+        aug_pe = initialize_pe()
         if self.augmentation_args['random_pitch_shifting']['enabled']:
             from augmentation.spec_stretch import SpectrogramStretchAugmentation
             aug_args = self.augmentation_args['random_pitch_shifting']
@@ -162,7 +163,7 @@ class AcousticBinarizer(BaseBinarizer):
             assert key_shift_min < 0 < key_shift_max, \
                 'Random pitch shifting augmentation must have a range where min < 0 < max.'
 
-            aug_ins = SpectrogramStretchAugmentation(self.raw_data_dirs, aug_args, pe=initialize_pe())
+            aug_ins = SpectrogramStretchAugmentation(self.raw_data_dirs, aug_args, pe=aug_pe)
             scale = aug_args['scale']
             aug_item_names = random.choices(all_item_names, k=int(scale * len(all_item_names)))
 
@@ -201,7 +202,7 @@ class AcousticBinarizer(BaseBinarizer):
                 f'Fixed pitch shifting augmentation requires num_spk >= (1 + len(targets)) * (max(spk_ids) + 1).'
             assert scale < 1, 'Fixed pitch shifting augmentation requires scale < 1.'
 
-            aug_ins = SpectrogramStretchAugmentation(self.raw_data_dirs, aug_args)
+            aug_ins = SpectrogramStretchAugmentation(self.raw_data_dirs, aug_args, pe=aug_pe)
             for i, target in enumerate(targets):
                 aug_item_names = random.choices(all_item_names, k=int(scale * len(all_item_names)))
                 for aug_item_name in aug_item_names:
@@ -230,7 +231,7 @@ class AcousticBinarizer(BaseBinarizer):
                 'Random time stretching augmentation must have a range where 0 < min < 1 < max.'
             assert domain in ['log', 'linear'], 'domain must be \'log\' or \'linear\'.'
 
-            aug_ins = SpectrogramStretchAugmentation(self.raw_data_dirs, aug_args)
+            aug_ins = SpectrogramStretchAugmentation(self.raw_data_dirs, aug_args, pe=aug_pe)
             scale = aug_args['scale']
             k_from_raw = int(scale / (1 + total_scale) * len(all_item_names))
             k_from_aug = int(total_scale * scale / (1 + total_scale) * len(all_item_names))
