@@ -34,7 +34,7 @@ class GaussianDiffusionONNX(GaussianDiffusion):
         nonzero_mask = ((t > 0).float()).reshape(1, 1, 1, 1)
         return model_mean + nonzero_mask * (0.5 * model_log_variance).exp() * noise
 
-    def p_sample_ddim(self, x, t, interval, cond):
+    def p_sample_ddim(self, x, t, interval: int, cond):
         a_t = extract(self.alphas_cumprod, t)
         t_prev = t - interval
         a_prev = extract(self.alphas_cumprod, t_prev * (t_prev > 0))
