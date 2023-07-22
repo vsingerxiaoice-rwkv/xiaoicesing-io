@@ -155,7 +155,7 @@ class VarianceBinarizer(BaseBinarizer):
         # Below: extract actual f0, convert to pitch and calculate delta pitch
         waveform, _ = librosa.load(meta_data['wav_fn'], sr=hparams['audio_sample_rate'], mono=True)
         global pitch_extractor
-        if pitch_extractor is not None:
+        if pitch_extractor is None:
             pitch_extractor = initialize_pe()
         f0, uv = pitch_extractor.get_pitch(waveform, length, hparams, interp_uv=True)
         if uv.all():  # All unvoiced
