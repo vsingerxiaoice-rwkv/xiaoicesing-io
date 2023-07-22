@@ -155,7 +155,7 @@ class VarianceTask(BaseTask):
             losses = {}
             if dur_pred is not None:
                 losses['dur_loss'] = self.lambda_dur_loss * self.dur_loss(dur_pred, ph_dur, ph2word=ph2word)
-            nonpadding = (mel2ph > 0).unsqueeze(-1).float()
+            nonpadding = (mel2ph > 0).unsqueeze(-1).float() if mel2ph is not None else None
             if pitch_pred is not None:
                 (pitch_x_recon, pitch_noise) = pitch_pred
                 losses['pitch_loss'] = self.lambda_pitch_loss * self.pitch_loss(
