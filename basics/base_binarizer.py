@@ -1,8 +1,8 @@
 import json
-import logging
 import pathlib
 import random
 import shutil
+import warnings
 from copy import deepcopy
 
 import numpy as np
@@ -105,34 +105,52 @@ class BaseBinarizer:
         Split the dataset into training set and validation set.
         :return: train_item_names, valid_item_names
         """
-        item_names = set(deepcopy(self.item_names))
         prefixes = set([str(pr) for pr in hparams['test_prefixes']])
         valid_item_names = set()
         # Add prefixes that specified speaker index and matches exactly item name to test set
         for prefix in deepcopy(prefixes):
-            if prefix in item_names:
+            if prefix in self.item_names:
                 valid_item_names.add(prefix)
                 prefixes.remove(prefix)
         # Add prefixes that exactly matches item name without speaker id to test set
         for prefix in deepcopy(prefixes):
-            for name in item_names:
+            matched = False
+            for name in self.item_names:
                 if name.split(':')[-1] == prefix:
                     valid_item_names.add(name)
-                    prefixes.remove(prefix)
+                    matched = True
+            if matched:
+                prefixes.remove(prefix)
         # Add names with one of the remaining prefixes to test set
         for prefix in deepcopy(prefixes):
-            for name in item_names:
+            matched = False
+            for name in self.item_names:
                 if name.startswith(prefix):
                     valid_item_names.add(name)
-                    prefixes.remove(prefix)
-        for prefix in prefixes:
-            for name in item_names:
+                    matched = True
+            if matched:
+                prefixes.remove(prefix)
+        for prefix in deepcopy(prefixes):
+            matched = False
+            for name in self.item_names:
                 if name.split(':')[-1].startswith(prefix):
                     valid_item_names.add(name)
+                    matched = True
+            if matched:
+                prefixes.remove(prefix)
+
+        if len(prefixes) != 0:
+            warnings.warn(
+                f'The following rules in test_prefixes have no matching names in the dataset: {sorted(prefixes)}',
+                category=UserWarning
+            )
+            warnings.filterwarnings('default')
+
         valid_item_names = sorted(list(valid_item_names))
-        train_item_names = [x for x in item_names if x not in set(valid_item_names)]
-        logging.info("train {}".format(len(train_item_names)))
-        logging.info("test {}".format(len(valid_item_names)))
+        assert len(valid_item_names) > 0, 'Validation set is empty!'
+        train_item_names = [x for x in self.item_names if x not in set(valid_item_names)]
+        assert len(train_item_names) > 0, 'Training set is empty!'
+
         return train_item_names, valid_item_names
 
     @property

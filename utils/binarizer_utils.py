@@ -1,13 +1,9 @@
-import warnings
-
 import librosa
 import numpy as np
+import parselmouth
 import pyworld as pw
 import torch
 
-warnings.filterwarnings("ignore")
-
-import parselmouth
 from utils.pitch_utils import interp_f0
 
 
