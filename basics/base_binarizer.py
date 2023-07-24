@@ -181,12 +181,15 @@ class BaseBinarizer:
         self.check_coverage()
 
         # Process valid set and train set
-        self.process_dataset('valid')
-        self.process_dataset(
-            'train',
-            num_workers=int(self.binarization_args['num_workers']),
-            apply_augmentation=any(args['enabled'] for args in self.augmentation_args.values())
-        )
+        try:
+            self.process_dataset('valid')
+            self.process_dataset(
+                'train',
+                num_workers=int(self.binarization_args['num_workers']),
+                apply_augmentation=any(args['enabled'] for args in self.augmentation_args.values())
+            )
+        except KeyboardInterrupt:
+            exit(-1)
 
     def check_coverage(self):
         # Group by phonemes in the dictionary.
@@ -281,7 +284,7 @@ class BaseBinarizer:
                     postprocess(item)
         except KeyboardInterrupt:
             builder.finalize()
-            exit(-1)
+            raise
 
         builder.finalize()
         with open(self.binary_data_dir / f'{prefix}.lengths', 'wb') as f:
