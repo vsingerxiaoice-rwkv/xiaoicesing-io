@@ -1,6 +1,5 @@
 import json
 import logging
-import os
 import pathlib
 import random
 import shutil
@@ -50,17 +49,9 @@ class BaseBinarizer:
         if not isinstance(data_dir, list):
             data_dir = [data_dir]
 
-        self.speakers = hparams['speakers']
-        assert isinstance(self.speakers, list), 'Speakers must be a list'
-        assert len(self.speakers) == len(set(self.speakers)), 'Speakers cannot contain duplicate names'
-
         self.raw_data_dirs = [pathlib.Path(d) for d in data_dir]
         self.binary_data_dir = pathlib.Path(hparams['binary_data_dir'])
         self.data_attrs = [] if data_attrs is None else data_attrs
-
-        if hparams['use_spk_id']:
-            assert len(self.speakers) == len(self.raw_data_dirs), \
-                'Number of raw data dirs must equal number of speaker names!'
 
         self.binarization_args = hparams['binarization_args']
         self.augmentation_args = hparams.get('augmentation_args', {})
@@ -68,6 +59,7 @@ class BaseBinarizer:
 
         self.spk_map = None
         self.spk_ids = hparams['spk_ids']
+        self.speakers = hparams['speakers']
         self.build_spk_map()
 
         self.items = {}
@@ -83,6 +75,27 @@ class BaseBinarizer:
         if self.binarization_args['shuffle']:
             random.seed(hparams['seed'])
             random.shuffle(self.item_names)
+
+    def build_spk_map(self):
+        assert isinstance(self.speakers, list), 'Speakers must be a list'
+        assert len(self.speakers) == len(self.raw_data_dirs), \
+            'Number of raw data dirs must equal number of speaker names!'
+        if not self.spk_ids:
+            self.spk_ids = list(range(len(self.raw_data_dirs)))
+        else:
+            assert len(self.spk_ids) == len(self.raw_data_dirs), \
+                'Length of explicitly given spk_ids must equal the number of raw datasets.'
+        assert max(self.spk_ids) < hparams['num_spk'], \
+            f'Index in spk_id sequence {self.spk_ids} is out of range. All values should be smaller than num_spk.'
+
+        self.spk_map = {}
+        for spk_name, spk_id in zip(self.speakers, self.spk_ids):
+            if spk_name in self.spk_map and self.spk_map[spk_name] != spk_id:
+                raise ValueError(f'Invalid speaker ID assignment. Name \'{spk_name}\' is assigned '
+                                 f'with different speaker IDs: {self.spk_map[spk_name]} and {spk_id}.')
+            self.spk_map[spk_name] = spk_id
+
+        print("| spk_map: ", self.spk_map)
 
     def load_meta_data(self, raw_data_dir: pathlib.Path, ds_id, spk_id):
         raise NotImplementedError()
@@ -130,17 +143,6 @@ class BaseBinarizer:
     def valid_item_names(self):
         return self._valid_item_names
 
-    def build_spk_map(self):
-        if not self.spk_ids:
-            self.spk_ids = list(range(len(self.raw_data_dirs)))
-        else:
-            assert len(self.spk_ids) == len(self.raw_data_dirs), \
-                'Length of explicitly given spk_ids must equal the number of raw datasets.'
-        assert max(self.spk_ids) < hparams['num_spk'], \
-            f'Index in spk_id sequence {self.spk_ids} is out of range. All values should be smaller than num_spk.'
-        self.spk_map = {x: i for x, i in zip(self.speakers, self.spk_ids)}
-        print("| spk_map: ", self.spk_map)
-
     def meta_data_iterator(self, prefix):
         if prefix == 'train':
             item_names = self.train_item_names
@@ -151,11 +153,12 @@ class BaseBinarizer:
             yield item_name, meta_data
 
     def process(self):
-        os.makedirs(hparams['binary_data_dir'], exist_ok=True)
+        self.binary_data_dir.mkdir(parents=True, exist_ok=True)
 
         # Copy spk_map and dictionary to binary data dir
-        spk_map_fn = f"{hparams['binary_data_dir']}/spk_map.json"
-        json.dump(self.spk_map, open(spk_map_fn, 'w', encoding='utf-8'))
+        spk_map_fn = self.binary_data_dir / 'spk_map.json'
+        with open(spk_map_fn, 'w', encoding='utf-8') as f:
+            json.dump(self.spk_map, f)
         shutil.copy(locate_dictionary(), self.binary_data_dir / 'dictionary.txt')
         self.check_coverage()
 
