@@ -259,7 +259,11 @@ class AcousticBinarizer(BaseBinarizer):
                         aug_map[aug_item] = [aug_task]
                     aug_list.append(aug_task)
                 elif aug_type == 1:
-                    aug_task = deepcopy(aug_item)
+                    aug_task = {
+                        'name': aug_item,
+                        'func': aug_item['func'],
+                        'kwargs': deepcopy(aug_item['kwargs'])
+                    }
                     aug_task['kwargs']['speed'] = speed
                     if aug_item['name'] in aug_map:
                         aug_map[aug_item['name']].append(aug_task)
