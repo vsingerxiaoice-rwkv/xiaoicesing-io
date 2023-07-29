@@ -12,7 +12,7 @@ numpy  # ==1.23.5
 onnx==1.14.0
 onnxsim==0.4.31
 praat-parselmouth==0.4.3
-pyworld==0.3.3
+pyworld==0.3.4
 PyYAML
 resampy
 scipy
