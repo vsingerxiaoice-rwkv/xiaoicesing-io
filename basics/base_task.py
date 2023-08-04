@@ -89,16 +89,40 @@ class BaseTask(pl.LightningModule):
         self.phone_encoder = self.build_phone_encoder()
         self.model = self.build_model()
         # utils.load_warp(self)
+        self.unfreeze_all_params()
+        if hparams['freezing_enabled']:
+            self.freeze_params()
         if hparams['finetune_enabled'] and get_latest_checkpoint_path(pathlib.Path(hparams['work_dir'])) is None:
-            self.load_finetune_ckpt( self.load_pre_train_model())
+            self.load_finetune_ckpt(self.load_pre_train_model())
         self.print_arch()
         self.build_losses_and_metrics()
         self.train_dataset = self.dataset_cls(hparams['train_set_name'])
         self.valid_dataset = self.dataset_cls(hparams['valid_set_name'])
 
+    def get_need_freeze_state_dict_key(self, model_state_dict) -> list:
+        key_list = []
+        for i in hparams['frozen_params']:
+            for j in model_state_dict:
+                if j.startswith(i):
+                    key_list.append(j)
+        return list(set(key_list))
+
+    def freeze_params(self) -> None:
+        model_state_dict = self.state_dict().keys()
+        freeze_key = self.get_need_freeze_state_dict_key(model_state_dict=model_state_dict)
+
+        for i in freeze_key:
+            params=self.get_parameter(i)
+
+            params.requires_grad = False
+
+    def unfreeze_all_params(self) -> None:
+        for i in self.model.parameters():
+            i.requires_grad = True
+
     def load_finetune_ckpt(
             self, state_dict
-    ):
+    ) -> None:
 
         adapt_shapes = hparams['finetune_strict_shapes']
         if not adapt_shapes:
@@ -286,7 +310,7 @@ class BaseTask(pl.LightningModule):
             optimizer_args['betas'] = (optimizer_args['beta1'], optimizer_args['beta2'])
         optimizer = build_object_from_config(
             optimizer_args['optimizer_cls'],
-            filter(lambda p: p.requires_grad, model.parameters()),
+            model.parameters(),
             **optimizer_args
         )
         return optimizer

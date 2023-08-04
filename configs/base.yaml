@@ -102,3 +102,6 @@ finetune_ignored_params: []
 
 
 finetune_strict_shapes: true
+
+freezing_enabled: false
+frozen_params: []
