@@ -108,7 +108,7 @@ class VarianceTask(BaseTask):
             self.pitch_loss = DiffusionNoiseLoss(
                 loss_type=hparams['diff_loss_type'],
             )
-            self.register_metric('pitch_acc', RawCurveAccuracy(delta=0.5))
+            self.register_metric('pitch_acc', RawCurveAccuracy(tolerance=0.5))
         if self.predict_variances:
             self.var_loss = DiffusionNoiseLoss(
                 loss_type=hparams['diff_loss_type'],

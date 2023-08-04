@@ -4,9 +4,9 @@ from torch import Tensor
 
 
 class RawCurveAccuracy(torchmetrics.Metric):
-    def __init__(self, *, delta, **kwargs):
+    def __init__(self, *, tolerance, **kwargs):
         super().__init__(**kwargs)
-        self.delta = delta
+        self.tolerance = tolerance
         self.add_state('close', default=torch.tensor(0.0, dtype=torch.float32), dist_reduce_fx='sum')
         self.add_state('total', default=torch.tensor(0.0, dtype=torch.float32), dist_reduce_fx='sum')
 
@@ -22,7 +22,7 @@ class RawCurveAccuracy(torchmetrics.Metric):
         else:
             assert pred.shape == target.shape == mask.shape, \
                 f'shapes of pred, target and mask mismatch: {pred.shape}, {target.shape}, {mask.shape}'
-        close = torch.abs(pred - target) < self.delta
+        close = torch.abs(pred - target) < self.tolerance
         if mask is not None:
             close &= mask
 
