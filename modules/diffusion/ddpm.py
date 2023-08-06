@@ -216,7 +216,10 @@ class GaussianDiffusion(nn.Module):
 
         return x_recon, noise
 
-    def inference(self, cond, b=1, device=None):
+    def inference(self, cond, b=1, src_spec=None, device=None):
+        depth = hparams.get('diff_depth', self.k_step)
+        # TODO: implement shallow diffusion
+
         t = self.k_step
         shape = (b, self.num_feats, self.out_dims, cond.shape[2])
         x = torch.randn(shape, device=device)
@@ -329,7 +332,7 @@ class GaussianDiffusion(nn.Module):
         x = x.transpose(2, 3).squeeze(1)  # [B, F, M, T] => [B, T, M] or [B, F, T, M]
         return x
 
-    def forward(self, condition, gt_spec=None, infer=True):
+    def forward(self, condition, gt_spec=None, src_spec=None, infer=True):
         """
             conditioning diffusion, use fastspeech2 encoder output as the condition
         """
@@ -344,6 +347,8 @@ class GaussianDiffusion(nn.Module):
             t = torch.randint(0, self.k_step, (b,), device=device).long()
             return self.p_losses(spec, t, cond=cond)
         else:
+            # src_spec: [B, T, M]
+            # TODO: implement shallow diffusion
             x = self.inference(cond, b=b, device=device)
             return self.denorm_spec(x)
 
