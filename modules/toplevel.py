@@ -20,6 +20,22 @@ from modules.fastspeech.variance_encoder import FastSpeech2Variance
 from utils.hparams import hparams
 
 
+class ShallowDiffusionOutput:
+    def __init__(self, *, aux_out=None, diff_out=None):
+        self.aux_out = aux_out
+        self.diff_out = diff_out
+
+
+# TODO: replace the following placeholder with real modules
+class ExampleAuxDecoder(nn.Module):
+    def __init__(self, out_dims):
+        super().__init__()
+        self.out_dims = out_dims
+
+    def forward(self, condition, infer=True):
+        return torch.randn(condition.shape[0], condition.shape[1], self.out_dims, device=condition.device)
+
+
 class DiffSingerAcoustic(ParameterAdaptorModule, CategorizedModule):
     @property
     def category(self):
@@ -30,6 +46,13 @@ class DiffSingerAcoustic(ParameterAdaptorModule, CategorizedModule):
         self.fs2 = FastSpeech2Acoustic(
             vocab_size=vocab_size
         )
+
+        self.use_shallow_diffusion = hparams.get('use_shallow_diffusion', False)
+        if self.use_shallow_diffusion:
+            # TODO: replace the following placeholder with real modules
+            self.aux_decoder = ExampleAuxDecoder(
+                out_dims=out_dims
+            )
 
         self.diffusion = GaussianDiffusion(
             out_dims=out_dims,
@@ -49,19 +72,29 @@ class DiffSingerAcoustic(ParameterAdaptorModule, CategorizedModule):
     def forward(
             self, txt_tokens, mel2ph, f0, key_shift=None, speed=None,
             spk_embed_id=None, gt_mel=None, infer=True, **kwargs
-    ):
+    ) -> ShallowDiffusionOutput:
         condition = self.fs2(
             txt_tokens, mel2ph, f0, key_shift=key_shift, speed=speed,
             spk_embed_id=spk_embed_id, **kwargs
         )
 
         if infer:
-            mel_pred = self.diffusion(condition, infer=True)
+            if self.use_shallow_diffusion:
+                aux_mel_pred = self.aux_decoder(condition, infer=True)
+                aux_mel_pred *= ((mel2ph > 0).float()[:, :, None])
+            else:
+                aux_mel_pred = None
+            mel_pred = self.diffusion(condition, src_spec=aux_mel_pred, infer=True)
             mel_pred *= ((mel2ph > 0).float()[:, :, None])
-            return mel_pred
+            return ShallowDiffusionOutput(aux_out=aux_mel_pred, diff_out=mel_pred)
         else:
+            if self.use_shallow_diffusion:
+                # TODO: replace the following placeholder with real calling code
+                aux_out = self.aux_decoder(condition, infer=False)
+            else:
+                aux_out = None
             x_recon, noise = self.diffusion(condition, gt_spec=gt_mel, infer=False)
-            return x_recon, noise
+            return ShallowDiffusionOutput(aux_out=aux_out, diff_out=(x_recon, noise))
 
 
 class DiffSingerVariance(ParameterAdaptorModule, CategorizedModule):
