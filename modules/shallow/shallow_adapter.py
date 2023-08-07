@@ -44,7 +44,7 @@ class shallow_adapt(nn.Module):
 
     def forward(self, condition, infer=False):
 
-        return self.model(condition)
+        return self.model(condition,infer)
 
     def get_loss(self):
         return self.model.build_loss()

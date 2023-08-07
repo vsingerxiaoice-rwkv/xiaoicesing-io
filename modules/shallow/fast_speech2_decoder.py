@@ -62,6 +62,15 @@ class ConvNeXtBlock(nn.Module):
         return x
 
 
+class fs2_loss(nn.Module):
+    def __init__(self):
+        super().__init__()
+
+    def forward(self,y, x):
+        x=(x - (-5)) / (0 - (-5)) * 2 - 1
+        return nn.L1Loss()(y,x)
+
+
 class fs2_decode(nn.Module):
     def __init__(self,encoder_hidden,out_dims,n_chans,kernel_size,dropout_rate,n_layers):
         super().__init__()
@@ -72,13 +81,16 @@ class fs2_decode(nn.Module):
 
 
     def build_loss(self):
-        return nn.L1Loss()
 
-    def forward(self, x):
+        return fs2_loss()
+
+    def forward(self, x,infer):
         x=x.transpose(1, 2)
         x=self.inconv(x)
         for i in self.conv:
             x=i(x)
         x=self.outconv(x).transpose(1, 2)
+        if infer:
+            (x + 1) / 2 * (0 - (-5)) + (-5)
         return x
         pass

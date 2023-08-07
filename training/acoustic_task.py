@@ -116,7 +116,7 @@ class AcousticTask(BaseTask):
                 aux_out = output.aux_out
                 # TODO: replace the following placeholder with real loss calculation
 
-                aux_mel_loss =  self.lambda_aux_mel_loss * self.aux_mel_loss(aux_out, (target - (-5)) / (0 - (-5)) * 2 - 1)
+                aux_mel_loss =  self.lambda_aux_mel_loss * self.aux_mel_loss(aux_out, target )
                 losses['aux_mel_loss'] = aux_mel_loss
             x_recon, x_noise = output.diff_out
             mel_loss = self.mel_loss(x_recon, x_noise, nonpadding=(mel2ph > 0).unsqueeze(-1).float())

@@ -84,7 +84,7 @@ shallow_diffusion_args:
   train_diffusion: true
   aux_decoder_arch: fs2
   aux_decode_strict_hparams: true
-  aux_decoder_args:
+  aux_decoder_args: {}
 lambda_aux_mel_loss: 1.0
 
 # train and eval
