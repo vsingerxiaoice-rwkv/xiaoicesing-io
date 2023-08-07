@@ -89,7 +89,7 @@ class DiffSingerAcoustic(ParameterAdaptorModule, CategorizedModule):
         else:
             if self.use_shallow_diffusion:
                 # TODO: replace the following placeholder with real calling code
-                aux_out = self.aux_decoder(condition, gt_spec=gt_mel, infer=False)
+                aux_out = self.aux_decoder(condition, infer=False)
             else:
                 aux_out = None
             x_recon, noise = self.diffusion(condition, gt_spec=gt_mel, infer=False)

@@ -40,14 +40,13 @@ class shallow_adapt(nn.Module):
                                                   nn.Module,
                                                   parame['shallow_diffusion_args']['aux_decode_strict_hparams'],
                                                   **decodeparame)
-        pass
 
-    def forward(self, condition,gt_spec =None, infer=False):
-        if infer:
-            return self.model(condition)
-        else:
-            return self.model.losses(self.model(condition),gt_spec)
 
-        pass
+    def forward(self, condition, infer=False):
+
+        return self.model(condition)
+
+    def get_loss(self):
+        return self.model.build_loss()
 
 

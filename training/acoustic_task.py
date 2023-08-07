@@ -81,7 +81,8 @@ class AcousticTask(BaseTask):
     def build_losses_and_metrics(self):
         if self.use_shallow_diffusion:
             # TODO: replace the following placeholder with real loss creation
-            self.aux_mel_loss = torch.nn.L1Loss()
+            self.aux_mel_loss =self.model.aux_decoder.get_loss()
+
         self.mel_loss = DiffusionNoiseLoss(loss_type=hparams['diff_loss_type'])
 
     def run_model(self, sample, infer=False):
@@ -113,8 +114,8 @@ class AcousticTask(BaseTask):
             if self.use_shallow_diffusion:
                 aux_out = output.aux_out
                 # TODO: replace the following placeholder with real loss calculation
-                # aux_mel_loss = self.aux_mel_loss(aux_out, target)
-                losses['aux_mel_loss'] = aux_out
+                aux_mel_loss = self.aux_mel_loss(aux_out, target)
+                losses['aux_mel_loss'] = aux_mel_loss
             x_recon, x_noise = output.diff_out
             mel_loss = self.mel_loss(x_recon, x_noise, nonpadding=(mel2ph > 0).unsqueeze(-1).float())
             losses['mel_loss'] = mel_loss

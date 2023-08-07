@@ -69,8 +69,10 @@ class fs2_decode(nn.Module):
         self.conv = nn.ModuleList([ConvNeXtBlock(dim=n_chans,intermediate_dim=n_chans*4,layer_scale_init_value=1e-6,drop_out=dropout_rate)  for _ in range(n_layers)])
         self.outconv=nn.Conv1d(n_chans, out_dims, kernel_size, stride=1, padding=(kernel_size - 1) // 2)
 
-    def losses(self,x,gt):
-        return nn.L1Loss()(x,gt)
+
+
+    def build_loss(self):
+        return nn.L1Loss()
 
     def forward(self, x):
         x=x.transpose(1, 2)
