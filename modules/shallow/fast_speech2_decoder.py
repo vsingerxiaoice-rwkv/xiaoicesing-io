@@ -91,6 +91,6 @@ class fs2_decode(nn.Module):
             x=i(x)
         x=self.outconv(x).transpose(1, 2)
         if infer:
-            (x + 1) / 2 * (0 - (-5)) + (-5)
+            x=(x + 1) / 2 * (0 - (-5)) + (-5)
         return x
         pass
