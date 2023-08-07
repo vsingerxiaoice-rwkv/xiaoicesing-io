@@ -78,15 +78,14 @@ diff_decoder_type: 'wavenet'
 diff_loss_type: l2
 schedule_type: 'linear'
 
+# shallow diffusion
 shallow_diffusion_args:
   train_aux_decoder: true
   train_diffusion: true
   aux_decoder_arch: fs2
   aux_decode_strict_hparams: true
   aux_decoder_args:
-    shared_encoder: true
-#    arch: ps
-    # kernel_size: xxx
+lambda_aux_mel_loss: 1.0
 
 # train and eval
 num_sanity_val_steps: 1
