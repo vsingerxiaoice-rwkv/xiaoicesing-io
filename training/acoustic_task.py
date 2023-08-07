@@ -62,8 +62,9 @@ class AcousticTask(BaseTask):
         self.dataset_cls = AcousticDataset
         self.use_shallow_diffusion = hparams['use_shallow_diffusion']
         if self.use_shallow_diffusion:
-            self.train_aux_decoder = hparams['shallow_diffusion_args']['train_aux_decoder']
-            self.train_diffusion = hparams['shallow_diffusion_args']['train_diffusion']
+            shallow_args = hparams['shallow_diffusion_args']
+            self.train_aux_decoder = shallow_args['train_aux_decoder']
+            self.train_diffusion = shallow_args['train_diffusion']
 
         self.use_vocoder = hparams['infer'] or hparams['val_with_vocoder']
         if self.use_vocoder:
@@ -84,10 +85,8 @@ class AcousticTask(BaseTask):
     # noinspection PyAttributeOutsideInit
     def build_losses_and_metrics(self):
         if self.use_shallow_diffusion:
-            # TODO: replace the following placeholder with real loss creation
             self.aux_mel_loss = self.model.aux_decoder.get_loss()
             self.lambda_aux_mel_loss = hparams['lambda_aux_mel_loss']
-
         self.mel_loss = DiffusionNoiseLoss(loss_type=hparams['diff_loss_type'])
 
     def run_model(self, sample, infer=False):
@@ -117,22 +116,15 @@ class AcousticTask(BaseTask):
         else:
             losses = {}
 
-            if self.use_shallow_diffusion:
-                if self.train_aux_decoder:
-                    aux_out = output.aux_out
-                    # TODO: replace the following placeholder with real loss calculation
+            if output.aux_out is not None:
+                aux_out = output.aux_out
+                aux_mel_loss = self.lambda_aux_mel_loss * self.aux_mel_loss(aux_out, target)
+                losses['aux_mel_loss'] = aux_mel_loss
 
-                    aux_mel_loss = self.lambda_aux_mel_loss * self.aux_mel_loss(aux_out, target)
-                    losses['aux_mel_loss'] = aux_mel_loss
-                if self.train_diffusion :
-                    x_recon, x_noise = output.diff_out
-                    mel_loss = self.mel_loss(x_recon, x_noise, nonpadding=(mel2ph > 0).unsqueeze(-1).float())
-                    losses['mel_loss'] = mel_loss
-                return losses
-
-            x_recon, x_noise = output.diff_out
-            mel_loss = self.mel_loss(x_recon, x_noise, nonpadding=(mel2ph > 0).unsqueeze(-1).float())
-            losses['mel_loss'] = mel_loss
+            if output.diff_out is not None:
+                x_recon, x_noise = output.diff_out
+                mel_loss = self.mel_loss(x_recon, x_noise, nonpadding=(mel2ph > 0).unsqueeze(-1).float())
+                losses['mel_loss'] = mel_loss
 
             return losses
 
@@ -157,8 +149,10 @@ class AcousticTask(BaseTask):
                     aux_mel=mel_out.aux_out, diff_mel=mel_out.diff_out,
                     f0=sample['f0']
                 )
-            self.plot_mel(batch_idx, sample['mel'], mel_out.aux_out, name=f'auxmel_{batch_idx}')
-            self.plot_mel(batch_idx, sample['mel'], mel_out.diff_out, name=f'diffmel_{batch_idx}')
+            if mel_out.aux_out is not None:
+                self.plot_mel(batch_idx, sample['mel'], mel_out.aux_out, name=f'auxmel_{batch_idx}')
+            if mel_out.diff_out is not None:
+                self.plot_mel(batch_idx, sample['mel'], mel_out.diff_out, name=f'diffmel_{batch_idx}')
 
         return losses, sample['size']
 
