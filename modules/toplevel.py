@@ -50,10 +50,11 @@ class DiffSingerAcoustic(ParameterAdaptorModule, CategorizedModule):
 
         self.use_shallow_diffusion = hparams.get('use_shallow_diffusion', False)
         if self.use_shallow_diffusion:
-            # TODO: replace the following placeholder with real modules
+            shallow_args = hparams['shallow_diffusion_args']
+            self.train_aux_decoder = shallow_args['train_aux_decoder']
+            self.train_diffusion = shallow_args['train_diffusion']
+            self.aux_decoder_grad = shallow_args['aux_decoder_grad']
             self.aux_decoder = shallow_adapt(hparams, out_dims)
-            self.train_aux_decoder=hparams['shallow_diffusion_args']['train_aux_decoder']
-            self.train_diffusion = hparams['shallow_diffusion_args']['train_diffusion']
 
         self.diffusion = GaussianDiffusion(
             out_dims=out_dims,
@@ -92,14 +93,15 @@ class DiffSingerAcoustic(ParameterAdaptorModule, CategorizedModule):
             if self.use_shallow_diffusion:
                 # TODO: replace the following placeholder with real calling code
                 if self.train_aux_decoder:
-                    aux_out = self.aux_decoder(condition, infer=False)
+                    aux_cond = condition * self.aux_decoder_grad + condition.detach() * (1 - self.aux_decoder_grad)
+                    aux_out = self.aux_decoder(aux_cond, infer=False)
                 else:
                     aux_out = None
                 if self.train_diffusion:
                     x_recon, noise = self.diffusion(condition, gt_spec=gt_mel, infer=False)
-                    diff_out=(x_recon, noise)
+                    diff_out = (x_recon, noise)
                 else:
-                    diff_out=None
+                    diff_out = None
                 return ShallowDiffusionOutput(aux_out=aux_out, diff_out=diff_out)
 
             else:
