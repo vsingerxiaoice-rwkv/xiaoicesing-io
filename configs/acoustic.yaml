@@ -66,8 +66,6 @@ K_step: 1000
 timesteps: 1000
 max_beta: 0.02
 rel_pos: true
-use_shallow_diffusion: false
-diff_depth: 400
 diff_accelerator: ddim
 pndm_speedup: 10
 hidden_size: 256
@@ -79,6 +77,8 @@ diff_loss_type: l2
 schedule_type: 'linear'
 
 # shallow diffusion
+use_shallow_diffusion: false
+diff_depth: 400
 shallow_diffusion_args:
   train_aux_decoder: true
   train_diffusion: true
