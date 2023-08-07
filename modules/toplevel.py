@@ -52,6 +52,8 @@ class DiffSingerAcoustic(ParameterAdaptorModule, CategorizedModule):
         if self.use_shallow_diffusion:
             # TODO: replace the following placeholder with real modules
             self.aux_decoder = shallow_adapt(hparams, out_dims)
+            self.train_aux_decoder=hparams['shallow_diffusion_args']['train_aux_decoder']
+            self.train_diffusion = hparams['shallow_diffusion_args']['train_diffusion']
 
         self.diffusion = GaussianDiffusion(
             out_dims=out_dims,
@@ -89,11 +91,21 @@ class DiffSingerAcoustic(ParameterAdaptorModule, CategorizedModule):
         else:
             if self.use_shallow_diffusion:
                 # TODO: replace the following placeholder with real calling code
-                aux_out = self.aux_decoder(condition, infer=False)
+                if self.train_aux_decoder:
+                    aux_out = self.aux_decoder(condition, infer=False)
+                else:
+                    aux_out = None
+                if self.train_diffusion:
+                    x_recon, noise = self.diffusion(condition, gt_spec=gt_mel, infer=False)
+                    diff_out=(x_recon, noise)
+                else:
+                    diff_out=None
+                return ShallowDiffusionOutput(aux_out=aux_out, diff_out=diff_out)
+
             else:
                 aux_out = None
-            x_recon, noise = self.diffusion(condition, gt_spec=gt_mel, infer=False)
-            return ShallowDiffusionOutput(aux_out=aux_out, diff_out=(x_recon, noise))
+                x_recon, noise = self.diffusion(condition, gt_spec=gt_mel, infer=False)
+                return ShallowDiffusionOutput(aux_out=aux_out, diff_out=(x_recon, noise))
 
 
 class DiffSingerVariance(ParameterAdaptorModule, CategorizedModule):

@@ -61,6 +61,10 @@ class AcousticTask(BaseTask):
         super().__init__()
         self.dataset_cls = AcousticDataset
         self.use_shallow_diffusion = hparams['use_shallow_diffusion']
+        if self.use_shallow_diffusion:
+            self.train_aux_decoder = hparams['shallow_diffusion_args']['train_aux_decoder']
+            self.train_diffusion = hparams['shallow_diffusion_args']['train_diffusion']
+
         self.use_vocoder = hparams['infer'] or hparams['val_with_vocoder']
         if self.use_vocoder:
             self.vocoder: BaseVocoder = get_vocoder_cls(hparams)()
@@ -112,12 +116,20 @@ class AcousticTask(BaseTask):
             return output
         else:
             losses = {}
-            if self.use_shallow_diffusion:
-                aux_out = output.aux_out
-                # TODO: replace the following placeholder with real loss calculation
 
-                aux_mel_loss =  self.lambda_aux_mel_loss * self.aux_mel_loss(aux_out, target )
-                losses['aux_mel_loss'] = aux_mel_loss
+            if self.use_shallow_diffusion:
+                if self.train_aux_decoder:
+                    aux_out = output.aux_out
+                    # TODO: replace the following placeholder with real loss calculation
+
+                    aux_mel_loss = self.lambda_aux_mel_loss * self.aux_mel_loss(aux_out, target)
+                    losses['aux_mel_loss'] = aux_mel_loss
+                if self.train_diffusion :
+                    x_recon, x_noise = output.diff_out
+                    mel_loss = self.mel_loss(x_recon, x_noise, nonpadding=(mel2ph > 0).unsqueeze(-1).float())
+                    losses['mel_loss'] = mel_loss
+                return losses
+
             x_recon, x_noise = output.diff_out
             mel_loss = self.mel_loss(x_recon, x_noise, nonpadding=(mel2ph > 0).unsqueeze(-1).float())
             losses['mel_loss'] = mel_loss

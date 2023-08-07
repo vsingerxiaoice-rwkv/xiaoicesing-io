@@ -72,7 +72,7 @@ class fs2_loss(nn.Module):
 
 
 class fs2_decode(nn.Module):
-    def __init__(self,encoder_hidden,out_dims,n_chans,kernel_size,dropout_rate,n_layers):
+    def __init__(self,encoder_hidden,out_dims,n_chans,kernel_size,dropout_rate,n_layers,parame):
         super().__init__()
         self.inconv=nn.Conv1d(encoder_hidden, n_chans, kernel_size, stride=1, padding=(kernel_size - 1) // 2)
         self.conv = nn.ModuleList([ConvNeXtBlock(dim=n_chans,intermediate_dim=n_chans*4,layer_scale_init_value=1e-6,drop_out=dropout_rate)  for _ in range(n_layers)])

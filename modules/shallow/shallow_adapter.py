@@ -35,6 +35,7 @@ class shallow_adapt(nn.Module):
         decodeparame=parame['shallow_diffusion_args']['aux_decoder_args']
         decodeparame[ 'encoder_hidden'] = parame['hidden_size']
         decodeparame['out_dims'] = out_dims
+        decodeparame['parame'] = parame
 
         self.model = build_object_from_class_name(cls_map[parame['shallow_diffusion_args']['aux_decoder_arch']],
                                                   nn.Module,
