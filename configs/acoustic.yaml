@@ -81,10 +81,11 @@ schedule_type: 'linear'
 shallow_diffusion_args:
   train_aux_decoder: true
   train_diffusion: true
-  shared_encoder: true
-  aux_decoder_arch: ps
+  aux_decoder_arch: fs2
+  aux_decode_strict_hparams: true
   aux_decoder_args:
-    arch: ps
+    shared_encoder: true
+#    arch: ps
     # kernel_size: xxx
 
 # train and eval

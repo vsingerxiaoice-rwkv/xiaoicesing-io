@@ -17,6 +17,7 @@ from modules.fastspeech.acoustic_encoder import FastSpeech2Acoustic
 from modules.fastspeech.param_adaptor import ParameterAdaptorModule
 from modules.fastspeech.tts_modules import RhythmRegulator, LengthRegulator
 from modules.fastspeech.variance_encoder import FastSpeech2Variance
+from modules.shallow.shallow_adapter import shallow_adapt
 from utils.hparams import hparams
 
 
@@ -50,9 +51,7 @@ class DiffSingerAcoustic(ParameterAdaptorModule, CategorizedModule):
         self.use_shallow_diffusion = hparams.get('use_shallow_diffusion', False)
         if self.use_shallow_diffusion:
             # TODO: replace the following placeholder with real modules
-            self.aux_decoder = ExampleAuxDecoder(
-                out_dims=out_dims
-            )
+            self.aux_decoder = shallow_adapt(hparams, out_dims)
 
         self.diffusion = GaussianDiffusion(
             out_dims=out_dims,
@@ -90,7 +89,7 @@ class DiffSingerAcoustic(ParameterAdaptorModule, CategorizedModule):
         else:
             if self.use_shallow_diffusion:
                 # TODO: replace the following placeholder with real calling code
-                aux_out = self.aux_decoder(condition, infer=False)
+                aux_out = self.aux_decoder(condition, gt_spec=gt_mel, infer=False)
             else:
                 aux_out = None
             x_recon, noise = self.diffusion(condition, gt_spec=gt_mel, infer=False)
