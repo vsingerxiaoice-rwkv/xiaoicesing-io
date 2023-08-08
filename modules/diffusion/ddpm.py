@@ -219,7 +219,7 @@ class GaussianDiffusion(nn.Module):
     def inference(self, cond, b=1, x_start=None, device=None):
         depth = hparams.get('diff_depth', self.k_step)
         noise = torch.randn(b, self.num_feats, self.out_dims, cond.shape[2], device=device)
-        if x_start is None or depth >= self.k_step:
+        if x_start is None or depth > self.k_step:
             t_max = self.k_step
             x = noise
         elif depth > 0:
@@ -231,13 +231,13 @@ class GaussianDiffusion(nn.Module):
             t_max = 0
             x = x_start
 
-        if hparams.get('pndm_speedup') and hparams['pndm_speedup'] > 1:
+        if hparams.get('pndm_speedup') and hparams['pndm_speedup'] > 1 and tmax > 0:
             algorithm = hparams.get('diff_accelerator', 'ddim')
             algorithm = 'pndm'
             if algorithm == 'dpm-solver':
                 from inference.dpm_solver_pytorch import NoiseScheduleVP, model_wrapper, DPM_Solver
                 # 1. Define the noise schedule.
-                noise_schedule = NoiseScheduleVP(schedule='discrete', betas=self.betas)
+                noise_schedule = NoiseScheduleVP(schedule='discrete', betas=self.betas[:tmax])
 
                 # 2. Convert your discrete-time `model` to the continuous-time
                 # noise prediction model. Here is an example for a diffusion model
@@ -276,7 +276,7 @@ class GaussianDiffusion(nn.Module):
             elif algorithm == 'unipc':
                 from inference.uni_pc import NoiseScheduleVP, model_wrapper, UniPC
                 # 1. Define the noise schedule.
-                noise_schedule = NoiseScheduleVP(schedule='discrete', betas=self.betas)
+                noise_schedule = NoiseScheduleVP(schedule='discrete', betas=self.betas[:tmax])
 
                 # 2. Convert your discrete-time `model` to the continuous-time
                 # noise prediction model. Here is an example for a diffusion model
