@@ -216,15 +216,24 @@ class GaussianDiffusion(nn.Module):
 
         return x_recon, noise
 
-    def inference(self, cond, b=1, src_spec=None, device=None):
+    def inference(self, cond, b=1, x_start=None, device=None):
         depth = hparams.get('diff_depth', self.k_step)
-        # TODO: implement shallow diffusion
+        noise = torch.randn(b, self.num_feats, self.out_dims, cond.shape[2], device=device)
+        if x_start is None or depth >= self.k_step:
+            t_max = self.k_step
+            x = noise
+        elif depth > 0:
+            t_max = depth
+            x = self.q_sample(
+                x_start, torch.full((b,), t_max - 1, device=device, dtype=torch.long), noise
+            )
+        else:
+            t_max = 0
+            x = x_start
 
-        t = self.k_step
-        shape = (b, self.num_feats, self.out_dims, cond.shape[2])
-        x = torch.randn(shape, device=device)
         if hparams.get('pndm_speedup') and hparams['pndm_speedup'] > 1:
             algorithm = hparams.get('diff_accelerator', 'ddim')
+            algorithm = 'pndm'
             if algorithm == 'dpm-solver':
                 from inference.dpm_solver_pytorch import NoiseScheduleVP, model_wrapper, DPM_Solver
                 # 1. Define the noise schedule.
@@ -254,7 +263,7 @@ class GaussianDiffusion(nn.Module):
                 # costs and the sample quality.
                 dpm_solver = DPM_Solver(model_fn, noise_schedule, algorithm_type="dpmsolver++")
 
-                steps = t // hparams["pndm_speedup"]
+                steps = t_max // hparams["pndm_speedup"]
                 self.bar = tqdm(desc="sample time step", total=steps, disable=not hparams['infer'], leave=False)
                 x = dpm_solver.sample(
                     x,
@@ -292,7 +301,7 @@ class GaussianDiffusion(nn.Module):
                 # costs and the sample quality.
                 uni_pc = UniPC(model_fn, noise_schedule, variant='bh2')
 
-                steps = t // hparams["pndm_speedup"]
+                steps = t_max // hparams["pndm_speedup"]
                 self.bar = tqdm(desc="sample time step", total=steps, disable=not hparams['infer'], leave=False)
                 x = uni_pc.sample(
                     x,
@@ -306,8 +315,8 @@ class GaussianDiffusion(nn.Module):
                 self.noise_list = deque(maxlen=4)
                 iteration_interval = hparams['pndm_speedup']
                 for i in tqdm(
-                        reversed(range(0, t, iteration_interval)), desc='sample time step',
-                        total=t // iteration_interval, disable=not hparams['infer'], leave=False
+                        reversed(range(0, t_max, iteration_interval)), desc='sample time step',
+                        total=t_max // iteration_interval, disable=not hparams['infer'], leave=False
                 ):
                     x = self.p_sample_plms(
                         x, torch.full((b,), i, device=device, dtype=torch.long),
@@ -316,8 +325,8 @@ class GaussianDiffusion(nn.Module):
             elif algorithm == 'ddim':
                 iteration_interval = hparams['pndm_speedup']
                 for i in tqdm(
-                        reversed(range(0, t, iteration_interval)), desc='sample time step',
-                        total=t // iteration_interval, disable=not hparams['infer'], leave=False
+                        reversed(range(0, t_max, iteration_interval)), desc='sample time step',
+                        total=t_max // iteration_interval, disable=not hparams['infer'], leave=False
                 ):
                     x = self.p_sample_ddim(
                         x, torch.full((b,), i, device=device, dtype=torch.long),
@@ -326,7 +335,7 @@ class GaussianDiffusion(nn.Module):
             else:
                 raise NotImplementedError(algorithm)
         else:
-            for i in tqdm(reversed(range(0, t)), desc='sample time step', total=t,
+            for i in tqdm(reversed(range(0, t_max)), desc='sample time step', total=t_max,
                           disable=not hparams['infer'], leave=False):
                 x = self.p_sample(x, torch.full((b,), i, device=device, dtype=torch.long), cond)
         x = x.transpose(2, 3).squeeze(1)  # [B, F, M, T] => [B, T, M] or [B, F, T, M]
@@ -347,9 +356,14 @@ class GaussianDiffusion(nn.Module):
             t = torch.randint(0, self.k_step, (b,), device=device).long()
             return self.p_losses(spec, t, cond=cond)
         else:
-            # src_spec: [B, T, M]
-            # TODO: implement shallow diffusion
-            x = self.inference(cond, b=b, device=device)
+            # src_spec: [B, T, M] or [B, F, T, M]
+            if src_spec is not None:
+                spec = self.norm_spec(src_spec).transpose(-2, -1)
+                if self.num_feats == 1:
+                    spec = spec[:, None, :, :]
+            else:
+                spec = None
+            x = self.inference(cond, b=b, x_start=spec, device=device)
             return self.denorm_spec(x)
 
     def norm_spec(self, x):
