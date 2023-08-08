@@ -90,7 +90,7 @@ shallow_diffusion_args:
   aux_decoder_arch: fs2
   aux_decoder_strict_hparams: true
   aux_decoder_args: {}
-lambda_aux_mel_loss: 1.0
+lambda_aux_mel_loss: 0.2
 
 # train and eval
 num_sanity_val_steps: 1
