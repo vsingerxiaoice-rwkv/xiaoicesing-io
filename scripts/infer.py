@@ -111,6 +111,7 @@ def acoustic(
 
     if depth >= 0:
         assert depth <= hparams['K_step'], f'Diffusion depth should not be larger than K_step {hparams["K_step"]}.'
+        hparams['diff_depth'] = depth
     else:
         depth = hparams['K_step']  # gaussian start (full depth diffusion)
 
