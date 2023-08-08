@@ -54,7 +54,7 @@ class DiffSingerAcoustic(ParameterAdaptorModule, CategorizedModule):
             self.train_aux_decoder = shallow_args['train_aux_decoder']
             self.train_diffusion = shallow_args['train_diffusion']
             self.aux_decoder_grad = shallow_args['aux_decoder_grad']
-            self.aux_decoder = shallow_adapt(hparams, out_dims)
+            self.aux_decoder = shallow_adapt(hparams, out_dims,vocab_size)
 
         self.diffusion = GaussianDiffusion(
             out_dims=out_dims,
@@ -82,7 +82,9 @@ class DiffSingerAcoustic(ParameterAdaptorModule, CategorizedModule):
 
         if infer:
             if self.use_shallow_diffusion:
-                aux_mel_pred = self.aux_decoder(condition, infer=True)
+                aux_mel_pred = self.aux_decoder(condition, infer=True,txt_tokens=txt_tokens, mel2ph=mel2ph, f0=f0,
+            key_shift=key_shift, speed=speed,spk_embed_id=spk_embed_id, **kwargs)
+
                 aux_mel_pred *= ((mel2ph > 0).float()[:, :, None])
             else:
                 aux_mel_pred = None
@@ -94,7 +96,8 @@ class DiffSingerAcoustic(ParameterAdaptorModule, CategorizedModule):
                 # TODO: replace the following placeholder with real calling code
                 if self.train_aux_decoder:
                     aux_cond = condition * self.aux_decoder_grad + condition.detach() * (1 - self.aux_decoder_grad)
-                    aux_out = self.aux_decoder(aux_cond, infer=False)
+                    aux_out = self.aux_decoder(aux_cond, infer=False,txt_tokens=txt_tokens, mel2ph=mel2ph, f0=f0,
+            key_shift=key_shift, speed=speed,spk_embed_id=spk_embed_id, **kwargs)
                 else:
                     aux_out = None
                 if self.train_diffusion:

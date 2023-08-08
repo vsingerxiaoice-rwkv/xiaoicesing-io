@@ -82,9 +82,13 @@ diff_depth: 400
 shallow_diffusion_args:
   train_aux_decoder: true
   train_diffusion: true
+  aux_share_encoder: true
+  aux_encoder_strict_hparams: false
+  aux_encoder_arch: fs2
+  aux_encoder_args: {}
   aux_decoder_grad: 0.1
   aux_decoder_arch: fs2
-  aux_decode_strict_hparams: true
+  aux_decoder_strict_hparams: true
   aux_decoder_args: {}
 lambda_aux_mel_loss: 1.0
 

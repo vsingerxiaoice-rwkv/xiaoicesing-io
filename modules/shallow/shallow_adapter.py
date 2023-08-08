@@ -2,7 +2,7 @@ import torch
 import torch.nn as nn
 
 cls_map = {'fs2': 'modules.shallow.fast_speech2_decoder.fs2_decode'}
-
+encoder_cls_map = {'fs2': 'modules.fastspeech.acoustic_encoder.FastSpeech2Acoustic'}
 
 def build_object_from_class_name(cls_str, parent_cls, strict, *args, **kwargs):
     import importlib
@@ -28,7 +28,7 @@ def filter_kwargs(dict_to_filter, kwarg_obj):
 
 
 class shallow_adapt(nn.Module):
-    def __init__(self, parame, out_dims):
+    def __init__(self, parame, out_dims,vocab_size):
         super().__init__()
         self.parame = parame
 
@@ -37,17 +37,41 @@ class shallow_adapt(nn.Module):
         decodeparame['out_dims'] = out_dims
         decodeparame['parame'] = parame
 
-        self.model = build_object_from_class_name(cls_map[parame['shallow_diffusion_args']['aux_decoder_arch']],
+        encoderparame=parame['shallow_diffusion_args']['aux_encoder_args']
+        encoderparame['parame'] = parame
+        encoderparame['vocab_size'] = vocab_size
+        self.decoder = build_object_from_class_name(cls_map[parame['shallow_diffusion_args']['aux_decoder_arch']],
                                                   nn.Module,
-                                                  parame['shallow_diffusion_args']['aux_decode_strict_hparams'],
+                                                  parame['shallow_diffusion_args']['aux_decoder_strict_hparams'],
                                                   **decodeparame)
 
 
-    def forward(self, condition, infer=False):
+        if not parame['shallow_diffusion_args']['aux_share_encoder']:
+            # todo
+            self.use_encoder=True
+            self.encoder=build_object_from_class_name(encoder_cls_map[parame['shallow_diffusion_args']['aux_encoder_arch']],
+                                                  nn.Module,
+                                                  parame['shallow_diffusion_args']['aux_encoder_strict_hparams'],
+                                                  **encoderparame)
+        else:
+            self.use_encoder = False
 
-        return self.model(condition,infer)
+
+
+
+
+    def forward(self, condition, infer=False,txt_tokens=None, mel2ph=None, f0=None,
+            key_shift=None, speed=None,
+            spk_embed_id=None, **kwargs):
+
+        if self.use_encoder:
+            condition=self.encoder(txt_tokens=txt_tokens, mel2ph=mel2ph, f0=f0,
+            key_shift=key_shift, speed=speed,
+            spk_embed_id=spk_embed_id, **kwargs)
+
+        return self.decoder(condition,infer)
 
     def get_loss(self):
-        return self.model.build_loss()
+        return self.decoder.build_loss()
 
 
