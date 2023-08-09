@@ -238,6 +238,7 @@ class GaussianDiffusion(nn.Module):
                 x_start, torch.full((b,), t_max - 1, device=device, dtype=torch.long), noise
             )
         else:
+            assert x_start is not None, 'Missing shallow diffusion source.'
             x = x_start
 
         if hparams.get('pndm_speedup') and hparams['pndm_speedup'] > 1 and t_max > 0:
