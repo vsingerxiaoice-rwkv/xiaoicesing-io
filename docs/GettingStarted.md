@@ -88,7 +88,7 @@ DiffSinger uses [ONNX](https://onnx.ai/) as the deployment format. Due to TorchS
 If your model is a variance model, run:
 
 ```bash
-python scripts/export.py --exp my_experiment
+python scripts/export.py variance --exp my_experiment
 ```
 
 or run
