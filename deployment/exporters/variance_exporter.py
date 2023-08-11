@@ -258,24 +258,23 @@ class DiffSingerVarianceExporter(BaseExporter):
             note_dur = torch.LongTensor([[2, 6, 3, 4]]).to(self.device)
             pitch = torch.FloatTensor([[60.] * 15]).to(self.device)
             retake = torch.ones_like(pitch, dtype=torch.bool)
+            pitch_input_args = (
+                encoder_out,
+                ph_dur,
+                note_midi,
+                note_dur,
+                pitch,
+                {
+                    **({'expr': torch.ones_like(pitch)} if self.expose_expr else {}),
+                    'retake': retake,
+                    **({'spk_embed': torch.rand(
+                        1, 15, hparams['hidden_size'], dtype=torch.float32, device=self.device
+                    )} if input_spk_embed else {})
+                }
+            )
             torch.onnx.export(
                 self.model.view_as_pitch_preprocess(),
-                (
-                    encoder_out,
-                    ph_dur,
-                    note_midi,
-                    note_dur,
-                    pitch,
-                    *([
-                        torch.ones_like(pitch)
-                        if self.expose_expr else []
-                    ]),
-                    retake,
-                    *([torch.rand(
-                        1, 15, hparams['hidden_size'],
-                        dtype=torch.float32, device=self.device
-                    )] if input_spk_embed else [])
-                ),
+                pitch_input_args,
                 self.pitch_preprocess_cache_path,
                 input_names=[
                     'encoder_out', 'ph_dur',
