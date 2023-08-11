@@ -114,7 +114,8 @@ class DiffSingerVariance(ParameterAdaptorModule, CategorizedModule):
 
     def forward(
             self, txt_tokens, midi, ph2word, ph_dur=None, word_dur=None, mel2ph=None,
-            base_pitch=None, pitch=None, pitch_retake=None, variance_retake: Dict[str, Tensor] = None,
+            base_pitch=None, pitch=None, pitch_expr=None, pitch_retake=None,
+            variance_retake: Dict[str, Tensor] = None,
             spk_id=None, infer=True, **kwargs
     ):
         if self.use_spk_id:
@@ -151,10 +152,23 @@ class DiffSingerVariance(ParameterAdaptorModule, CategorizedModule):
 
         if self.predict_pitch:
             if pitch_retake is None:
-                pitch_retake_embed = self.pitch_retake_embed(torch.ones_like(mel2ph))
+                pitch_retake = torch.ones_like(mel2ph, dtype=torch.bool)
             else:
-                pitch_retake_embed = self.pitch_retake_embed(pitch_retake.long())
+                print(base_pitch, pitch, pitch_retake)
                 base_pitch = base_pitch * pitch_retake + pitch * ~pitch_retake
+
+            if pitch_expr is None:
+                pitch_retake_embed = self.pitch_retake_embed(pitch_retake.long())
+            else:
+                retake_true_embed = self.pitch_retake_embed(
+                    torch.ones(1, 1, dtype=torch.long, device=txt_tokens.device)
+                )  # [B=1, T=1] => [B=1, T=1, H]
+                retake_false_embed = self.pitch_retake_embed(
+                    torch.zeros(1, 1, dtype=torch.long, device=txt_tokens.device)
+                )  # [B=1, T=1] => [B=1, T=1, H]
+                pitch_expr = (pitch_expr * pitch_retake)[:, :, None]  # [B, T, 1]
+                pitch_retake_embed = pitch_expr * retake_true_embed + (1. - pitch_expr) * retake_false_embed
+
             pitch_cond = condition + pitch_retake_embed
             pitch_cond += self.base_pitch_embed(base_pitch[:, :, None])
             if infer:

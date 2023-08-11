@@ -212,6 +212,22 @@ class DiffSingerVarianceInfer(BaseSVSInfer):
                 summary['pitch'] = 'manual'
             elif self.auto_completion_mode or self.global_predict_pitch:
                 summary['pitch'] = 'auto'
+
+                # Load expressiveness
+                expr = param.get('expr', 1.)
+                if isinstance(expr, (int, float, bool)):
+                    summary['expr'] = f'static({expr:.3f})'
+                    batch['expr'] = torch.FloatTensor([expr]).to(self.device)[:, None]  # [B=1, T=1]
+                else:
+                    summary['expr'] = 'dynamic'
+                    expr = resample_align_curve(
+                        np.array(expr.split(), np.float32),
+                        original_timestep=float(param['expr_timestep']),
+                        target_timestep=self.timestep,
+                        align_length=T_s
+                    )
+                    batch['expr'] = torch.from_numpy(expr.astype(np.float32)).to(self.device)[None]
+
             else:
                 summary['pitch'] = 'ignored'
 
@@ -235,6 +251,7 @@ class DiffSingerVarianceInfer(BaseSVSInfer):
         ph_dur = sample['ph_dur']
         mel2ph = sample['mel2ph']
         base_pitch = sample['base_pitch']
+        expr = sample.get('expr')
         pitch = sample.get('pitch')
 
         if hparams['use_spk_id']:
@@ -255,7 +272,7 @@ class DiffSingerVarianceInfer(BaseSVSInfer):
 
         dur_pred, pitch_pred, variance_pred = self.model(
             txt_tokens, midi=midi, ph2word=ph2word, word_dur=word_dur, ph_dur=ph_dur,
-            mel2ph=mel2ph, base_pitch=base_pitch, pitch=pitch,
+            mel2ph=mel2ph, base_pitch=base_pitch, pitch=pitch, pitch_expr=expr,
             ph_spk_mix_embed=ph_spk_mix_embed, spk_mix_embed=spk_mix_embed,
             infer=True
         )
