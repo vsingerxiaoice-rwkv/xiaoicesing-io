@@ -1,10 +1,23 @@
 # Best Practices
 
-## Using custom dictionaries
+## Materials for training and using models
 
-This section is about using a custom grapheme-to-phoneme dictionary for any language(s).
+### Datasets
 
-### Dictionary format
+A dataset mainly includes recordings and transcriptions, which is called a _raw dataset_. Raw datasets should be organized as the following folder structure:
+
+- my_raw_data/
+  - wavs/
+    - 001.wav
+    - 002.wav
+    - ... (more recording files)
+  - transcriptions.csv
+
+In the example above, the _my_raw_data_ folder is the root directory of a raw dataset.
+
+The _transcriptions.csv_ file contains all labels of the recordings. The common column of the CSV file is `name`, which represents all recording items by their filenames **without extension**. Other required columns may vary according to the category of the model you are training, and will be introduced in the following sections.
+
+### Dictionaries
 
 A dictionary is a .txt file, in which each line represents a mapping rule from one syllable to its phoneme sequence. The syllable and the phonemes are split by `tab`, and the phonemes are split by `space`:
 
@@ -18,6 +31,22 @@ Syllable names and phoneme names can be customized, but with the following limit
 - `-` and `+` cannot be used because they are defined as slur tags in most singing voice synthesis editors.
 - Special characters including but not limited to `@`, `#`, `&`, `|`, `/`, `<`, `>`, etc. should be avoided because they may be used as special tags in the future format changes. Using them now is okay, and all modifications will be notified in advance.
 - ASCII characters are preferred for the best encoding compatibility, but all UTF-8 characters are acceptable.
+
+There are some preset dictionaries in the [dictionaries/](../dictionaries) folder. For the guidance of using a custom dictionary, see [Using custom dictionaries](#using-custom-dictionaries).
+
+### Configuration files
+
+A configuration file is a YAML file that defines enabled features, model hyperparameters and controls the behavior of the binarizer, trainer and inference. For more information of the configuration system and configurable attributes, see [Configuration Schemas](ConfigurationSchemas.md).
+
+### DS files
+
+DS files are JSON files with _.ds_ suffix that contains phoneme sequence, phoneme durations, music scores or curve parameters. They are mainly used to run inference on models for test and evaluation purposes, and they can be used as training data in some cases. There are some example DS files in the [samples/](../samples) folder.
+
+The current recommended way of using a model for production purposes is to use [OpenUTAU for DiffSinger](https://github.com/xunmengshe/OpenUtau). It can export DS files as well.
+
+## Using custom dictionaries
+
+This section is about using a custom grapheme-to-phoneme dictionary for any language(s).
 
 ### Add a dictionary
 
