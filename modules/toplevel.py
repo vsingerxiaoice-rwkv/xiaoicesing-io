@@ -154,7 +154,6 @@ class DiffSingerVariance(ParameterAdaptorModule, CategorizedModule):
             if pitch_retake is None:
                 pitch_retake = torch.ones_like(mel2ph, dtype=torch.bool)
             else:
-                print(base_pitch, pitch, pitch_retake)
                 base_pitch = base_pitch * pitch_retake + pitch * ~pitch_retake
 
             if pitch_expr is None:
