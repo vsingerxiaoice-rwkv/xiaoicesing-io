@@ -173,13 +173,13 @@ Enabling automatic mixed precision (AMP) can accelerate training and save GPU me
 By default, the training runs in FP32 precision. To enable AMP, edit your configuration file:
 
 ```yaml
-pl_trainer_precision: 16  # FP16 precision
+pl_trainer_precision: 16-mixed  # FP16 precision
 ```
 
 or
 
 ```yaml
-pl_trainer_precision: bf16  # BF16 precision
+pl_trainer_precision: bf16-mixed  # BF16 precision
 ```
 
 For more precision options, please checkout the official [documentation](https://lightning.ai/docs/pytorch/stable/common/trainer.html#precision).
