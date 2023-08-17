@@ -97,7 +97,7 @@ class DiffSingerAcoustic(ParameterAdaptorModule, CategorizedModule):
                 if self.train_aux_decoder:
                     aux_cond = condition * self.aux_decoder_grad + condition.detach() * (1 - self.aux_decoder_grad)
                     aux_out = self.aux_decoder(aux_cond, infer=False,txt_tokens=txt_tokens, mel2ph=mel2ph, f0=f0,
-            key_shift=key_shift, speed=speed,spk_embed_id=spk_embed_id,gt_mel=gt_mel, **kwargs)
+            key_shift=key_shift, speed=speed,spk_embed_id=spk_embed_id,gt_mel=gt_mel,mask=((mel2ph > 0).float()[:, :, None]), **kwargs)
                 else:
                     aux_out = None
                 if self.train_diffusion:

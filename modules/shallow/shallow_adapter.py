@@ -63,14 +63,14 @@ class shallow_adapt(nn.Module):
 
     def forward(self, condition, infer=False, txt_tokens=None, mel2ph=None, f0=None,
                 key_shift=None, speed=None,
-                spk_embed_id=None,gt_mel=None, **kwargs):
+                spk_embed_id=None,gt_mel=None,mask=None, **kwargs):
 
         if self.use_encoder:
             condition = self.encoder(txt_tokens=txt_tokens, mel2ph=mel2ph, f0=f0,
                                      key_shift=key_shift, speed=speed,
                                      spk_embed_id=spk_embed_id, **kwargs)
 
-        return self.decoder(condition, infer,gt_mel)
+        return self.decoder(condition, infer,gt_mel,mask)
 
     def get_loss(self):
         return self.decoder.build_loss()

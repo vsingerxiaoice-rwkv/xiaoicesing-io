@@ -759,7 +759,7 @@ class SynthesizerTrn(nn.Module):
                  inter_channels,
                  hidden_channels,
 
-                 condition_channels,
+                 condition_channels,flow_wavenet_lay=4,
 
                  condition_encoder_filter_channels=None,
 
@@ -847,7 +847,7 @@ class SynthesizerTrn(nn.Module):
         else:
             condition_channelsw = 0
 
-        self.flow = ResidualCouplingBlock(inter_channels, hidden_channels, 5, 1, n_flow_layer,
+        self.flow = ResidualCouplingBlock(inter_channels, hidden_channels, 5, 1, n_flow_layer,n_flows=flow_wavenet_lay,
                                           gin_channels=condition_channelsw, share_parameter=flow_share_parameter)
 
     def forward(self, c, mel, x_mask=None):
@@ -921,12 +921,17 @@ class glow_loss_L(nn.Module):
         return l
 
 
+
+
+
+
+
 class glow_decoder(nn.Module):
     def __init__(self, encoder_hidden, out_dims, latent_encoder_hidden_channels, latent_encoder_n_heads,
                  latent_encoder_n_layers, latent_encoder_kernel_size, latent_encoder_dropout_rate,
                  condition_encoder_hidden_channels, condition_encoder_n_heads, condition_encoder_n_layers,
                  condition_encoder_kernel_size, condition_encoder_dropout_rate, flow_hidden_channels,
-                 flow_condition_channels, parame,flow_infer_seed=None,flow_infer_scale=0.35,
+                 flow_condition_channels, parame,use_mask=True,use_norm=True,flow_wavenet_lay=4,flow_infer_seed=None,flow_infer_scale=0.35,
                  condition_encoder_filter_channels=None,
 
                  latent_encoder_filter_channels=None,
@@ -957,6 +962,7 @@ class glow_decoder(nn.Module):
                                            condition_encoder_dropout_rate=condition_encoder_dropout_rate,
 
                                            inter_channels=out_dims,
+                                           flow_wavenet_lay=flow_wavenet_lay,
                                            hidden_channels=flow_hidden_channels,
 
                                            condition_channels=flow_condition_channels,
@@ -974,24 +980,50 @@ class glow_decoder(nn.Module):
                                            ues_condition_encoder=ues_condition_encoder, ues_condition=ues_condition,
                                            condition_encoder_type=condition_encoder_type)
 
+        self.use_mask=use_mask
+        self.use_norm=use_norm
+
+    def norm(self,x):
+        x = (x - (-5)) / (0 - (-5)) * 2 - 1
+        return x
+
+    def denorm(self,x):
+        x=(x + 1) / 2 * (0 - (-5)) + (-5)
+        return x
+
     def build_loss(self):
+
+
         if self.use_latent:
 
             return glow_loss_L()
 
-    def forward(self, x, infer, x_gt):
+    def forward(self, x, infer, x_gt,mask):
+        if not self.use_mask or infer:
+            mask=None
+        else:
+            mask=mask.transpose(1, 2)
+
+
+
 
         if infer:
             out=self.glow_decoder.infer(x.transpose(1, 2), noice_scale=self.flow_infer_scale, seed=self.flow_infer_seed).transpose(1, 2)
+            if self.use_norm:
+                out = self.denorm(out)
             return out
         else:
+            if self.use_norm:
+                x_gt = self.norm(x_gt)
 
 
             x = x.transpose(1, 2)
             x_gt=x_gt.transpose(1, 2)
 
-            x_mask, (z_p, m_p, logs_p), logdet=self.glow_decoder(x,x_gt)
-            pack_loss=(z_p, m_p, logs_p, logdet, x_mask )
+            x_mask, (z_p, m_p, logs_p), logdet=self.glow_decoder(x,x_gt,x_mask=mask)
+
+
+            pack_loss = (z_p, m_p, logs_p, logdet, x_mask)
             return pack_loss
 
 
