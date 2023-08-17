@@ -228,7 +228,7 @@ class DiffSingerVariance(ParameterAdaptorModule, CategorizedModule):
             ]
             condition += torch.stack(variance_embeds, dim=-1).sum(-1)
 
-        variance_outputs = self.variance_predictor(condition, variance_inputs, infer)
+        variance_outputs = self.variance_predictor(condition, variance_inputs, infer=infer)
 
         if infer:
             variances_pred_out = self.collect_variance_outputs(variance_outputs)
