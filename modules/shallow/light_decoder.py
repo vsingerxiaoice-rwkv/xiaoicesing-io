@@ -3,7 +3,14 @@ from typing import Optional
 import torch
 import torch.nn as nn
 
+class GLU(nn.Module):
+    def __init__(self, dim):
+        super().__init__()
+        self.dim = dim
 
+    def forward(self, x):
+        out, gate = x.chunk(2, dim=self.dim)
+        return out * gate.sigmoid()
 
 
 class ConvNeXtBlock(nn.Module):
@@ -33,7 +40,8 @@ class ConvNeXtBlock(nn.Module):
         self.norm = nn.LayerNorm(dim, eps=1e-6)
         self.pwconv1 = nn.Linear(dim, intermediate_dim)  # pointwise/1x1 convs, implemented with linear layers
         self.act = nn.GELU()
-        self.pwconv2 = nn.Linear(intermediate_dim, dim)
+        self.act2=GLU(2)
+        self.pwconv2 = nn.Linear(intermediate_dim//2, dim)
         self.gamma = (
             nn.Parameter(layer_scale_init_value * torch.ones(dim), requires_grad=True)
             if layer_scale_init_value > 0
@@ -43,15 +51,19 @@ class ConvNeXtBlock(nn.Module):
         self.drop_path = nn.Identity()
         self.dropout=nn.Dropout(drop_out) if drop_out > 0. else nn.Identity()
 
+
+
     def forward(self, x: torch.Tensor, ) -> torch.Tensor:
         residual = x
+        x=self.act(x)
         x = self.dwconv(x)
+
         x = x.transpose(1, 2)  # (B, C, T) -> (B, T, C)
 
 
         x = self.norm(x)
         x = self.pwconv1(x)
-        x = self.act(x)
+        x = self.act2(x)
         x = self.pwconv2(x)
         if self.gamma is not None:
             x = self.gamma * x
@@ -71,7 +83,7 @@ class fs2_loss(nn.Module):
         return nn.L1Loss()(y,x)
 
 
-class fs2_decode(nn.Module):
+class noise_decoder(nn.Module):
     def __init__(self,encoder_hidden,out_dims,n_chans,kernel_size,dropout_rate,n_layers,parame):
         super().__init__()
         self.inconv=nn.Conv1d(encoder_hidden, n_chans, kernel_size, stride=1, padding=(kernel_size - 1) // 2)
@@ -87,6 +99,7 @@ class fs2_decode(nn.Module):
     def forward(self, x,infer,**kwargs):
         x=x.transpose(1, 2)
         x=self.inconv(x)
+
         for i in self.conv:
             x=i(x)
         x=self.outconv(x).transpose(1, 2)

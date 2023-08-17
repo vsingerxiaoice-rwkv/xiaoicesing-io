@@ -42,10 +42,13 @@ class ConvNeXtBlock(nn.Module):
         # self.drop_path = DropPath(drop_path) if drop_path > 0. else nn.Identity()
         self.drop_path = nn.Identity()
         self.dropout=nn.Dropout(drop_out) if drop_out > 0. else nn.Identity()
+        self.con = nn.Conv1d(dim, dim, kernel_size=1, )
 
-    def forward(self, x: torch.Tensor, ) -> torch.Tensor:
+
+    def forward(self, x: torch.Tensor,y ) -> torch.Tensor:
         residual = x
         x = self.dwconv(x)
+        x=x+self.con(y)
         x = x.transpose(1, 2)  # (B, C, T) -> (B, T, C)
 
 
@@ -71,7 +74,7 @@ class fs2_loss(nn.Module):
         return nn.L1Loss()(y,x)
 
 
-class fs2_decode(nn.Module):
+class noise_decoder(nn.Module):
     def __init__(self,encoder_hidden,out_dims,n_chans,kernel_size,dropout_rate,n_layers,parame):
         super().__init__()
         self.inconv=nn.Conv1d(encoder_hidden, n_chans, kernel_size, stride=1, padding=(kernel_size - 1) // 2)
@@ -87,9 +90,10 @@ class fs2_decode(nn.Module):
     def forward(self, x,infer,**kwargs):
         x=x.transpose(1, 2)
         x=self.inconv(x)
+        y=torch.randn_like(x)
         for i in self.conv:
-            x=i(x)
-        x=self.outconv(x).transpose(1, 2)
+            y=i(y,x)
+        x=self.outconv(y).transpose(1, 2)
         if infer:
             x=(x + 1) / 2 * (0 - (-5)) + (-5)
         return x

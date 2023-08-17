@@ -1,8 +1,12 @@
 import torch
 import torch.nn as nn
 
-cls_map = {'fs2': 'modules.shallow.fast_speech2_decoder.fs2_decode'}
+cls_map = {'fs2': 'modules.shallow.fast_speech2_decoder.fs2_decode',
+           'ns': 'modules.shallow.noise_decoder.noise_decoder', 'ld': 'modules.shallow.light_decoder.noise_decoder','att_fs2':'modules.shallow.fs2_decoder.attention_fs2_decoder'
+           ,'glow':'modules.shallow.glow.glow_decoder'
+           }
 encoder_cls_map = {'fs2': 'modules.fastspeech.acoustic_encoder.FastSpeech2Acoustic'}
+
 
 def build_object_from_class_name(cls_str, parent_cls, strict, *args, **kwargs):
     import importlib
@@ -28,50 +32,45 @@ def filter_kwargs(dict_to_filter, kwarg_obj):
 
 
 class shallow_adapt(nn.Module):
-    def __init__(self, parame, out_dims,vocab_size):
+    def __init__(self, parame, out_dims, vocab_size):
         super().__init__()
         self.parame = parame
 
-        decodeparame=parame['shallow_diffusion_args']['aux_decoder_args']
-        decodeparame[ 'encoder_hidden'] = parame['hidden_size']
+        decodeparame = parame['shallow_diffusion_args']['aux_decoder_args']
+        if decodeparame.get('encoder_hidden') is None:
+            decodeparame['encoder_hidden'] = parame['hidden_size']
         decodeparame['out_dims'] = out_dims
         decodeparame['parame'] = parame
 
-        encoderparame=parame['shallow_diffusion_args']['aux_encoder_args']
+        encoderparame = parame['shallow_diffusion_args']['aux_encoder_args']
         encoderparame['parame'] = parame
         encoderparame['vocab_size'] = vocab_size
         self.decoder = build_object_from_class_name(cls_map[parame['shallow_diffusion_args']['aux_decoder_arch']],
-                                                  nn.Module,
-                                                  parame['shallow_diffusion_args']['aux_decoder_strict_hparams'],
-                                                  **decodeparame)
-
+                                                    nn.Module,
+                                                    parame['shallow_diffusion_args']['aux_decoder_strict_hparams'],
+                                                    **decodeparame)
 
         if not parame['shallow_diffusion_args']['aux_share_encoder']:
             # todo
-            self.use_encoder=True
-            self.encoder=build_object_from_class_name(encoder_cls_map[parame['shallow_diffusion_args']['aux_encoder_arch']],
-                                                  nn.Module,
-                                                  parame['shallow_diffusion_args']['aux_encoder_strict_hparams'],
-                                                  **encoderparame)
+            self.use_encoder = True
+            self.encoder = build_object_from_class_name(
+                encoder_cls_map[parame['shallow_diffusion_args']['aux_encoder_arch']],
+                nn.Module,
+                parame['shallow_diffusion_args']['aux_encoder_strict_hparams'],
+                **encoderparame)
         else:
             self.use_encoder = False
 
-
-
-
-
-    def forward(self, condition, infer=False,txt_tokens=None, mel2ph=None, f0=None,
-            key_shift=None, speed=None,
-            spk_embed_id=None, **kwargs):
+    def forward(self, condition, infer=False, txt_tokens=None, mel2ph=None, f0=None,
+                key_shift=None, speed=None,
+                spk_embed_id=None,gt_mel=None, **kwargs):
 
         if self.use_encoder:
-            condition=self.encoder(txt_tokens=txt_tokens, mel2ph=mel2ph, f0=f0,
-            key_shift=key_shift, speed=speed,
-            spk_embed_id=spk_embed_id, **kwargs)
+            condition = self.encoder(txt_tokens=txt_tokens, mel2ph=mel2ph, f0=f0,
+                                     key_shift=key_shift, speed=speed,
+                                     spk_embed_id=spk_embed_id, **kwargs)
 
-        return self.decoder(condition,infer)
+        return self.decoder(condition, infer,gt_mel)
 
     def get_loss(self):
         return self.decoder.build_loss()
-
-
