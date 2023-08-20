@@ -70,13 +70,13 @@ A variance model takes high-level music information as input, including phoneme 
 
 To train a variance model, you must have all the required attributes listed in the following table in your transcriptions.csv according to the functionalities enabled.
 
-|                               | name | ph_seq | ph_dur | ph_num | note_seq | note_dur |
-|:-----------------------------:|:----:|:------:|:------:|:------:|:--------:|:--------:|
-|  phoneme duration prediction  |  ✓   |   ✓    |   ✓    |   ✓    |          |          |
-|       pitch prediction        |  ✓   |   ✓    |   ✓    |        |    ✓     |    ✓     |
-| variance parameter prediction |  ✓   |   ✓    |   ✓    |        |          |          |
+|                                | name | ph_seq | ph_dur | ph_num | note_seq | note_dur |
+|:------------------------------:|:----:|:------:|:------:|:------:|:--------:|:--------:|
+|  phoneme duration prediction   |  ✓   |   ✓    |   ✓    |   ✓    |          |          |
+|        pitch prediction        |  ✓   |   ✓    |   ✓    |        |    ✓     |    ✓     |
+| variance parameters prediction |  ✓   |   ✓    |   ✓    |        |          |          |
 
-The recommended way of building a variance dataset is to extend an acoustic dataset. You may have all the recordings prepared like the acoustic dataset as well.
+The recommended way of building a variance dataset is to extend an acoustic dataset. You may have all the recordings prepared like the acoustic dataset as well, or [use DS files in your variance datasets](#build-variance-datasets-with-ds-files).
 
 Variance models support multi-speaker settings like acoustic models do.
 
@@ -143,13 +143,43 @@ You can submit or propose a new dictionary by raising a topic in [Discussions](h
 - Most native speakers/singers of that language should be able to easily cover all phonemes in the dictionary. This means the dictionary should not contain extremely rare or highly customized phonemes of some dialects or accents.
 - It should not bring too much difficulty and complexity to the data labeling workflow, and it should be easy to use for end users of voicebanks.
 
+## Build variance datasets with DS files
+
+TBD
+
+## Pitch extractors
+
+A pitch extractor estimates pitch (F0 sequence) from given recordings. F0 (fundamental frequency) is one of the most important components of singing voice that is needed by both acoustic models and variance models.
+
+```yaml
+pe: parselmouth  # pitch extractor type
+pe_ckpt: checkpoints/xxx/model.pt  # pitch extractor model path (if it requires any)
+```
+
+### Parselmouth
+
+[Parselmouth](https://github.com/YannickJadoul/Parselmouth) is the default pitch extractor in this repository. It is based on DSP algorithms, runs fast on CPU and can get accurate F0 on clean and normal recordings. To use parselmouth, simply include the following line in your configuration file:
+
+```yaml
+pe: parselmouth
+```
+
+### RMVPE
+
+[RMVPE](https://github.com/Dream-High/RMVPE) (Robust Model for Vocal Pitch Estimation) is the state-of-the-art NN-based pitch estimation model for singing voice. It runs slower than parselmouth, consumes more memory, however uses CUDA to accelerate computation (if available) and produce better results on noisy recordings and edge cases. To enable RMVPE, put its `model.pt` in `checkpoints/rmvpe` and edit your configuration file:
+
+```yaml
+pe: rmvpe
+pe_ckpt: checkpoints/rmvpe/model.pt
+```
+
 ## Performance tuning
 
 This section is about accelerating training and utilizing hardware.
 
 ### Data loader and batch sampler
 
-The data loader loads data pieces from the binarized dataset, and the batch sampler forms batches according to data lengths.
+The data loader loads data pieces from the binary dataset, and the batch sampler forms batches according to data lengths.
 
 To configure the data loader, edit your configuration file:
 
@@ -182,7 +212,7 @@ or
 pl_trainer_precision: bf16-mixed  # BF16 precision
 ```
 
-For more precision options, please checkout the official [documentation](https://lightning.ai/docs/pytorch/stable/common/trainer.html#precision).
+For more precision options, please check out the [official documentation](https://lightning.ai/docs/pytorch/stable/common/trainer.html#precision).
 
 ### Training on multiple GPUs
 
@@ -191,7 +221,7 @@ Using distributed data parallel (DDP) can divide training tasks to multiple GPUs
 By default, the trainer will utilize all CUDA devices defined in the `CUDA_VISIBLE_DEVICES` environment variable (empty means using all available devices). If you want to specify which GPUs to use, edit your configuration file:
 
 ```yaml
-pl_trainer_devices: [0, 1, 2, 3]  # using the first 4 GPUs defined in CUDA_VISIBLE_DEVICES
+pl_trainer_devices: [0, 1, 2, 3]  # use the first 4 GPUs defined in CUDA_VISIBLE_DEVICES
 ```
 
 Please note that `max_batch_size` and `max_batch_frames` are values for **each** GPU.
@@ -247,3 +277,7 @@ Also, note that the LR scheduler performs scheduling on the granularity of steps
 The special case applies when a tuple is needed in `__init__`: `beta1` and `beta2` are treated separately and form a tuple in the code. You could try to pass in an array instead. (And as an experiment, AdamW does accept `[beta1, beta2]`). If there is another special treatment required, please submit an issue.
 
 If you found other optimizer and learning rate scheduler useful, you can raise a topic in [Discussions](https://github.com/openvpi/DiffSinger/discussions), raise [Issues](https://github.com/openvpi/DiffSinger/issues) or submit [PRs](https://github.com/openvpi/DiffSinger/pulls) if it introduces new codes or dependencies.
+
+## Fine-tuning and freezing parameters
+
+TBD
