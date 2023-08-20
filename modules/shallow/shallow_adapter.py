@@ -3,7 +3,7 @@ import torch.nn as nn
 
 cls_map = {'fs2': 'modules.shallow.fast_speech2_decoder.fs2_decode',
            'ns': 'modules.shallow.noise_decoder.noise_decoder', 'ld': 'modules.shallow.light_decoder.noise_decoder','att_fs2':'modules.shallow.fs2_decoder.attention_fs2_decoder'
-           ,'glow':'modules.shallow.glow.glow_decoder','glow_convnext':'modules.shallow.convnext_glow.glow_decoder_convnext'
+           ,'glow':'modules.shallow.glow.glow_decoder','glow_convnext':'modules.shallow.convnext_glow.glow_decoder_convnext','gglow':'modules.shallow.gglow.glow_decoder','fast_speech2_decoders':'modules.shallow.fast_speech2_decoders.fs2_decode'
            }
 encoder_cls_map = {'fs2': 'modules.fastspeech.acoustic_encoder.FastSpeech2Acoustic'}
 

@@ -287,7 +287,7 @@ class attention_fs2_decoder(nn.Module):
 
         return fs2_loss()
 
-    def forward(self, x,infer,**kwargs):
+    def forward(self, x,infer,*args,**kwargs):
         x=x.transpose(1, 2)
         x=self.inconv(x)
 

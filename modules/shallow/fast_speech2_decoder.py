@@ -84,7 +84,7 @@ class fs2_decode(nn.Module):
 
         return fs2_loss()
 
-    def forward(self, x,infer,**kwargs):
+    def forward(self, x,infer,*args,**kwargs):
         x=x.transpose(1, 2)
         x=self.inconv(x)
         for i in self.conv:

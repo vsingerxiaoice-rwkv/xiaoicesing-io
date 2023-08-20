@@ -424,134 +424,14 @@ class WN(torch.nn.Module):
         else:
             out = output
         return out
-pass
-class ConvNeXtBlock_condition(nn.Module):
-    """ConvNeXt Block adapted from https://github.com/facebookresearch/ConvNeXt to 1D audio signal.
 
-    Args:
-        dim (int): Number of input channels.
-        intermediate_dim (int): Dimensionality of the intermediate layer.
-        layer_scale_init_value (float, optional): Initial value for the layer scale. None means no scaling.
-            Defaults to None.
-        adanorm_num_embeddings (int, optional): Number of embeddings for AdaLayerNorm.
-            None means non-conditional LayerNorm. Defaults to None.
-    """
-
-    def __init__(
-            self,
-            dim: int,
-            intermediate_dim: int, dilation, padding,
-            layer_scale_init_value: Optional[float] = None, drop_path: float = 0.0, drop_out: float = 0.0,condione: int=0
-
-    ):
-        super().__init__()
-        if condione!=0:
-            self.cond_layer = torch.nn.Conv1d(condione, intermediate_dim, 1)
-        self.dwconv = nn.Conv1d(dim, dim, kernel_size=7, padding=padding, groups=dim,dilation=dilation)  # depthwise conv
-
-        self.norm = nn.LayerNorm(dim, eps=1e-6)
-        self.pwconv1 = nn.Linear(dim, intermediate_dim)  # pointwise/1x1 convs, implemented with linear layers
-        self.act = nn.GELU()
-        self.pwconv2 = nn.Linear(intermediate_dim, dim)
-        self.gamma = (
-            nn.Parameter(layer_scale_init_value * torch.ones(dim), requires_grad=True)
-            if layer_scale_init_value > 0
-            else None
-        )
-        # self.drop_path = DropPath(drop_path) if drop_path > 0. else nn.Identity()
-        self.drop_path = nn.Identity()
-        self.dropout = nn.Dropout(drop_out) if drop_out > 0. else nn.Identity()
-
-    def forward(self, x: torch.Tensor,condition=None ) -> torch.Tensor:
-
-
-
-        residual = x
-        x = self.dwconv(x)
-        x = x.transpose(1, 2)  # (B, C, T) -> (B, T, C)
-
-        x = self.norm(x)
-        x = self.pwconv1(x)
-        if condition is not None:
-
-            condition = self.cond_layer(condition)
-        else:
-            condition = torch.zeros_like(x.transpose(1, 2))
-
-        x=x+condition.transpose(1, 2)
-        x = self.act(x)
-        x = self.pwconv2(x)
-        if self.gamma is not None:
-            x = self.gamma * x
-        x = x.transpose(1, 2)  # (B, T, C) -> (B, C, T)
-        x = self.dropout(x)
-
-        x = residual + self.drop_path(x)
-        return x
-
-pass
-
-
-class CONVnext_flow(torch.nn.Module):
-    def __init__(self, hidden_channels, kernel_size, dilation_rate, n_layers, gin_channels=0, p_dropout=0,innx=3):
-        super().__init__()
-        assert (kernel_size % 2 == 1)
-        self.hidden_channels = hidden_channels
-        self.kernel_size = kernel_size,
-        self.dilation_rate = dilation_rate
-        self.n_layers = n_layers
-        self.gin_channels = gin_channels  # condition用的
-        self.p_dropout = p_dropout
-
-        self.in_layers = torch.nn.ModuleList()
-        self.res_skip_layers = torch.nn.ModuleList()
-        self.drop = nn.Dropout(p_dropout)
-        self.condition_layers = torch.nn.ModuleList()
-
-        # if gin_channels != 0:
-        #     cond_layer = torch.nn.Conv1d(gin_channels, 2 * hidden_channels * n_layers, 1)
-        #     # self.cond_layer = weight_norm_modules(cond_layer, name='weight')
-        #     self.cond_layer=cond_layer
-
-        for i in range(n_layers):
-            kernel_size=7
-            dilation = dilation_rate ** i
-            padding = int((kernel_size * dilation - dilation) / 2)
-
-
-
-            in_layer = ConvNeXtBlock_condition(dim=hidden_channels, intermediate_dim=innx * hidden_channels, drop_out=p_dropout,
-                                   dilation=dilation, padding=padding,layer_scale_init_value=1e-6,condione=gin_channels)
-            # in_layer = weight_norm_modules(in_layer, name='weight')
-            self.in_layers.append(in_layer)
-
-            # last one is not necessary
-
-    def forward(self, x, x_mask=None, g=None, **kwargs):
-
-
-        # if g is not None:
-        #     g = self.cond_layer(g)
-
-        for i in range(self.n_layers):
-
-
-            x = self.in_layers[i](x,g)
-
-            if x_mask is not None:
-                x = x * x_mask
-            else:
-                x = x
-
-
-
-
-
-
-
-        return x
-
-
+    # def remove_weight_norm(self):
+    #     if self.gin_channels != 0:
+    #         remove_weight_norm_modules(self.cond_layer)
+    #     for l in self.in_layers:
+    #         remove_weight_norm_modules(l)
+    #     for l in self.res_skip_layers:
+    #         remove_weight_norm_modules(l)
 
 
 class ResidualCouplingLayer(nn.Module):
@@ -577,7 +457,7 @@ class ResidualCouplingLayer(nn.Module):
         self.mean_only = mean_only
 
         self.pre = nn.Conv1d(self.half_channels, hidden_channels, 1)
-        self.enc = CONVnext_flow(hidden_channels, kernel_size, dilation_rate, n_layers, p_dropout=p_dropout,
+        self.enc = WN(hidden_channels, kernel_size, dilation_rate, n_layers, p_dropout=p_dropout,
                       gin_channels=gin_channels) if wn_sharing_parameter is None else wn_sharing_parameter
         self.post = nn.Conv1d(hidden_channels, self.half_channels * (2 - mean_only), 1)
         self.post.weight.data.zero_()
@@ -642,7 +522,7 @@ class ResidualCouplingBlock(nn.Module):
 
         self.flows = nn.ModuleList()
 
-        self.wn = CONVnext_flow(hidden_channels, kernel_size, dilation_rate, n_layers, p_dropout=0,
+        self.wn = WN(hidden_channels, kernel_size, dilation_rate, n_layers, p_dropout=0,
                      gin_channels=gin_channels) if share_parameter else None
 
         for i in range(n_flows):
@@ -663,6 +543,42 @@ class ResidualCouplingBlock(nn.Module):
                 x = flow(x, x_mask, g=g, reverse=reverse)
         return x, logdet_tot
 
+
+# class TextEncoder(nn.Module):
+#     def __init__(self,
+#                  out_channels,
+#                  hidden_channels,
+#                  kernel_size,
+#                  n_layers,
+#                  gin_channels=0,
+#                  filter_channels=None,
+#                  n_heads=None,
+#                  p_dropout=None):
+#         super().__init__()
+#         self.out_channels = out_channels
+#         self.hidden_channels = hidden_channels
+#         self.kernel_size = kernel_size
+#         self.n_layers = n_layers
+#         self.gin_channels = gin_channels
+#         self.proj = nn.Conv1d(hidden_channels, out_channels * 2, 1)
+#         self.f0_emb = nn.Embedding(256, hidden_channels)
+#
+#         self.enc_ = attentions.Encoder(
+#             hidden_channels,
+#             filter_channels,
+#             n_heads,
+#             n_layers,
+#             kernel_size,
+#             p_dropout)
+#
+#     def forward(self, x, x_mask, f0=None, noice_scale=1):
+#         x = x + self.f0_emb(f0).transpose(1, 2)
+#         x = self.enc_(x * x_mask, x_mask)
+#         stats = self.proj(x) * x_mask
+#         m, logs = torch.split(stats, self.out_channels, dim=1)
+#         z = (m + torch.randn_like(m) * torch.exp(logs) * noice_scale) * x_mask
+#
+#         return z, m, logs, x_mask
 
 
 class ConvNeXtBlock(nn.Module):
@@ -956,7 +872,7 @@ class SynthesizerTrn(nn.Module):
 
         return x_mask, (z_p, m_p, logs_p), logdet,
 
-
+    @torch.no_grad()
     def infer(self, c, noice_scale=0.35, seed=None, ):
         if seed is not None:
 
@@ -969,6 +885,8 @@ class SynthesizerTrn(nn.Module):
             z_p, m_p, logs_p = self.latent_encoder(c)
         else:
             z_p = torch.randn_like(torch.zeros(1, self.inter_channels, c.size()[2])) * noice_scale
+
+            z_p=z_p.cuda()
 
         # vol proj
 
@@ -984,14 +902,6 @@ class SynthesizerTrn(nn.Module):
 
         return o
 
-class fs2_loss(nn.Module):
-    def __init__(self):
-        super().__init__()
-
-    def forward(self,y, x):
-        x=(x - (-5)) / (0 - (-5)) * 2 - 1
-        return nn.L1Loss()(y,x)
-
 
 class glow_loss_L(nn.Module):
     def __init__(self):
@@ -1002,8 +912,8 @@ class glow_loss_L(nn.Module):
         z, m, logs, logdet, mask = pack_loss
         # z, m, logs, logdet, mask = None
 
-        l = torch.sum(logs) + 0.5 * torch.sum(
-            torch.exp(-2 * logs) * ((z - m) ** 2))  # neg normal likelihood w/o the constant term
+        l = 0.5 * torch.sum(
+            torch.exp(-2 * logdet) * ((z ) ** 2))  # neg normal likelihood w/o the constant term
         l = l - torch.sum(logdet)  # log jacobian determinant
         if mask is not None:
             l = l / torch.sum(torch.ones_like(z) * mask)  # averaging across batch, channel and time axes
@@ -1016,14 +926,12 @@ class glow_loss_L(nn.Module):
 
 
 
-
-
-class glow_decoder_convnext(nn.Module):
+class glow_decoder(nn.Module):
     def __init__(self, encoder_hidden, out_dims, latent_encoder_hidden_channels, latent_encoder_n_heads,
                  latent_encoder_n_layers, latent_encoder_kernel_size, latent_encoder_dropout_rate,
                  condition_encoder_hidden_channels, condition_encoder_n_heads, condition_encoder_n_layers,
                  condition_encoder_kernel_size, condition_encoder_dropout_rate, flow_hidden_channels,
-                 flow_condition_channels, parame,ft_flow=False,use_mask=True,use_norm=True,flow_wavenet_lay=4,flow_infer_seed=None,flow_infer_scale=0.35,
+                 flow_condition_channels, parame,use_mask=True,use_norm=True,flow_wavenet_lay=4,flow_infer_seed=None,flow_infer_scale=0.35,
                  condition_encoder_filter_channels=None,
 
                  latent_encoder_filter_channels=None,
@@ -1039,7 +947,6 @@ class glow_decoder_convnext(nn.Module):
         self.use_latent=use_latent
         self.flow_infer_seed=flow_infer_seed
         self.flow_infer_scale=flow_infer_scale
-        self.ft_flow=ft_flow
         self.glow_decoder = SynthesizerTrn(latent_encoder_hidden_channels=latent_encoder_hidden_channels,
                                            latent_encoder_n_heads=latent_encoder_n_heads,
                                            latent_encoder_n_layers=latent_encoder_n_layers,
@@ -1085,35 +992,27 @@ class glow_decoder_convnext(nn.Module):
         return x
 
     def build_loss(self):
-        if self.ft_flow:
-            return fs2_loss()
+
 
         if self.use_latent:
 
             return glow_loss_L()
 
-
-
+        return glow_loss_L()
     def forward(self, x, infer, x_gt,mask):
         if not self.use_mask or infer:
             mask=None
         else:
             mask=mask.transpose(1, 2)
 
-        if self.ft_flow and not infer:
-            out = self.glow_decoder.infer(x.transpose(1, 2), noice_scale=self.flow_infer_scale,
-                                          seed=self.flow_infer_seed).transpose(1, 2)
-            return out
-
 
 
 
         if infer:
-            with torch.no_grad():
-                out=self.glow_decoder.infer(x.transpose(1, 2), noice_scale=self.flow_infer_scale, seed=self.flow_infer_seed).transpose(1, 2)
-                if self.use_norm:
-                    out = self.denorm(out)
-                return out
+            out=self.glow_decoder.infer(x.transpose(1, 2), noice_scale=self.flow_infer_scale, seed=self.flow_infer_seed).transpose(1, 2)
+            if self.use_norm:
+                out = self.denorm(out)
+            return out
         else:
             if self.use_norm:
                 x_gt = self.norm(x_gt)
