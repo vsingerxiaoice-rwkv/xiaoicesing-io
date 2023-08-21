@@ -49,11 +49,11 @@ class DiffSingerAcoustic(ParameterAdaptorModule, CategorizedModule):
         )
 
         self.use_shallow_diffusion = hparams.get('use_shallow_diffusion', False)
+        self.shallow_args = hparams['shallow_diffusion_args']
         if self.use_shallow_diffusion:
-            shallow_args = hparams['shallow_diffusion_args']
-            self.train_aux_decoder = shallow_args['train_aux_decoder']
-            self.train_diffusion = shallow_args['train_diffusion']
-            self.aux_decoder_grad = shallow_args['aux_decoder_grad']
+            self.train_aux_decoder = self.shallow_args['train_aux_decoder']
+            self.train_diffusion = self.shallow_args['train_diffusion']
+            self.aux_decoder_grad = self.shallow_args['aux_decoder_grad']
             self.aux_decoder = shallow_adapt(hparams, out_dims,vocab_size)
 
         self.diffusion = GaussianDiffusion(
@@ -79,21 +79,22 @@ class DiffSingerAcoustic(ParameterAdaptorModule, CategorizedModule):
             txt_tokens, mel2ph, f0, key_shift=key_shift, speed=speed,
             spk_embed_id=spk_embed_id, **kwargs
         )
-
         if infer:
             if self.use_shallow_diffusion:
                 aux_mel_pred = self.aux_decoder(condition, infer=True,txt_tokens=txt_tokens, mel2ph=mel2ph, f0=f0,
             key_shift=key_shift, speed=speed,spk_embed_id=spk_embed_id, **kwargs)
-
                 aux_mel_pred *= ((mel2ph > 0).float()[:, :, None])
+                if gt_mel is not None and self.shallow_args['val_gt_start']:
+                    src_mel = gt_mel
+                else:
+                    src_mel = aux_mel_pred
             else:
-                aux_mel_pred = None
-            mel_pred = self.diffusion(condition, src_spec=aux_mel_pred, infer=True)
+                aux_mel_pred = src_mel = None
+            mel_pred = self.diffusion(condition, src_spec=src_mel, infer=True)
             mel_pred *= ((mel2ph > 0).float()[:, :, None])
             return ShallowDiffusionOutput(aux_out=aux_mel_pred, diff_out=mel_pred)
         else:
             if self.use_shallow_diffusion:
-                # TODO: replace the following placeholder with real calling code
                 if self.train_aux_decoder:
                     aux_cond = condition * self.aux_decoder_grad + condition.detach() * (1 - self.aux_decoder_grad)
                     aux_out = self.aux_decoder(aux_cond, infer=False,txt_tokens=txt_tokens, mel2ph=mel2ph, f0=f0,

@@ -82,6 +82,7 @@ diff_depth: 400
 shallow_diffusion_args:
   train_aux_decoder: true
   train_diffusion: true
+  val_gt_start: false
   aux_share_encoder: true
   aux_encoder_strict_hparams: false
   aux_encoder_arch: fs2
