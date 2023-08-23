@@ -278,6 +278,54 @@ The special case applies when a tuple is needed in `__init__`: `beta1` and `beta
 
 If you found other optimizer and learning rate scheduler useful, you can raise a topic in [Discussions](https://github.com/openvpi/DiffSinger/discussions), raise [Issues](https://github.com/openvpi/DiffSinger/issues) or submit [PRs](https://github.com/openvpi/DiffSinger/pulls) if it introduces new codes or dependencies.
 
-## Fine-tuning and freezing parameters
+## Fine-tuning and parameter freezing
 
-TBD
+### Fine-tuning from existing checkpoints
+
+By default, the training starts from a model from scratch with randomly initialized parameters. However, if you already have some pre-trained checkpoints, and you need to adapt them to other datasets with their functionalities unchanged, fine-tuning may save training steps and time. In general, you need to add the following structure into the configuration file:
+
+```yaml
+# take acoustic models as an example
+finetune_enabled: true  # the main switch to enable fine-tuning
+finetune_ckpt_path: checkpoints/pretrained/model_ckpt_steps_320000.ckpt  # path to your pre-trained checkpoint
+finetune_ignored_params:  # prefix rules to exclude specific parameters when loading the checkpoints
+  - model.fs2.encoder.embed_tokens  # in case when the phoneme set is changed
+  - model.fs2.txt_embed  # same as above
+  - model.fs2.spk_embed  # in case when the speaker set is changed
+finetune_strict_shapes: true  # whether to raise an error when parameter shapes mismatch
+```
+
+For the pre-trained checkpoint, it must be a file saved with `torch.save`, containing a `dict` object and a `state_dict` key, like the following example:
+
+```json5
+{
+  "state_dict": {
+    "model.fs2.txt_embed": null,  // torch.Tensor
+    "model.fs2.pitch_embed.weight": null,  // torch.Tensor
+    "model.fs2.pitch_embed.bias": null,  // torch.Tensor
+    // ... (other parameters)
+  }
+  // ... (other possible keys
+}
+```
+
+**IMPORTANT NOTES**:
+
+- The pre-trained checkpoint is **loaded only once** at the beginning of the training experiment. You may interrupt the training at any time, but after this new experiment has saved its own checkpoint, the pre-trained checkpoint will not be loaded again when the training is resumed.
+- Only the state dict of the checkpoint will be loaded. The optimizer state in the pre-trained checkpoint will be ignored.
+- The parameter name matching is **not strict** when loading the pre-trained checkpoint. This means that missing parameters in the state dict will still be left as randomly initialized, and redundant parameters will be ignored without any warnings and errors. There are cases where the tensor shapes mismatch between the pre-trained state dict and the model - edit `finetune_strict_shapes` to change the behavior when dealing with this.
+- Be careful if you want to change the functionalities when fine-tuning. Starting from a checkpoint trained under different functionalities may be even slower than training from scratch.
+
+### Freezing model parameters
+
+Sometimes you want to freeze part of the model during training or fine-tuning to save GPU memory, accelerate the training process or avoid catastrophic forgetting. Parameter freezing may also be useful if you want to add/remove functionalities from pre-trained checkpoints. In general, you need to add the following structure into the configuration file:
+
+```yaml
+# take acoustic models as an example
+freezing_enabled: true  # main switch to enable parameter freezing
+frozen_params:  # prefix rules to freeze specific parameters during training
+  - model.fs2.encoder
+  - model.fs2.pitch_embed
+```
+
+You may interrupt the training and change the settings above at any time. Sometimes this will cause mismatching optimizer state - and it will be discarded silently.
