@@ -426,6 +426,30 @@ int
 
 1
 
+### binarization_args.prefer_ds
+
+Whether to prefer loading attributes and parameters from DS files.
+
+#### visibility
+
+variance
+
+#### scope
+
+preprocessing
+
+#### customizability
+
+recommended
+
+#### type
+
+bool
+
+#### default
+
+False
+
 ### binarization_args.shuffle
 
 Whether binarized dataset will be shuffled or not.

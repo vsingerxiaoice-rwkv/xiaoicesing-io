@@ -145,7 +145,36 @@ You can submit or propose a new dictionary by raising a topic in [Discussions](h
 
 ## Build variance datasets with DS files
 
-TBD
+By default, the variance binarizer loads attributes from transcriptions.csv and searches for recording files (*.wav) to extract features and parameters. These attributes and parameters also exist in DS files, which are normally used for inference. This section introduces the required settings and important notes to build a variance dataset from DS files.
+
+First of all, you should edit your configuration file to enable loading from DS files:
+
+```yaml
+binarization_args:
+  prefer_ds: true  # prefer loading from DS files
+```
+
+Then you should prepare some DS files which are properly segmented. If you export DS files with OpenUTAU for DiffSinger, the DS files are already segmented according to the spaces between notes. You should put these DS files in a folder named `ds` in your raw dataset directory (besides the `wavs` folder).
+
+The DS files should also use the same dictionary as that of your target model. The attributes required vary from your target functionalities, as listed below:
+
+|        attribute name        | required by duration prediction | required by pitch prediction | required by variance parameters prediction | previous source | current source |
+|:----------------------------:|:-------------------------------:|:----------------------------:|:------------------------------------------:|:---------------:|:--------------:|
+|            `name`            |                ✓                |              ✓               |                     ✓                      |       CSV       |      CSV       |
+|           `ph_seq`           |                ✓                |              ✓               |                     ✓                      |       CSV       |     DS/CSV     |
+|           `ph_dur`           |                ✓                |              ✓               |                     ✓                      |       CSV       |     DS/CSV     |
+|           `ph_num`           |                ✓                |                              |                                            |       CSV       |     DS/CSV     |
+|          `note_seq`          |                                 |              ✓               |                                            |       CSV       |     DS/CSV     |
+|          `note_dur`          |                                 |              ✓               |                                            |       CSV       |     DS/CSV     |
+|           `f0_seq`           |                ✓                |              ✓               |                     ✓                      |       WAV       |     DS/WAV     |
+| `energy`, `breathiness`, ... |                                 |                              |                     ✓                      |       WAV       |     DS/WAV     |
+
+This means you only need one column in trancriptions.csv, the `name` column, to declare all DS files included in the dataset. The name pattern can be:
+
+- Full name: `some-name` will firstly match the first segment in `some-name.ds`.
+- Name with index: `some-name#0` and `some-name#1` will match segment 0 and segment 1 in `some-name.ds` if there are no match with full name.
+
+Though not recommended, the binarizer will still try to load attributes from transcriptions.csv or extract parameters from recordings if there are no matching DS files. In this case the full name matching logic is applied (the same as the normal binarization process).
 
 ## Pitch extractors
 
