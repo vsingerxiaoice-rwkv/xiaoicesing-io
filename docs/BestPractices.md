@@ -279,11 +279,13 @@ accumulate_grad_batches: 4  # the actual batch size will be 4x.
 
 Please note that enabling gradient accumulation will slow down training because the losses must be calculated for several times before the weights are updated (1 update to the weights = 1 actual training step).
 
-### Optimizer and learning rate
+## Optimizers and learning rate schedulers
 
-The optimizer and the learning rate scheduler can take an important role in accelerating the training process. DiffSinger uses a flexible configuration logic for these two modules.
+The optimizer and the learning rate scheduler can take an important role in the training process. DiffSinger uses a flexible configuration logic for these two modules.
 
-You can modify options of the optimizer and learning rate scheduler, or even use other classes of them by editing the configuration file:
+### Basic configurations
+
+The optimizer and learning rate scheduler used during training can be configured by their full class name and keyword arguments in the configuration file. Take the following as an example for the optimizer:
 
 ```yaml
 optimizer_args:
@@ -292,6 +294,11 @@ optimizer_args:
   beta1: 0.9
   beta2: 0.98
   weight_decay: 0
+```
+
+and for the learning rate scheduler:
+
+```yaml
 lr_scheduler_args:
   scheduler_cls: torch.optim.lr_scheduler.StepLR  # class name of learning rate schedule
   warmup_steps: 2000
@@ -305,7 +312,31 @@ Also, note that the LR scheduler performs scheduling on the granularity of steps
 
 The special case applies when a tuple is needed in `__init__`: `beta1` and `beta2` are treated separately and form a tuple in the code. You could try to pass in an array instead. (And as an experiment, AdamW does accept `[beta1, beta2]`). If there is another special treatment required, please submit an issue.
 
-If you found other optimizer and learning rate scheduler useful, you can raise a topic in [Discussions](https://github.com/openvpi/DiffSinger/discussions), raise [Issues](https://github.com/openvpi/DiffSinger/issues) or submit [PRs](https://github.com/openvpi/DiffSinger/pulls) if it introduces new codes or dependencies.
+For PyTorch built-in optimizers and LR schedulers, see official [documentation](https://pytorch.org/docs/stable/optim.html) of the `torch.optim` package. If you found other optimizer and learning rate scheduler useful, you can raise a topic in [Discussions](https://github.com/openvpi/DiffSinger/discussions), raise [Issues](https://github.com/openvpi/DiffSinger/issues) or submit [PRs](https://github.com/openvpi/DiffSinger/pulls) if it introduces new codes or dependencies.
+
+### Composite LR schedulers
+
+Some LR schedulers like `SequentialLR` and `ChainedScheduler` may use other schedulers as arguments. Besides built-in types, there is a special design to configure these scheduler objects. See the following example.
+
+```yaml
+lr_scheduler_args:
+  scheduler_cls: torch.optim.lr_scheduler.SequentialLR
+  schedulers:
+  - cls: torch.optim.lr_scheduler.ExponentialLR
+    gamma: 0.5
+  - cls: torch.optim.lr_scheduler.LinearLR
+  - cls: torch.optim.lr_scheduler.MultiStepLR
+    milestones:
+    - 10
+    - 20
+  milestones:
+  - 10
+  - 20
+```
+
+The LR scheduler objects will be recursively construct objects if `cls` is present in sub-arguments. Please note that `cls` must be a scheduler class because this is a special design.
+
+**WARNING:** Nested `SequentialLR` and `ChainedScheduler` have unexpected behavior. **DO NOT** nest them. Also, make sure the scheduler is _chainable_ before using it in `ChainedScheduler`.
 
 ## Fine-tuning and parameter freezing
 
