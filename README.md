@@ -19,7 +19,7 @@ This is a refactored and enhanced version of _DiffSinger: Singing Voice Synthesi
 
 ## User Guidance
 
-> 中文教程 / Chinese Tutorials: [Text](https://www.yuque.com/openvpi/tutorial), [Video](https://www.bilibili.com/video/BV1xN411F7yM)
+> 中文教程 / Chinese Tutorials: [Text](https://openvpi-docs.feishu.cn/wiki/KmBFwoYDEixrS4kHcTAcajPinPe), [Video](https://www.bilibili.com/video/BV1xN411F7yM)
 
 - **Installation & basic usages**: See [Getting Started](docs/GettingStarted.md)
 - **Dataset creation pipelines & tools**: See [MakeDiffSinger](https://github.com/openvpi/MakeDiffSinger)

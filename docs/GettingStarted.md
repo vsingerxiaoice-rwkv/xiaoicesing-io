@@ -21,13 +21,15 @@ DiffSinger requires Python 3.8 or later. We strongly recommend you create a virt
 
 ## Configuration
 
-Every model needs a configuration file to run preprocessing, training, inference and deployment. Templates of configurations files are in [configs/templates](../configs/templates/). Please **copy** the templates to your own data directory before you edit them.
+Every model needs a configuration file to run preprocessing, training, inference and deployment. Templates of configurations files are in [configs/templates](../configs/templates). Please **copy** the templates to your own data directory before you edit them.
 
 For more details about configurable parameters, see [Configuration Schemas](ConfigurationSchemas.md).
 
+> Tips: to see which parameters are required or recommended to be edited, you can search by _customizability_ in the configuration schemas.
+
 ## Preprocessing
 
-Raw data pieces and transcriptions should be binarized into dataset files before training.
+Raw data pieces and transcriptions should be binarized into dataset files before training. Before doing this step, please ensure all required configurations like `raw_data_dir` and `binary_data_dir` are set properly, and all your desired functionalities and features are enabled and configured.
 
 Assume that you have a configuration file called `my_config.yaml`. Run:
 
@@ -48,6 +50,14 @@ python scripts/train.py --config my_config.yaml --exp_name my_experiment --reset
 Checkpoints will be saved at the `checkpoints/my_experiment/` directory. When interrupting the program and running the above command again, the training resumes automatically from the latest checkpoint.
 
 For more suggestions related to training performance, see [performance tuning](BestPractices.md#performance-tuning).
+
+### TensorBoard
+
+Run the following command to start the TensorBoard:
+
+```bash
+tensorboard --logdir checkpoints/
+```
 
 ## Inference
 
@@ -88,7 +98,7 @@ DiffSinger uses [ONNX](https://onnx.ai/) as the deployment format. Due to TorchS
 If your model is a variance model, run:
 
 ```bash
-python scripts/export.py --exp my_experiment
+python scripts/export.py variance --exp my_experiment
 ```
 
 or run
@@ -115,7 +125,7 @@ for more configurable options.
 
 ## Other utilities
 
-There are other useful CLI tools in the [scripts/](../scripts/) directory not mentioned above:
+There are other useful CLI tools in the [scripts/](../scripts) directory not mentioned above:
 
 - drop_spk.py - delete speaker embeddings from checkpoints (for data security reasons when distributing models)
 - migrate.py - migrate old transcription files or checkpoints from previous versions of DiffSinger

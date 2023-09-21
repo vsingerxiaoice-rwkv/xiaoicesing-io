@@ -20,6 +20,7 @@ class DiffSingerVarianceExporter(BaseExporter):
             device: Union[str, torch.device] = 'cpu',
             cache_dir: Path = None,
             ckpt_steps: int = None,
+            expose_expr: bool = False,
             export_spk: List[Tuple[str, Dict[str, float]]] = None,
             freeze_spk: Tuple[str, Dict[str, float]] = None
     ):
@@ -58,6 +59,7 @@ class DiffSingerVarianceExporter(BaseExporter):
             if self.model.predict_variances else None
 
         # Attributes for exporting
+        self.expose_expr = expose_expr
         self.freeze_spk: Tuple[str, Dict[str, float]] = freeze_spk \
             if hparams['use_spk_id'] else None
         self.export_spk: List[Tuple[str, Dict[str, float]]] = export_spk \
@@ -256,25 +258,30 @@ class DiffSingerVarianceExporter(BaseExporter):
             note_dur = torch.LongTensor([[2, 6, 3, 4]]).to(self.device)
             pitch = torch.FloatTensor([[60.] * 15]).to(self.device)
             retake = torch.ones_like(pitch, dtype=torch.bool)
+            pitch_input_args = (
+                encoder_out,
+                ph_dur,
+                note_midi,
+                note_dur,
+                pitch,
+                {
+                    **({'expr': torch.ones_like(pitch)} if self.expose_expr else {}),
+                    'retake': retake,
+                    **({'spk_embed': torch.rand(
+                        1, 15, hparams['hidden_size'], dtype=torch.float32, device=self.device
+                    )} if input_spk_embed else {})
+                }
+            )
             torch.onnx.export(
                 self.model.view_as_pitch_preprocess(),
-                (
-                    encoder_out,
-                    ph_dur,
-                    note_midi,
-                    note_dur,
-                    pitch,
-                    retake,
-                    *([torch.rand(
-                        1, 15, hparams['hidden_size'],
-                        dtype=torch.float32, device=self.device
-                    )] if input_spk_embed else [])
-                ),
+                pitch_input_args,
                 self.pitch_preprocess_cache_path,
                 input_names=[
                     'encoder_out', 'ph_dur',
                     'note_midi', 'note_dur',
-                    'pitch', 'retake',
+                    'pitch',
+                    *(['expr'] if self.expose_expr else []),
+                    'retake',
                     *(['spk_embed'] if input_spk_embed else [])
                 ],
                 output_names=[
@@ -293,6 +300,7 @@ class DiffSingerVarianceExporter(BaseExporter):
                     'note_dur': {
                         1: 'n_notes'
                     },
+                    **({'expr': {1: 'n_frames'}} if self.expose_expr else {}),
                     'pitch': {
                         1: 'n_frames'
                     },

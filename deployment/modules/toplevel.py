@@ -162,14 +162,25 @@ class DiffSingerVarianceONNX(DiffSingerVariance):
 
     def forward_pitch_preprocess(
             self, encoder_out, ph_dur, note_midi, note_dur,
-            pitch=None, retake=None, spk_embed=None
+            pitch=None, expr=None, retake=None, spk_embed=None
     ):
         condition = self.forward_mel2x_gather(encoder_out, ph_dur, x_dim=self.hidden_size)
-        condition += self.pitch_retake_embed(retake.long())
+        if expr is None:
+            retake_embed = self.pitch_retake_embed(retake.long())
+        else:
+            retake_true_embed = self.pitch_retake_embed(
+                torch.ones(1, 1, dtype=torch.long, device=encoder_out.device)
+            )  # [B=1, T=1] => [B=1, T=1, H]
+            retake_false_embed = self.pitch_retake_embed(
+                torch.zeros(1, 1, dtype=torch.long, device=encoder_out.device)
+            )  # [B=1, T=1] => [B=1, T=1, H]
+            expr = (expr * retake)[:, :, None]  # [B, T, 1]
+            retake_embed = expr * retake_true_embed + (1. - expr) * retake_false_embed
+        pitch_cond = condition + retake_embed
         frame_midi_pitch = self.forward_mel2x_gather(note_midi, note_dur, x_dim=None)
         base_pitch = self.smooth(frame_midi_pitch)
         base_pitch = base_pitch * retake + pitch * ~retake
-        pitch_cond = condition + self.base_pitch_embed(base_pitch[:, :, None])
+        pitch_cond += self.base_pitch_embed(base_pitch[:, :, None])
         if hparams['use_spk_id'] and spk_embed is not None:
             pitch_cond += spk_embed
         return pitch_cond, base_pitch
