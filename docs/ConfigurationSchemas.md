@@ -634,9 +634,9 @@ bool
 
 true
 
-### ddp_backend
+### dataset_size_key
 
-The distributed training backend.
+The key that indexes the binarized metadata to be used as the `sizes` when batching by size
 
 #### visibility
 
@@ -648,7 +648,7 @@ training
 
 #### customizability
 
-normal
+not recommended
 
 #### type
 
@@ -656,11 +656,7 @@ str
 
 #### default
 
-nccl
-
-#### constraints
-
-Choose from 'gloo', 'nccl', 'nccl_no_p2p'. Windows platforms may use 'gloo'; Linux platforms may use 'nccl'; if Linux ddp gets stuck, use 'nccl_no_p2p'.
+lengths
 
 ### dictionary
 
@@ -1852,7 +1848,7 @@ training
 
 #### customizability
 
-reserved
+normal
 
 #### type
 
@@ -1876,7 +1872,7 @@ training
 
 #### customizability
 
-reserved
+normal
 
 #### type
 
@@ -1957,6 +1953,30 @@ float
 #### default
 
 0.06
+
+### nccl_p2p
+
+Whether to enable P2P when using NCCL as the backend. Turn it to `false` if the training process is stuck upon beginning.
+
+#### visibility
+
+all
+
+#### scope
+
+training
+
+#### customizability
+
+normal
+
+#### type
+
+bool
+
+#### default
+
+true
 
 ### num_ckpt_keep
 
@@ -2488,7 +2508,15 @@ int
 
 ### pl_trainer_strategy
 
-Strategies of the Lightning trainer behavior.
+Arguments of Lightning Strategy. Values will be used as keyword arguments when constructing the Strategy object.
+
+#### type
+
+dict
+
+### pl_trainer_strategy.name
+
+Strategy name for the Lightning trainer.
 
 #### visibility
 
