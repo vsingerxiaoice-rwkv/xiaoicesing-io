@@ -253,6 +253,7 @@ class BaseBinarizer:
         total_sec = {k: 0.0 for k in self.spk_map}
         total_raw_sec = {k: 0.0 for k in self.spk_map}
         extra_info = {'names': {}, 'spk_ids': {}, 'spk_names': {}, 'lengths': {}}
+        skipped = 0
 
         for item_name, meta_data in self.meta_data_iterator(prefix):
             args.append([item_name, meta_data, self.binarization_args])
@@ -260,8 +261,9 @@ class BaseBinarizer:
         aug_map = self.arrange_data_augmentation(self.meta_data_iterator(prefix)) if apply_augmentation else {}
 
         def postprocess(_item):
-            nonlocal total_sec, total_raw_sec, extra_info
+            nonlocal total_sec, total_raw_sec, extra_info, skipped
             if _item is None:
+                skipped += (1 + len(aug_map.get(_item['name'], [])))
                 return
             item_no = builder.add_item(_item)
             for k, v in _item.items():
@@ -304,8 +306,8 @@ class BaseBinarizer:
                     item = self.process_item(*a)
                     postprocess(item)
             for k in extra_info:
-                for item_no in range(len(args)):
-                    assert item_no in extra_info[k], f'Item numbering is not consecutive.'
+                assert set(extra_info[k]) == set(range(len(args) + sum(len(x) for x in aug_map.values()) - skipped)), \
+                    f'Item numbering is not consecutive.'
                 extra_info[k] = list(map(lambda x: x[1], sorted(extra_info[k].items(), key=lambda x: x[0])))
         except KeyboardInterrupt:
             builder.finalize()
