@@ -263,7 +263,6 @@ class BaseBinarizer:
         def postprocess(_item):
             nonlocal total_sec, total_raw_sec, extra_info, max_no
             if _item is None:
-                skipped += (1 + len(aug_map.get(_item['name'], [])))
                 return
             item_no = builder.add_item(_item)
             max_no = max(max_no, item_no)
