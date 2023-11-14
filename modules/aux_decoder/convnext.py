@@ -78,7 +78,7 @@ class ConvNeXtDecoder(nn.Module):
 
     # noinspection PyUnusedLocal
     def forward(self, x, infer=False):
-        x = x.transpose(1, 2)
+        x = x['fs2_cond'].transpose(1, 2)
         x = self.inconv(x)
         for conv in self.conv:
             x = conv(x)

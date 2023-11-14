@@ -2,13 +2,16 @@ import torch.nn
 from torch import nn
 
 from .convnext import ConvNeXtDecoder
+from .ddsp import DDSPDecoder
 from utils import filter_kwargs
 
 AUX_DECODERS = {
-    'convnext': ConvNeXtDecoder
+    'convnext': ConvNeXtDecoder,
+    'ddsp': DDSPDecoder
 }
 AUX_LOSSES = {
-    'convnext': nn.L1Loss
+    'convnext': nn.L1Loss,
+    'ddsp': nn.L1Loss
 }
 
 
@@ -55,8 +58,8 @@ class AuxDecoderAdaptor(nn.Module):
         b = (self.spec_max + self.spec_min) / 2.
         return x * k + b
 
-    def forward(self, condition, infer=False):
-        x = self.decoder(condition, infer=infer)  # [B, T, F x C]
+    def forward(self, cond_dict, infer=False):
+        x = self.decoder(cond_dict, infer=infer)  # [B, T, F x C]
 
         if self.n_feats > 1:
             # This is the temporary solution since PyTorch 1.13
