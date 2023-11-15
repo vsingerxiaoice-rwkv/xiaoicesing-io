@@ -61,7 +61,7 @@ shallow_diffusion_args:
     kernel_size: 31
     dropout_rate: 0.0
   aux_decoder_grad: 0.1
-lambda_aux_mel_loss: 0.2
+lambda_aux_mel_loss: 1.0
 
 optimizer_args:
   lr: 0.0004

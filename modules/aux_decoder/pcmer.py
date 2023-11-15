@@ -126,17 +126,19 @@ class _EncoderLayer(nn.Module):
         self.norm = nn.LayerNorm(parent.dim_model)
         
         # attention
+        '''
         self.attn = Attention(dim = parent.dim_model,
                                   heads = parent.num_heads,dim_head=32
                                   # causal = False
                               )
+        '''
         
     #  METHODS  ########################################################################################################
 
     def forward(self, phone, mask=None):
         
         # compute attention sub-layer
-        phone = phone + (self.attn(self.norm(phone), mask=mask))
+        #phone = phone + (self.attn(self.norm(phone), mask=mask))
         
         phone = phone + (self.conformer(phone))
         

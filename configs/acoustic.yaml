@@ -95,7 +95,7 @@ shallow_diffusion_args:
     dropout_rate: 0.0
   aux_decoder_grad: 0.1
 
-lambda_aux_mel_loss: 0.2
+lambda_aux_mel_loss: 1.0
 
 # train and eval
 num_sanity_val_steps: 1

@@ -42,7 +42,7 @@ class Cond2Control(nn.Module):
                 nn.LeakyReLU(),
                 nn.Conv1d(num_channels, num_channels, 3, 1, 1)) 
 
-        # transformer
+        # pcmer without attention
         self.decoder = PCmer(
             num_layers=num_layers,
             num_heads=num_heads,
