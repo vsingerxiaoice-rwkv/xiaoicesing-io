@@ -4,16 +4,18 @@ import torch
 from matplotlib.ticker import MultipleLocator
 
 
-def spec_to_figure(spec, vmin=None, vmax=None):
+def spec_to_figure(spec, vmin=None, vmax=None, title=None):
     if isinstance(spec, torch.Tensor):
         spec = spec.cpu().numpy()
     fig = plt.figure(figsize=(12, 9))
     plt.pcolor(spec.T, vmin=vmin, vmax=vmax)
+    if title is not None:
+        plt.title(title, fontsize=15)
     plt.tight_layout()
     return fig
 
 
-def dur_to_figure(dur_gt, dur_pred, txt):
+def dur_to_figure(dur_gt, dur_pred, txt, title=None):
     if isinstance(dur_gt, torch.Tensor):
         dur_gt = dur_gt.cpu().numpy()
     if isinstance(dur_pred, torch.Tensor):
@@ -35,12 +37,14 @@ def dur_to_figure(dur_gt, dur_pred, txt):
         plt.plot([dur_pred[i], dur_gt[i]], [12, 10], color='black', linewidth=2, linestyle=':')
     plt.yticks([])
     plt.xlim(0, max(dur_pred[-1], dur_gt[-1]))
-    fig.legend()
-    fig.tight_layout()
+    plt.legend()
+    if title is not None:
+        plt.title(title, fontsize=15)
+    plt.tight_layout()
     return fig
 
 
-def pitch_note_to_figure(pitch_gt, pitch_pred=None, note_midi=None, note_dur=None, note_rest=None):
+def pitch_note_to_figure(pitch_gt, pitch_pred=None, note_midi=None, note_dur=None, note_rest=None, title=None):
     if isinstance(pitch_gt, torch.Tensor):
         pitch_gt = pitch_gt.cpu().numpy()
     if isinstance(pitch_pred, torch.Tensor):
@@ -73,11 +77,13 @@ def pitch_note_to_figure(pitch_gt, pitch_pred=None, note_midi=None, note_dur=Non
     plt.gca().yaxis.set_major_locator(MultipleLocator(1))
     plt.grid(axis='y')
     plt.legend()
+    if title is not None:
+        plt.title(title, fontsize=15)
     plt.tight_layout()
     return fig
 
 
-def curve_to_figure(curve_gt, curve_pred=None, curve_base=None, grid=None):
+def curve_to_figure(curve_gt, curve_pred=None, curve_base=None, grid=None, title=None):
     if isinstance(curve_gt, torch.Tensor):
         curve_gt = curve_gt.cpu().numpy()
     if isinstance(curve_pred, torch.Tensor):
@@ -94,6 +100,8 @@ def curve_to_figure(curve_gt, curve_pred=None, curve_base=None, grid=None):
         plt.gca().yaxis.set_major_locator(MultipleLocator(grid))
     plt.grid(axis='y')
     plt.legend()
+    if title is not None:
+        plt.title(title, fontsize=15)
     plt.tight_layout()
     return fig
 
