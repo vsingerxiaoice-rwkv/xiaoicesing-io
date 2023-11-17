@@ -17,7 +17,7 @@ from modules.diffusion.ddpm import (
 from modules.fastspeech.acoustic_encoder import FastSpeech2Acoustic
 from modules.fastspeech.param_adaptor import ParameterAdaptorModule
 from modules.fastspeech.tts_modules import RhythmRegulator, LengthRegulator
-from modules.fastspeech.variance_encoder import FastSpeech2Variance, MelodyEncoder
+from modules.fastspeech.variance_encoder import FastSpeech2Variance
 from utils.hparams import hparams
 
 
@@ -75,9 +75,18 @@ class DiffSingerAcoustic(CategorizedModule, ParameterAdaptorModule):
             txt_tokens, mel2ph, f0, key_shift=key_shift, speed=speed,
             spk_embed_id=spk_embed_id, **kwargs
         )
+        aux_cond_dict = {
+            'fs2_cond': condition, 
+            'txt_tokens': txt_tokens, 
+            'mel2ph': mel2ph, 
+            'f0': f0,  
+            'key_shift':key_shift,
+            'speed': speed,
+            'spk_embed_id': spk_embed_id,
+        }
         if infer:
             if self.use_shallow_diffusion:
-                aux_mel_pred = self.aux_decoder(condition, infer=True)
+                aux_mel_pred = self.aux_decoder(aux_cond_dict, infer=True)
                 aux_mel_pred *= ((mel2ph > 0).float()[:, :, None])
                 if gt_mel is not None and self.shallow_args['val_gt_start']:
                     src_mel = gt_mel
@@ -91,8 +100,8 @@ class DiffSingerAcoustic(CategorizedModule, ParameterAdaptorModule):
         else:
             if self.use_shallow_diffusion:
                 if self.train_aux_decoder:
-                    aux_cond = condition * self.aux_decoder_grad + condition.detach() * (1 - self.aux_decoder_grad)
-                    aux_out = self.aux_decoder(aux_cond, infer=False)
+                    aux_cond_dict['fs2_cond'] = condition * self.aux_decoder_grad + condition.detach() * (1 - self.aux_decoder_grad)
+                    aux_out = self.aux_decoder(aux_cond_dict, infer=False)
                 else:
                     aux_out = None
                 if self.train_diffusion:
@@ -130,15 +139,9 @@ class DiffSingerVariance(CategorizedModule, ParameterAdaptorModule):
         self.lr = LengthRegulator()
 
         if self.predict_pitch:
-            self.use_melody_encoder = hparams.get('use_melody_encoder', False)
-            if self.use_melody_encoder:
-                self.melody_encoder = MelodyEncoder(enc_hparams=hparams['melody_encoder_args'])
-                self.delta_pitch_embed = Linear(1, hparams['hidden_size'])
-            else:
-                self.base_pitch_embed = Linear(1, hparams['hidden_size'])
-
             self.pitch_retake_embed = Embedding(2, hparams['hidden_size'])
             pitch_hparams = hparams['pitch_prediction_args']
+            self.base_pitch_embed = Linear(1, hparams['hidden_size'])
             self.pitch_predictor = PitchDiffusion(
                 vmin=pitch_hparams['pitd_norm_min'],
                 vmax=pitch_hparams['pitd_norm_max'],
@@ -165,7 +168,6 @@ class DiffSingerVariance(CategorizedModule, ParameterAdaptorModule):
 
     def forward(
             self, txt_tokens, midi, ph2word, ph_dur=None, word_dur=None, mel2ph=None,
-            note_midi=None, note_rest=None, note_dur=None, note_glide=None, mel2note=None,
             base_pitch=None, pitch=None, pitch_expr=None, pitch_retake=None,
             variance_retake: Dict[str, Tensor] = None,
             spk_id=None, infer=True, **kwargs
@@ -203,21 +205,10 @@ class DiffSingerVariance(CategorizedModule, ParameterAdaptorModule):
             condition += spk_embed
 
         if self.predict_pitch:
-            if self.use_melody_encoder:
-                melody_encoder_out = self.melody_encoder(
-                    note_midi, note_rest, note_dur,
-                    glide=note_glide
-                )
-                melody_encoder_out = F.pad(melody_encoder_out, [0, 0, 1, 0])
-                mel2note_ = mel2note[..., None].repeat([1, 1, hparams['hidden_size']])
-                melody_condition = torch.gather(melody_encoder_out, 1, mel2note_)
-                pitch_cond = condition + melody_condition
-            else:
-                pitch_cond = condition.clone()  # preserve the original tensor to avoid further inplace operations
-
-            retake_unset = pitch_retake is None
-            if retake_unset:
+            if pitch_retake is None:
                 pitch_retake = torch.ones_like(mel2ph, dtype=torch.bool)
+            else:
+                base_pitch = base_pitch * pitch_retake + pitch * ~pitch_retake
 
             if pitch_expr is None:
                 pitch_retake_embed = self.pitch_retake_embed(pitch_retake.long())
@@ -231,17 +222,8 @@ class DiffSingerVariance(CategorizedModule, ParameterAdaptorModule):
                 pitch_expr = (pitch_expr * pitch_retake)[:, :, None]  # [B, T, 1]
                 pitch_retake_embed = pitch_expr * retake_true_embed + (1. - pitch_expr) * retake_false_embed
 
-            pitch_cond += pitch_retake_embed
-            if self.use_melody_encoder:
-                if retake_unset:  # generate from scratch
-                    delta_pitch_in = torch.zeros_like(base_pitch)
-                else:
-                    delta_pitch_in = (pitch - base_pitch) * ~pitch_retake
-                pitch_cond += self.delta_pitch_embed(delta_pitch_in[:, :, None])
-            else:
-                base_pitch = base_pitch * pitch_retake + pitch * ~pitch_retake
-                pitch_cond += self.base_pitch_embed(base_pitch[:, :, None])
-
+            pitch_cond = condition + pitch_retake_embed
+            pitch_cond += self.base_pitch_embed(base_pitch[:, :, None])
             if infer:
                 pitch_pred_out = self.pitch_predictor(pitch_cond, infer=True)
             else:
@@ -254,7 +236,7 @@ class DiffSingerVariance(CategorizedModule, ParameterAdaptorModule):
 
         if pitch is None:
             pitch = base_pitch + pitch_pred_out
-        var_cond = condition + self.pitch_embed(pitch[:, :, None])
+        condition += self.pitch_embed(pitch[:, :, None])
 
         variance_inputs = self.collect_variance_inputs(**kwargs)
         if variance_retake is not None:
@@ -262,9 +244,9 @@ class DiffSingerVariance(CategorizedModule, ParameterAdaptorModule):
                 self.variance_embeds[v_name](v_input[:, :, None]) * ~variance_retake[v_name][:, :, None]
                 for v_name, v_input in zip(self.variance_prediction_list, variance_inputs)
             ]
-            var_cond += torch.stack(variance_embeds, dim=-1).sum(-1)
+            condition += torch.stack(variance_embeds, dim=-1).sum(-1)
 
-        variance_outputs = self.variance_predictor(var_cond, variance_inputs, infer=infer)
+        variance_outputs = self.variance_predictor(condition, variance_inputs, infer=infer)
 
         if infer:
             variances_pred_out = self.collect_variance_outputs(variance_outputs)
