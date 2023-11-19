@@ -3,6 +3,7 @@ import torch
 import torch.distributions
 import torch.optim
 import torch.utils.data
+import torchmetrics
 
 import utils
 import utils.infer_utils
@@ -92,8 +93,26 @@ class AcousticTask(BaseTask):
             self.aux_mel_loss = build_aux_loss(self.shallow_args['aux_decoder_arch'])
             self.lambda_aux_mel_loss = hparams['lambda_aux_mel_loss']
             self.register_validation_loss('aux_mel_loss')
+            self.register_validation_metric(
+                'aux_mel_mae', torchmetrics.MeanAbsoluteError()
+            )
+            self.register_validation_metric(
+                'aux_mel_mse', torchmetrics.MeanSquaredError()
+            )
+            self.register_validation_metric(
+                'aux_mel_ssim', torchmetrics.image.StructuralSimilarityIndexMeasure()
+            )
         self.mel_loss = DiffusionNoiseLoss(loss_type=hparams['diff_loss_type'])
         self.register_validation_loss('mel_loss')
+        self.register_validation_metric(
+            'mel_mae', torchmetrics.MeanAbsoluteError()
+        )
+        self.register_validation_metric(
+            'mel_mse', torchmetrics.MeanSquaredError()
+        )
+        self.register_validation_metric(
+            'mel_ssim', torchmetrics.image.StructuralSimilarityIndexMeasure()
+        )
 
     def run_model(self, sample, infer=False):
         txt_tokens = sample['tokens']  # [B, T_ph]
@@ -150,32 +169,41 @@ class AcousticTask(BaseTask):
             for i in range(len(sample['indices'])):
                 data_idx = sample['indices'][i]
                 if data_idx < hparams['num_valid_plots']:
+                    mel_len = self.valid_dataset.metadata['mel'][data_idx]
+                    f0_len = self.valid_dataset.metadata['f0'][data_idx]
+                    # Call contiguous() here to avoid RuntimeError because
+                    # torchmetrics.MeanSquaredError uses view() internally
+                    aux_mel = mel_out.aux_out[i, :mel_len].contiguous() if mel_out.aux_out is not None else None
+                    diff_mel = mel_out.diff_out[i, :mel_len].contiguous() if mel_out.diff_out is not None else None
+                    gt_mel = sample['mel'][i, :mel_len].contiguous()
                     if self.use_vocoder:
-                        self.plot_wav(
-                            data_idx, sample['mel'][i],
-                            mel_out.aux_out[i] if mel_out.aux_out is not None else None,
-                            mel_out.diff_out[i],
-                            sample['f0'][i]
+                        self.plot_wav(data_idx, gt_mel, aux_mel, diff_mel, sample['f0'][i, :f0_len])
+                    if aux_mel is not None:
+                        self.valid_metrics['aux_mel_mae'].update(preds=aux_mel, target=gt_mel)
+                        self.valid_metrics['aux_mel_mse'].update(preds=aux_mel, target=gt_mel)
+                        self.valid_metrics['aux_mel_ssim'].update(
+                            preds=aux_mel[None, None], target=gt_mel[None, None]
                         )
-                    if mel_out.aux_out is not None:
-                        self.plot_mel(data_idx, sample['mel'][i], mel_out.aux_out[i], 'auxmel')
-                    if mel_out.diff_out is not None:
-                        self.plot_mel(data_idx, sample['mel'][i], mel_out.diff_out[i], 'diffmel')
+                        self.plot_mel(data_idx, gt_mel, aux_mel, 'auxmel')
+                    if diff_mel is not None:
+                        self.valid_metrics['mel_mae'].update(preds=diff_mel, target=gt_mel)
+                        self.valid_metrics['mel_mse'].update(preds=diff_mel, target=gt_mel)
+                        self.valid_metrics['mel_ssim'].update(
+                            preds=diff_mel[None, None], target=gt_mel[None, None]
+                        )
+                        self.plot_mel(data_idx, gt_mel, diff_mel, 'diffmel')
         return losses, sample['size']
-
 
     ############
     # validation plots
     ############
     def plot_wav(self, data_idx, gt_mel, aux_mel, diff_mel, f0):
-        f0_len = self.valid_dataset.metadata['f0'][data_idx]
-        mel_len = self.valid_dataset.metadata['mel'][data_idx]
-        gt_mel = gt_mel[:mel_len].unsqueeze(0)
+        gt_mel = gt_mel.unsqueeze(0)
         if aux_mel is not None:
-            aux_mel = aux_mel[:mel_len].unsqueeze(0)
+            aux_mel = aux_mel.unsqueeze(0)
         if diff_mel is not None:
-            diff_mel = diff_mel[:mel_len].unsqueeze(0)
-        f0 = f0[:f0_len].unsqueeze(0)
+            diff_mel = diff_mel.unsqueeze(0)
+        f0 = f0.unsqueeze(0)
         if data_idx not in self.logged_gt_wav:
             gt_wav = self.vocoder.spec2wav_torch(gt_mel, f0=f0)
             self.logger.all_rank_experiment.add_audio(
@@ -202,9 +230,8 @@ class AcousticTask(BaseTask):
     def plot_mel(self, data_idx, gt_spec, out_spec, name_prefix='mel'):
         vmin = hparams['mel_vmin']
         vmax = hparams['mel_vmax']
-        mel_len = self.valid_dataset.metadata['mel'][data_idx]
         spec_cat = torch.cat([(out_spec - gt_spec).abs() + vmin, gt_spec, out_spec], -1)
         title_text = f"{self.valid_dataset.metadata['spk_names'][data_idx]} - {self.valid_dataset.metadata['names'][data_idx]}"
         self.logger.all_rank_experiment.add_figure(f'{name_prefix}_{data_idx}',  spec_to_figure(
-            spec_cat[:mel_len], vmin, vmax, title_text
+            spec_cat, vmin, vmax, title_text
         ), global_step=self.global_step)
