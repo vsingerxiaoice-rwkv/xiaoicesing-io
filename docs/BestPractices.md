@@ -206,6 +206,21 @@ pe: rmvpe
 pe_ckpt: checkpoints/rmvpe/model.pt
 ```
 
+### Harvest
+
+[Harvest](https://github.com/mmorise/World) (Harvest: A high-performance fundamental frequency estimator from speech signals) is the recommended pitch extractor from Masanori Morise's WORLD, a free software for high-quality speech analysis, manipulation and synthesis. It is a state-of-the-art algorithmic pitch estimator designed for speech, but has seen use in singing voice synthesis. It runs the slowest compared to the others, but provides very accurate F0 on clean and normal recordings compared to parselmouth.
+
+To use Harvest, simply include the following line in your configuration file:
+```yaml
+pe: harvest
+```
+
+**Note:** It is also recommended to change the F0 detection range for Harvest with accordance to your dataset, as they are hard boundaries for this algorithm and the defaults might not suffice for most use cases. To change the F0 detection range, you may include or edit this part in the configuration file:
+```yaml
+f0_min: 65 # Minimum F0 to detect
+f0_max: 800 # Maximum F0 to detect
+```
+
 ## Performance tuning
 
 This section is about accelerating training and utilizing hardware.
