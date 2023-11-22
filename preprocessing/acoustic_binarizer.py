@@ -47,8 +47,8 @@ breathiness_smooth: SinusoidalSmoothingConv1d = None
 
 
 class AcousticBinarizer(BaseBinarizer):
-    def __init__(self):
-        super().__init__(data_attrs=ACOUSTIC_ITEM_ATTRIBUTES)
+    def __init__(self, data_dir=None):
+        super().__init__(data_dir=data_dir, data_attrs=ACOUSTIC_ITEM_ATTRIBUTES)
         self.lr = LengthRegulator()
         self.need_energy = hparams.get('use_energy_embed', False)
         self.need_breathiness = hparams.get('use_breathiness_embed', False)
