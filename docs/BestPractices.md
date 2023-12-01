@@ -88,6 +88,8 @@ Functionalities of variance models are defined by their outputs. There are three
 - Pitch Diffusion: predicts the pitch curve. See `predict_pitch` in the configuration schemas.
 - Multi-Variance Diffusion: jointly predicts other variance parameters. See `predict_energy` and `predict_breathiness` in the configuration schemas.
 
+There may be some mutual influence between the modules above when they are enabled together. See [mutual influence between variance modules](#mutual-influence-between-variance-modules) for more details.
+
 ## Using custom dictionaries
 
 This section is about using a custom grapheme-to-phoneme dictionary for any language(s).
@@ -175,6 +177,36 @@ This means you only need one column in trancriptions.csv, the `name` column, to 
 - Name with index: `some-name#0` and `some-name#1` will match segment 0 and segment 1 in `some-name.ds` if there are no match with full name.
 
 Though not recommended, the binarizer will still try to load attributes from transcriptions.csv or extract parameters from recordings if there are no matching DS files. In this case the full name matching logic is applied (the same as the normal binarization process).
+
+## Mutual influence between variance modules
+
+In some recent experiments and researches, some mutual influence between the modules of variance models has been found. In practice, being aware of the influence and making use of it can improve accuracy and avoid instability of the model.
+
+### Influence on the duration predictor
+
+The duration predictor benefits from its downstream modules, like the pitch predictor and the variance predictor.
+
+The experiments were conducted on both manually refined datasets and automatically labeled datasets, and with pitch predictors driven by both base pitch and melody encoder. All the results have shown that when either of the pitch predictor and the variance predictor is enabled together with the duration predictor, its rhythm correctness and duration accuracy significantly outperforms those of a solely trained duration predictor.
+
+Possible reason for this difference can be the lack of information carried by pure phoneme duration sequences, which may not fully represent the phoneme features in the real world. With the help of frame-level feature predictors, the encoder learns more knowledge about the voice features related to the phoneme types and durations, thus making the duration predictor produce better results.
+
+### Influence on frame-level feature predictors
+
+Frame-level feature predictors, including the pitch predictor and the variance predictor, have better performance when trained without enabling the duration predictor.
+
+The experiments found that when the duration predictor is enabled, the pitch accuracy drops and the dynamics of variance parameters sometimes become unstable. And it has nothing to do with the gradients from the duration predictor, because applying a scale factor on the gradients does not make any difference even if the gradients are completely cut off.
+
+Possible reason for this phenomenon can be the lack of direct phoneme duration input. When the duration predictor is enabled, the model takes in word durations instead of phoneme durations; when there is no duration predictor together, the phoneme duration sequence is directly taken in and passed through the attention-based linguistic encoder. With direct modeling on the phoneme duration, the frame-level predictors can have a better understanding of the context, thus producing better results.
+
+Another set of experiments showed that there is no significant influence between the pitch predictor and the variance predictor. When they are enabled together without the duration predictor, both can converge well and produce satisfactory results. No conclusion can be drawn on this issue, and it can depend on the dataset.
+
+### Suggested procedures of training variance models
+
+According to the experiment results and the analysis above, the suggested procedures of training a set of variance models are listed below:
+
+1. Train the duration predictor together with the variance predictor, and discard the variance predictor part.
+2. Train the pitch predictor and the variance predictor separately or together.
+3. If interested, compare across different combinations in step 2 and choose the best.
 
 ## Pitch extractors
 
