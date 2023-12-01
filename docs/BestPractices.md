@@ -44,6 +44,20 @@ DS files are JSON files with _.ds_ suffix that contains phoneme sequence, phonem
 
 The current recommended way of using a model for production purposes is to use [OpenUTAU for DiffSinger](https://github.com/xunmengshe/OpenUtau). It can export DS files as well.
 
+### Other fundamental assets
+
+#### Vocoders
+
+A vocoder is a model that can reconstruct the audio waveform given the low-dimensional mel-spectrogram. The [DiffSinger Community Vocoders Project](https://openvpi.github.io/vocoders) provides a universal pre-trained vocoder that can be used for starters of this repository. To use it, download the model (~50 MB size) from its releases and unzip it into the `checkpoints/` folder.
+
+The pre-trained vocoder can be fine-tuned on your target dataset. It is highly recommended to do so because fine-tuned vocoder can generate much better results on specific (seen) datasets while does not need much computing resources. See the [vocoder training and fine-tuning repository](https://github.com/openvpi/SingingVocoders) for detailed instructions. After you get the fine-tuned vocoder checkpoint, you can configure it by `vocoder_ckpt` key in your configuration file.
+
+Another unrecommended option: train a ultra-lightweight [DDSP vocoder](https://github.com/yxlllc/pc-ddsp) first by yourself, then configure it according to the relevant [instructions](https://github.com/yxlllc/pc-ddsp/blob/master/DiffSinger.md).
+
+#### Pitch extractors
+
+RMVPE is the recommended pitch extractor of this repository, which is an NN-based algorithm and requires a pre-trained model. For more information about pitch extractors and how to configure them, see [pitch extraction](#pitch-extraction).
+
 ## Overview: training acoustic models
 
 An acoustic model takes low-level singing information as input, including (but not limited to) phoneme sequence, phoneme durations and F0 sequence. The only output of an acoustic model is the mel-spectrogram, which can be converted to waveform (the final audio) through the vocoder. Briefly speaking, an acoustic model takes in all features that are explicitly given, and produces the singing voice.
@@ -208,7 +222,7 @@ According to the experiment results and the analysis above, the suggested proced
 2. Train the pitch predictor and the variance predictor separately or together.
 3. If interested, compare across different combinations in step 2 and choose the best.
 
-## Pitch extractors
+## Pitch extraction
 
 A pitch extractor estimates pitch (F0 sequence) from given recordings. F0 (fundamental frequency) is one of the most important components of singing voice that is needed by both acoustic models and variance models.
 
