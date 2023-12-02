@@ -31,16 +31,16 @@ augmentation_args:
   random_pitch_shifting:
     enabled: false
     range: [-5., 5.]
-    scale: 1.0
+    scale: 0.75
   fixed_pitch_shifting:
     enabled: false
     targets: [-5., 5.]
-    scale: 0.75
+    scale: 0.5
   random_time_stretching:
     enabled: false
     range: [0.5, 2.]
     domain: log  # or linear
-    scale: 1.0
+    scale: 0.75
 
 raw_data_dir: 'data/opencpop/raw'
 binary_data_dir: 'data/opencpop/binary'
