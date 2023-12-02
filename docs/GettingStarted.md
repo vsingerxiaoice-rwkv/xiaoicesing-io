@@ -16,7 +16,7 @@ DiffSinger requires Python 3.8 or later. We strongly recommend you create a virt
 
 ### Materials and assets
 
-Some necessary materials and assets are needed before continuing with this repository. See [materials for training and using models](BestPractices.md#materials-for-training-and-using-models) for detailed instructions.
+Some essential materials and assets are needed before continuing with this repository. See [materials for training and using models](BestPractices.md#materials-for-training-and-using-models) for detailed instructions.
 
 ## Configuration
 
@@ -123,6 +123,20 @@ python scripts/export.py acoustic --help
 ```
 
 for more configurable options.
+
+To export an NSF-HiFiGAN vocoder checkpoint, run:
+
+```bash
+python scripts/export.py nsf-hifigan --config CONFIG --ckpt CKPT
+```
+
+where `CONFIG` is a configuration file that has configured the same mel parameters as the vocoder (can be configs/acoustic.yaml for most cases) and `CKPT` is the path of the checkpoint to be exported.
+
+For more configurable options, run
+
+```bash
+python scripts/export.py nsf-hifigan --help
+```
 
 ## Other utilities
 
