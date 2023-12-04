@@ -60,6 +60,10 @@ Run the following command to start the TensorBoard:
 tensorboard --logdir checkpoints/
 ```
 
+> NOTICE
+> 
+> If you are training a model with multiple GPUs (DDP), please add `--reload_multifile=true` option when launching TensorBoard, otherwise it may not update properly.
+
 ## Inference
 
 Inference of DiffSinger is based on DS files. Assume that you have a DS file named `my_song.ds` and your model is named `my_experiment`.
