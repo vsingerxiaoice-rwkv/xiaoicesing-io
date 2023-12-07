@@ -81,7 +81,7 @@ num_valid_plots: 10
 ###########
 pl_trainer_accelerator: 'auto'
 pl_trainer_devices: 'auto'
-pl_trainer_precision: '32-true'
+pl_trainer_precision: '16-mixed'
 pl_trainer_num_nodes: 1
 pl_trainer_strategy: 
   name: auto
