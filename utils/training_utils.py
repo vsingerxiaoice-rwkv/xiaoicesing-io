@@ -364,17 +364,48 @@ class DsTensorBoardLogger(TensorBoardLogger):
             del state["_all_rank_experiment"]
         return state
 
-
-def get_strategy(strategy):
-    if strategy['name'] == 'auto':
-        return 'auto'
-
+def get_strategy(
+    devices = "auto",
+    num_nodes = 1,
+    accelerator = "auto",
+    strategy = "auto",
+    precision = None,
+):
+    from lightning.pytorch.trainer.connectors import accelerator_connector
+    from lightning.pytorch.accelerators import AcceleratorRegistry
     from lightning.pytorch.strategies import StrategyRegistry
-    if strategy['name'] not in StrategyRegistry:
-        available_names = ", ".join(sorted(StrategyRegistry.keys())) or "none"
-        raise ValueError(f"Invalid strategy name {strategy['name']}. Available names: {available_names}")
-
-    data = StrategyRegistry[strategy['name']]
-    params = data['init_params']
-    params.update({k: v for k, v in strategy.items() if k != 'name'})
-    return data['strategy'](**utils.filter_kwargs(params, data['strategy']))
+    class _DsAcceleratorConnector(accelerator_connector._AcceleratorConnector):
+        def __init__(self) -> None:
+            accelerator_connector._register_external_accelerators_and_strategies()
+            self._registered_strategies = StrategyRegistry.available_strategies()
+            self._accelerator_types = AcceleratorRegistry.available_accelerators()
+            self._strategy_flag = "auto"
+            self._accelerator_flag = "auto"
+            self._precision_plugin_flag = None
+            self._parallel_devices = []
+            self.checkpoint_io = None
+            self._check_config_and_set_final_flags(
+                strategy=strategy['name'],
+                accelerator=accelerator,
+                precision=precision,
+                plugins=[],
+                sync_batchnorm=False,
+            )
+            if self._accelerator_flag == "auto":
+                self._accelerator_flag = self._choose_auto_accelerator()
+            elif self._accelerator_flag == "gpu":
+                self._accelerator_flag = self._choose_gpu_accelerator_backend()
+            self._check_device_config_and_set_final_flags(devices=devices, num_nodes=num_nodes)
+            self._set_parallel_devices_and_init_accelerator()
+            if self._strategy_flag == "auto":
+                self._strategy_flag = self._choose_strategy()
+            self._check_strategy_and_fallback()
+            self._init_strategy()
+    accerlarator = _DsAcceleratorConnector()
+    for k in StrategyRegistry.available_strategies():
+        if StrategyRegistry[k]['strategy'] is accerlarator.strategy.__class__:  # type: ignore
+            data = StrategyRegistry[k]
+            params = data['init_params']
+            params.update({k: v for k, v in strategy.items() if k != 'name'})
+            return data['strategy'](**utils.filter_kwargs(params, data['strategy']))
+    raise ValueError(f"Strategy {strategy['name']} not found")
