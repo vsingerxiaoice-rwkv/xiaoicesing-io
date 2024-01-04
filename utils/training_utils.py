@@ -365,11 +365,11 @@ class DsTensorBoardLogger(TensorBoardLogger):
         return state
 
 def get_strategy(
-    devices = "auto",
-    num_nodes = 1,
-    accelerator = "auto",
-    strategy = "auto",
-    precision = None,
+    devices="auto",
+    num_nodes=1,
+    accelerator="auto",
+    strategy={"name": "auto"},
+    precision=None,
 ):
     from lightning.fabric.utilities.device_parser import _determine_root_gpu_device
     from lightning.pytorch.accelerators import AcceleratorRegistry
@@ -385,7 +385,7 @@ def get_strategy(
             self._accelerator_types = AcceleratorRegistry.available_accelerators()
             self._parallel_devices = []
             self._check_config_and_set_final_flags(
-                strategy=strategy['name'],
+                strategy=strategy["name"],
                 accelerator=accelerator,
                 precision=precision,
                 plugins=[],
@@ -401,9 +401,10 @@ def get_strategy(
                 self._strategy_flag = self._choose_strategy()
             self._check_strategy_and_fallback()
             self._init_strategy()
-            for k in ['colossalai', 'bagua', 'hpu', 'hpu_parallel', 'hpu_single', 'ipu', 'ipu_strategy']:
+            for k in ["colossalai", "bagua", "hpu", "hpu_parallel", "hpu_single", "ipu", "ipu_strategy"]:
                 if k in StrategyRegistry:
                     StrategyRegistry.remove(k)
+
         def _init_strategy(self) -> None:
             assert isinstance(self._strategy_flag, (str, Strategy))
             if isinstance(self._strategy_flag, str):
@@ -413,12 +414,12 @@ def get_strategy(
                 data = StrategyRegistry[self._strategy_flag]
                 params = {}
                 # Replicate additional logic for _choose_strategy when dealing with single device strategies
-                if issubclass(data['strategy'], SingleDeviceStrategy):
+                if issubclass(data["strategy"], SingleDeviceStrategy):
                     if self._accelerator_flag == "hpu":
-                        params = {"device": torch.device('hpu')}
+                        params = {"device": torch.device("hpu")}
                     elif self._accelerator_flag == "tpu":
                         params = {"device": self._parallel_devices[0]}
-                    elif data['strategy'] is SingleDeviceStrategy:
+                    elif data["strategy"] is SingleDeviceStrategy:
                         if isinstance(self._accelerator_flag, (CUDAAccelerator, MPSAccelerator)) or (
                             isinstance(self._accelerator_flag, str) and self._accelerator_flag in ("cuda", "gpu", "mps")
                         ):
@@ -427,17 +428,18 @@ def get_strategy(
                             params = {"device": "cpu"}
                     else:
                         raise NotImplementedError
-                params.update(data['init_params'])
-                params.update({k: v for k, v in strategy.items() if k != 'name'})
-                self.strategy = data['strategy'](**utils.filter_kwargs(params, data['strategy']))
+                params.update(data["init_params"])
+                params.update({k: v for k, v in strategy.items() if k != "name"})
+                self.strategy = data["strategy"](**utils.filter_kwargs(params, data["strategy"]))
             elif isinstance(self._strategy_flag, SingleDeviceStrategy):
-                params = {'device': self._strategy_flag.root_device}
-                params.update({k: v for k, v in strategy.items() if k != 'name'})
+                params = {"device": self._strategy_flag.root_device}
+                params.update({k: v for k, v in strategy.items() if k != "name"})
                 self.strategy = self._strategy_flag.__class__(**utils.filter_kwargs(params, self._strategy_flag.__class__))
             else:
                 rank_zero_warn(
-                    f"Inferred strategy {self._strategy_flag.__class__.__name__} cannot take custom configurations." \
+                    f"Inferred strategy {self._strategy_flag.__class__.__name__} cannot take custom configurations."
                     f"To use custom configurations, please specify the strategy name explicitly."
                 )
                 self.strategy = self._strategy_flag
+
     return _DsAcceleratorConnector().strategy
