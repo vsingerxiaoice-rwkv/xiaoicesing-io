@@ -119,11 +119,14 @@ def acoustic(
 
     if speedup > 0:
         assert depth % speedup == 0, f'Acceleration ratio must be factor of diffusion depth {depth}.'
-        hparams['pndm_speedup'] = speedup
+        hparams['diff_speedup'] = speedup
+    elif 'diff_speedup' not in hparams:
+        # NOTICE: this is for compatibility
+        hparams['diff_speedup'] = hparams['pndm_speedup']
 
     spk_mix = parse_commandline_spk_mix(spk) if hparams['use_spk_id'] and spk is not None else None
     for param in params:
-        if gender is not None and hparams.get('use_key_shift_embed'):
+        if gender is not None and hparams['use_key_shift_embed']:
             param['gender'] = gender
 
         if spk_mix is not None:
@@ -213,7 +216,10 @@ def variance(
 
     if speedup > 0:
         assert hparams['K_step'] % speedup == 0, f'Acceleration ratio must be factor of K_step {hparams["K_step"]}.'
-        hparams['pndm_speedup'] = speedup
+        hparams['diff_speedup'] = speedup
+    elif 'diff_speedup' not in hparams:
+        # NOTICE: this is for compatibility
+        hparams['diff_speedup'] = hparams['pndm_speedup']
 
     spk_mix = parse_commandline_spk_mix(spk) if hparams['use_spk_id'] and spk is not None else None
     for param in params:

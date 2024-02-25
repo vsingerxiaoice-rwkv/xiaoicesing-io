@@ -64,27 +64,20 @@ class AcousticBinarizer(BaseBinarizer):
 
     def load_meta_data(self, raw_data_dir: pathlib.Path, ds_id, spk_id):
         meta_data_dict = {}
-        if (raw_data_dir / 'transcriptions.csv').exists():
-            with open(raw_data_dir / 'transcriptions.csv', 'r', encoding='utf-8') as f:
-                for utterance_label in csv.DictReader(f):
-                    item_name = utterance_label['name']
-                    temp_dict = {
-                        'wav_fn': str(raw_data_dir / 'wavs' / f'{item_name}.wav'),
-                        'ph_seq': utterance_label['ph_seq'].split(),
-                        'ph_dur': [float(x) for x in utterance_label['ph_dur'].split()],
-                        'spk_id': spk_id,
-                        'spk_name': self.speakers[ds_id],
-                    }
-                    assert len(temp_dict['ph_seq']) == len(temp_dict['ph_dur']), \
-                        f'Lengths of ph_seq and ph_dur mismatch in \'{item_name}\'.'
-                    meta_data_dict[f'{ds_id}:{item_name}'] = temp_dict
-        else:
-            raise FileNotFoundError(
-                f'transcriptions.csv not found in {raw_data_dir}. '
-                'If this is a dataset with the old transcription format, please consider '
-                'migrating it to the new format via the following command:\n'
-                'python scripts/migrate.py txt <INPUT_TXT>'
-            )
+        with open(raw_data_dir / 'transcriptions.csv', 'r', encoding='utf-8') as f:
+            for utterance_label in csv.DictReader(f):
+                item_name = utterance_label['name']
+                temp_dict = {
+                    'wav_fn': str(raw_data_dir / 'wavs' / f'{item_name}.wav'),
+                    'ph_seq': utterance_label['ph_seq'].split(),
+                    'ph_dur': [float(x) for x in utterance_label['ph_dur'].split()],
+                    'spk_id': spk_id,
+                    'spk_name': self.speakers[ds_id],
+                }
+                assert len(temp_dict['ph_seq']) == len(temp_dict['ph_dur']), \
+                    f'Lengths of ph_seq and ph_dur mismatch in \'{item_name}\'.'
+                meta_data_dict[f'{ds_id}:{item_name}'] = temp_dict
+
         self.items.update(meta_data_dict)
 
     @torch.no_grad()
@@ -119,7 +112,7 @@ class AcousticBinarizer(BaseBinarizer):
         gt_f0, uv = pitch_extractor.get_pitch(
             wav, samplerate=hparams['audio_sample_rate'], length=length,
             hop_size=hparams['hop_size'], f0_min=hparams['f0_min'], f0_max=hparams['f0_max'],
-            interp_uv=hparams['interp_uv']
+            interp_uv=True
         )
         if uv.all():  # All unvoiced
             print(f'Skipped \'{item_name}\': empty gt f0')
@@ -196,10 +189,10 @@ class AcousticBinarizer(BaseBinarizer):
 
             processed_input['tension'] = tension.cpu().numpy()
 
-        if hparams.get('use_key_shift_embed', False):
+        if hparams['use_key_shift_embed']:
             processed_input['key_shift'] = 0.
 
-        if hparams.get('use_speed_embed', False):
+        if hparams['use_speed_embed']:
             processed_input['speed'] = 1.
 
         return processed_input
@@ -214,7 +207,7 @@ class AcousticBinarizer(BaseBinarizer):
             from augmentation.spec_stretch import SpectrogramStretchAugmentation
             aug_args = self.augmentation_args['random_pitch_shifting']
             key_shift_min, key_shift_max = aug_args['range']
-            assert hparams.get('use_key_shift_embed', False), \
+            assert hparams['use_key_shift_embed'], \
                 'Random pitch shifting augmentation requires use_key_shift_embed == True.'
             assert key_shift_min < 0 < key_shift_max, \
                 'Random pitch shifting augmentation must have a range where min < 0 < max.'
@@ -280,12 +273,10 @@ class AcousticBinarizer(BaseBinarizer):
             from augmentation.spec_stretch import SpectrogramStretchAugmentation
             aug_args = self.augmentation_args['random_time_stretching']
             speed_min, speed_max = aug_args['range']
-            domain = aug_args['domain']
-            assert hparams.get('use_speed_embed', False), \
+            assert hparams['use_speed_embed'], \
                 'Random time stretching augmentation requires use_speed_embed == True.'
             assert 0 < speed_min < 1 < speed_max, \
                 'Random time stretching augmentation must have a range where 0 < min < 1 < max.'
-            assert domain in ['log', 'linear'], 'domain must be \'log\' or \'linear\'.'
 
             aug_ins = SpectrogramStretchAugmentation(self.raw_data_dirs, aug_args, pe=aug_pe)
             scale = aug_args['scale']
@@ -296,13 +287,8 @@ class AcousticBinarizer(BaseBinarizer):
             aug_items = random.choices(all_item_names, k=k_from_raw) + random.choices(aug_list, k=k_from_aug + k_mutate)
 
             for aug_type, aug_item in zip(aug_types, aug_items):
-                if domain == 'log':
-                    # Uniform distribution in log domain
-                    speed = speed_min * (speed_max / speed_min) ** random.random()
-                else:
-                    # Uniform distribution in linear domain
-                    rand = random.uniform(-1, 1)
-                    speed = 1 + (speed_max - 1) * rand if rand >= 0 else 1 + (1 - speed_min) * rand
+                # Uniform distribution in log domain
+                speed = speed_min * (speed_max / speed_min) ** random.random()
                 if aug_type == 0:
                     aug_task = {
                         'name': aug_item,
