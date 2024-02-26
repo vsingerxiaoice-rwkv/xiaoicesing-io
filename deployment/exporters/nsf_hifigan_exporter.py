@@ -62,6 +62,8 @@ class NSFHiFiGANExporter(BaseExporter):
                 # mel specifications
                 'sample_rate': hparams['audio_sample_rate'],
                 'hop_size': hparams['hop_size'],
+                'win_size': hparams['win_size'],
+                'fft_size': hparams['fft_size'],
                 'num_mel_bins': hparams['audio_num_mel_bins'],
                 'mel_fmin': hparams['fmin'],
                 'mel_fmax': hparams['fmax'] if hparams['fmax'] is not None else hparams['audio_sample_rate'] / 2,

@@ -143,6 +143,8 @@ class DiffSingerAcousticExporter(BaseExporter):
         # mel specification
         dsconfig['sample_rate'] = hparams['audio_sample_rate']
         dsconfig['hop_size'] = hparams['hop_size']
+        dsconfig['win_size'] = hparams['win_size']
+        dsconfig['fft_size'] = hparams['fft_size']
         dsconfig['num_mel_bins'] = hparams['audio_num_mel_bins']
         dsconfig['mel_fmin'] = hparams['fmin']
         dsconfig['mel_fmax'] = hparams['fmax'] if hparams['fmax'] is not None else hparams['audio_sample_rate'] / 2
