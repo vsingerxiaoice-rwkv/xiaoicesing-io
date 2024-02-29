@@ -239,7 +239,8 @@ class DiffSingerVariance(CategorizedModule, ParameterAdaptorModule):
                     delta_pitch_in = (pitch - base_pitch) * ~pitch_retake
                 pitch_cond += self.delta_pitch_embed(delta_pitch_in[:, :, None])
             else:
-                base_pitch = base_pitch * pitch_retake + pitch * ~pitch_retake
+                if not retake_unset:  # retake
+                    base_pitch = base_pitch * pitch_retake + pitch * ~pitch_retake
                 pitch_cond += self.base_pitch_embed(base_pitch[:, :, None])
 
             if infer:
