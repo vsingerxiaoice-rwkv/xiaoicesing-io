@@ -136,7 +136,7 @@ class DiffSingerAcousticExporter(BaseExporter):
         dsconfig['use_key_shift_embed'] = self.expose_gender
         dsconfig['use_speed_embed'] = self.expose_velocity
         for variance in VARIANCE_CHECKLIST:
-            dsconfig[f'use_{variance}_embed'] = variance in self.model.fs2.variance_embed_list
+            dsconfig[f'use_{variance}_embed'] = (variance in self.model.fs2.variance_embed_list)
         # shallow diffusion
         dsconfig['use_shallow_diffusion'] = self.model.use_shallow_diffusion
         dsconfig['max_depth'] = self.model.diffusion.k_step
