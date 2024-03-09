@@ -121,7 +121,7 @@ class DiffSingerAcousticExporter(BaseExporter):
             # basic configs
             'phonemes': f'{self.model_name}.phonemes.txt',
             'acoustic': f'{model_name}.onnx',
-            'vocoder': 'nsf_hifigan',
+            'vocoder': 'nsf_hifigan_44.1k_hop512_128bin_2024.02',
         }
         # multi-speaker
         if len(self.export_spk) > 0:
