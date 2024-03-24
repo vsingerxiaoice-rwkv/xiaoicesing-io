@@ -64,7 +64,5 @@ class AuxDecoderAdaptor(nn.Module):
             # x = x.unflatten(dim=2, sizes=(self.n_feats, self.in_dims))
             x = x.reshape(-1, x.shape[1], self.n_feats, self.out_dims)  # [B, T, F, C]
             x = x.transpose(1, 2)  # [B, F, T, C]
-        if infer:
-            x = self.denorm_spec(x)
 
         return x  # [B, T, C] or [B, F, T, C]

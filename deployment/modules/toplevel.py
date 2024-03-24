@@ -23,6 +23,7 @@ class DiffSingerAcousticONNX(DiffSingerAcoustic):
             vocab_size=vocab_size
         )
         self.diffusion = GaussianDiffusionONNX(
+            cond_dims=self.diff_cond_dims,
             out_dims=out_dims,
             num_feats=1,
             timesteps=hparams['timesteps'],
@@ -52,7 +53,10 @@ class DiffSingerAcousticONNX(DiffSingerAcoustic):
             gender=gender, velocity=velocity, spk_embed=spk_embed
         )
         if self.use_shallow_diffusion:
-            aux_mel_pred = self.aux_decoder(condition, infer=True)
+            aux_out = self.aux_decoder(condition, infer=True)
+            aux_mel_pred = self.aux_decoder.denorm_spec(aux_out)
+            if self.use_mel_condition:
+                condition = aux_out
             return condition, aux_mel_pred
         else:
             return condition
@@ -100,6 +104,7 @@ class DiffSingerVarianceONNX(DiffSingerVariance):
                 vmax=pitch_hparams['pitd_norm_max'],
                 cmin=pitch_hparams['pitd_clip_min'],
                 cmax=pitch_hparams['pitd_clip_max'],
+                cond_dims=hparams['hidden_size'],
                 repeat_bins=pitch_hparams['repeat_bins'],
                 timesteps=hparams['timesteps'],
                 k_step=hparams['K_step'],

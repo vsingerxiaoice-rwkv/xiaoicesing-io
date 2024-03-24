@@ -64,11 +64,13 @@ beta_schedule = {
 
 
 class GaussianDiffusion(nn.Module):
-    def __init__(self, out_dims, num_feats=1, timesteps=1000, k_step=1000,
+    def __init__(self, cond_dims, out_dims, num_feats=1, timesteps=1000, k_step=1000,
                  denoiser_type=None, denoiser_args=None, betas=None,
                  spec_min=None, spec_max=None):
         super().__init__()
-        self.denoise_fn: nn.Module = DIFF_DENOISERS[denoiser_type](out_dims, num_feats, **denoiser_args)
+        self.denoise_fn: nn.Module = DIFF_DENOISERS[denoiser_type](
+            out_dims, num_feats, cond_dims, **denoiser_args
+        )
         self.out_dims = out_dims
         self.num_feats = num_feats
 
@@ -383,7 +385,8 @@ class GaussianDiffusion(nn.Module):
 
 
 class RepetitiveDiffusion(GaussianDiffusion):
-    def __init__(self, vmin: float | int | list, vmax: float | int | list, repeat_bins: int,
+    def __init__(self, vmin: float | int | list, vmax: float | int | list,
+                 cond_dims: int, repeat_bins: int,
                  timesteps=1000, k_step=1000,
                  denoiser_type=None, denoiser_args=None,
                  betas=None):
@@ -393,7 +396,7 @@ class RepetitiveDiffusion(GaussianDiffusion):
         spec_max = [vmax] if num_feats == 1 else [[v] for v in vmax]
         self.repeat_bins = repeat_bins
         super().__init__(
-            out_dims=repeat_bins, num_feats=num_feats,
+            cond_dims=cond_dims, out_dims=repeat_bins, num_feats=num_feats,
             timesteps=timesteps, k_step=k_step,
             denoiser_type=denoiser_type, denoiser_args=denoiser_args,
             betas=betas, spec_min=spec_min, spec_max=spec_max
@@ -422,7 +425,8 @@ class RepetitiveDiffusion(GaussianDiffusion):
 
 class PitchDiffusion(RepetitiveDiffusion):
     def __init__(self, vmin: float, vmax: float,
-                 cmin: float, cmax: float, repeat_bins,
+                 cmin: float, cmax: float,
+                 cond_dims: int, repeat_bins: int,
                  timesteps=1000, k_step=1000,
                  denoiser_type=None, denoiser_args=None,
                  betas=None):
@@ -431,7 +435,8 @@ class PitchDiffusion(RepetitiveDiffusion):
         self.cmin = cmin  # clip min
         self.cmax = cmax  # clip max
         super().__init__(
-            vmin=vmin, vmax=vmax, repeat_bins=repeat_bins,
+            vmin=vmin, vmax=vmax,
+            cond_dims=cond_dims, repeat_bins=repeat_bins,
             timesteps=timesteps, k_step=k_step,
             denoiser_type=denoiser_type, denoiser_args=denoiser_args,
             betas=betas
@@ -448,7 +453,8 @@ class MultiVarianceDiffusion(RepetitiveDiffusion):
     def __init__(
             self, ranges: List[Tuple[float, float]],
             clamps: List[Tuple[float | None, float | None] | None],
-            repeat_bins, timesteps=1000, k_step=1000,
+            cond_dims: int, repeat_bins: int,
+            timesteps=1000, k_step=1000,
             denoiser_type=None, denoiser_args=None,
             betas=None
     ):
@@ -461,7 +467,8 @@ class MultiVarianceDiffusion(RepetitiveDiffusion):
         if len(vmax) == 1:
             vmax = vmax[0]
         super().__init__(
-            vmin=vmin, vmax=vmax, repeat_bins=repeat_bins,
+            vmin=vmin, vmax=vmax,
+            cond_dims=cond_dims, repeat_bins=repeat_bins,
             timesteps=timesteps, k_step=k_step,
             denoiser_type=denoiser_type, denoiser_args=denoiser_args,
             betas=betas

@@ -232,7 +232,7 @@ class DiffSingerAcousticExporter(BaseExporter):
             opset_version=15
         )
 
-        condition = torch.rand((1, n_frames, hparams['hidden_size']), device=self.device)
+        condition = torch.rand((1, n_frames, self.model.diff_cond_dims), device=self.device)
 
         # Prepare inputs for denoiser tracing and GaussianDiffusion scripting
         shape = (1, 1, hparams['audio_num_mel_bins'], n_frames)

@@ -149,7 +149,8 @@ class GaussianDiffusionONNX(GaussianDiffusion):
 
 class PitchDiffusionONNX(GaussianDiffusionONNX, PitchDiffusion):
     def __init__(self, vmin: float, vmax: float,
-                 cmin: float, cmax: float, repeat_bins,
+                 cmin: float, cmax: float,
+                 cond_dims: int, repeat_bins: int,
                  timesteps=1000, k_step=1000,
                  denoiser_type=None, denoiser_args=None,
                  betas=None):
@@ -158,7 +159,8 @@ class PitchDiffusionONNX(GaussianDiffusionONNX, PitchDiffusion):
         self.cmin = cmin
         self.cmax = cmax
         super(PitchDiffusion, self).__init__(
-            vmin=vmin, vmax=vmax, repeat_bins=repeat_bins,
+            vmin=vmin, vmax=vmax,
+            cond_dims=cond_dims, repeat_bins=repeat_bins,
             timesteps=timesteps, k_step=k_step,
             denoiser_type=denoiser_type, denoiser_args=denoiser_args,
             betas=betas
@@ -179,7 +181,8 @@ class MultiVarianceDiffusionONNX(GaussianDiffusionONNX, MultiVarianceDiffusion):
     def __init__(
             self, ranges: List[Tuple[float, float]],
             clamps: List[Tuple[float | None, float | None] | None],
-            repeat_bins, timesteps=1000, k_step=1000,
+            cond_dims: int, repeat_bins: int,
+            timesteps=1000, k_step=1000,
             denoiser_type=None, denoiser_args=None,
             betas=None
     ):
@@ -192,7 +195,8 @@ class MultiVarianceDiffusionONNX(GaussianDiffusionONNX, MultiVarianceDiffusion):
         if len(vmax) == 1:
             vmax = vmax[0]
         super(MultiVarianceDiffusion, self).__init__(
-            vmin=vmin, vmax=vmax, repeat_bins=repeat_bins,
+            vmin=vmin, vmax=vmax,
+            cond_dims=cond_dims, repeat_bins=repeat_bins,
             timesteps=timesteps, k_step=k_step,
             denoiser_type=denoiser_type, denoiser_args=denoiser_args,
             betas=betas

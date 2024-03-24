@@ -41,6 +41,7 @@ class DiffSingerAcoustic(CategorizedModule, ParameterAdaptorModule):
 
         self.use_shallow_diffusion = hparams.get('use_shallow_diffusion', False)
         self.shallow_args = hparams.get('shallow_diffusion_args', {})
+        self.use_mel_condition = self.use_shallow_diffusion and self.shallow_args.get('use_mel_condition', False)
         if self.use_shallow_diffusion:
             self.train_aux_decoder = self.shallow_args['train_aux_decoder']
             self.train_diffusion = self.shallow_args['train_diffusion']
@@ -52,7 +53,9 @@ class DiffSingerAcoustic(CategorizedModule, ParameterAdaptorModule):
                 aux_decoder_args=self.shallow_args['aux_decoder_args']
             )
 
+        self.diff_cond_dims = out_dims if self.use_mel_condition else hparams['hidden_size']
         self.diffusion = GaussianDiffusion(
+            cond_dims=self.diff_cond_dims,
             out_dims=out_dims,
             num_feats=1,
             timesteps=hparams['timesteps'],
@@ -77,8 +80,11 @@ class DiffSingerAcoustic(CategorizedModule, ParameterAdaptorModule):
         )
         if infer:
             if self.use_shallow_diffusion:
-                aux_mel_pred = self.aux_decoder(condition, infer=True)
-                aux_mel_pred *= ((mel2ph > 0).float()[:, :, None])
+                mask = (mel2ph > 0).float()[:, :, None]
+                aux_out = self.aux_decoder(condition, infer=True)
+                aux_mel_pred = self.aux_decoder.denorm_spec(aux_out) * mask
+                if self.use_mel_condition:
+                    condition = aux_out * mask
                 if gt_mel is not None and self.shallow_args['val_gt_start']:
                     src_mel = gt_mel
                 else:
@@ -95,7 +101,10 @@ class DiffSingerAcoustic(CategorizedModule, ParameterAdaptorModule):
                     aux_out = self.aux_decoder(aux_cond, infer=False)
                 else:
                     aux_out = None
+                if self.use_mel_condition:
+                    condition = aux_out
                 if self.train_diffusion:
+                    assert condition is not None, "No condition available for the DDPM."
                     x_recon, noise = self.diffusion(condition, gt_spec=gt_mel, infer=False)
                     diff_out = (x_recon, noise)
                 else:
@@ -144,6 +153,7 @@ class DiffSingerVariance(CategorizedModule, ParameterAdaptorModule):
                 vmax=pitch_hparams['pitd_norm_max'],
                 cmin=pitch_hparams['pitd_clip_min'],
                 cmax=pitch_hparams['pitd_clip_max'],
+                cond_dims=hparams['hidden_size'],
                 repeat_bins=pitch_hparams['repeat_bins'],
                 timesteps=hparams['timesteps'],
                 k_step=hparams['K_step'],

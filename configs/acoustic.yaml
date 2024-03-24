@@ -92,6 +92,7 @@ shallow_diffusion_args:
     kernel_size: 7
     dropout_rate: 0.1
   aux_decoder_grad: 0.1
+  use_mel_condition: true
 
 lambda_aux_mel_loss: 0.2
 
