@@ -231,14 +231,16 @@ def variance(
 @main.command(help='Export NSF-HiFiGAN vocoder model to ONNX format.')
 @click.option(
     '--config', type=click.Path(
-        exists=True, file_okay=True, dir_okay=False, readable=True, resolve_path=True
+        exists=True, file_okay=True, dir_okay=False, readable=True,
+        path_type=pathlib.Path, resolve_path=True
     ),
     required=True,
     help='Specify a configuration file for the vocoder.'
 )
 @click.option(
     '--ckpt', type=click.Path(
-        exists=True, file_okay=True, dir_okay=False, readable=True, resolve_path=True
+        exists=True, file_okay=True, dir_okay=False, readable=True,
+        path_type=pathlib.Path, resolve_path=True
     ),
     required=False,
     help='Specify a model path of the vocoder checkpoint.'
@@ -267,7 +269,7 @@ def nsf_hifigan(
         out = root_dir / 'artifacts' / 'nsf_hifigan'
 
     # Load configurations
-    set_hparams(config)
+    set_hparams(config.as_posix())
     if ckpt is None:
         model_path = pathlib.Path(hparams['vocoder_ckpt']).resolve()
     else:
