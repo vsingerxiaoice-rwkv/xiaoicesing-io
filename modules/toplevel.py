@@ -172,7 +172,7 @@ class DiffSingerVariance(CategorizedModule, ParameterAdaptorModule):
             )
         elif self.diffusion_type == 'reflow':
             self.diffusion = RectifiedFlow(
-                out_dims=dur_vae_hparams['latent_dim'],
+                out_dims=1,
                 num_feats=1,
 
                 time_scale_factor=hparams['time_scale_factor'],
