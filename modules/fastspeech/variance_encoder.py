@@ -79,9 +79,9 @@ class FastSpeech2Variance(nn.Module):
             dur_cond = encoder_out + midi_embed
             if spk_embed is not None:
                 dur_cond += spk_embed
-            ph_dur_pred = self.dur_predictor(dur_cond, x_masks=txt_tokens == PAD_INDEX, infer=infer)
+            # ph_dur_pred = self.dur_predictor(dur_cond, x_masks=txt_tokens == PAD_INDEX, infer=infer)
 
-            return encoder_out, ph_dur_pred
+            return encoder_out, dur_cond
         else:
             return encoder_out, None
 

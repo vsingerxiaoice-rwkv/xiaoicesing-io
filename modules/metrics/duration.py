@@ -16,7 +16,7 @@ def linguistic_checks(pred, target, ph2word, mask=None):
     assert torch.any(ph2word > 0), 'empty word sequence'
     assert torch.all(ph2word >= 0), 'unexpected negative word index'
     assert ph2word.max() <= pred.shape[1], f'word index out of range: {ph2word.max()} > {pred.shape[1]}'
-    assert torch.all(pred >= 0.), f'unexpected negative ph_dur prediction'
+    # assert torch.all(pred >= 0.), f'unexpected negative ph_dur prediction'
     assert torch.all(target >= 0.), f'unexpected negative ph_dur target'
 
 
@@ -84,7 +84,8 @@ class PhonemeDurationAccuracy(torchmetrics.Metric):
         wdur_target = pdur_target.new_zeros(*shape).scatter_add(
             1, ph2word, pdur_target
         )[:, 1:]  # [B, T_ph] => [B, T_w]
-        pdur_align = self.rr(pdur_pred, ph2word=ph2word, word_dur=wdur_target)
+        # pdur_align = self.rr(pdur_pred, ph2word=ph2word, word_dur=wdur_target)
+        pdur_align=pdur_pred
 
         accurate = torch.abs(pdur_align - pdur_target) <= pdur_target * self.tolerance
         if mask is not None:

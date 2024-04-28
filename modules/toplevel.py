@@ -19,6 +19,7 @@ from modules.fastspeech.acoustic_encoder import FastSpeech2Acoustic
 from modules.fastspeech.param_adaptor import ParameterAdaptorModule
 from modules.fastspeech.tts_modules import RhythmRegulator, LengthRegulator
 from modules.fastspeech.variance_encoder import FastSpeech2Variance, MelodyEncoder
+from modules.vae.vae import VAE
 from utils.hparams import hparams
 
 
@@ -136,17 +137,58 @@ class DiffSingerVariance(CategorizedModule, ParameterAdaptorModule):
         ParameterAdaptorModule.__init__(self)
         self.predict_dur = hparams['predict_dur']
         self.predict_pitch = hparams['predict_pitch']
-
+        dur_hparams = hparams['dur_prediction_args']
+        self.log_offset = dur_hparams['log_offset']
         self.use_spk_id = hparams['use_spk_id']
         if self.use_spk_id:
             self.spk_embed = Embedding(hparams['num_spk'], hparams['hidden_size'])
+        self.diffusion_type = hparams.get('diffusion_type', 'ddpm')
 
         self.fs2 = FastSpeech2Variance(
             vocab_size=vocab_size
         )
+        self.vae=DURVAE()
+        self.vae.load('checkpoints/dv8/model_ckpt_steps_20000.ckpt')
+        self.vae.eval()
+        dur_vae_hparams = hparams['dur_vae_args']
+        self.model = VAE(in_dim=1,
+                         latent_dim=dur_vae_hparams['latent_dim'],
+                         dims=dur_vae_hparams['dims'],
+                         lays=dur_vae_hparams['lays'],)
+        if self.diffusion_type == 'ddpm':
+            self.diffusion = GaussianDiffusion(
+                out_dims=dur_vae_hparams['latent_dim'],
+                num_feats=1,
+
+                k_step=hparams['K_step'],
+                backbone_type=hparams.get('backbone_type', hparams.get('diff_decoder_type')),
+                backbone_args={
+                    'n_layers': hparams['residual_layers'],
+                    'n_chans': hparams['residual_channels'],
+                    'n_dilates': hparams['dilation_cycle_length'],
+                },
+                spec_min=[-2],
+                spec_max=[2]
+            )
+        elif self.diffusion_type == 'reflow':
+            self.diffusion = RectifiedFlow(
+                out_dims=dur_vae_hparams['latent_dim'],
+                num_feats=1,
+
+                time_scale_factor=hparams['time_scale_factor'],
+                backbone_type=hparams.get('backbone_type', hparams.get('diff_decoder_type')),
+                backbone_args={
+                    'n_layers': hparams['residual_layers'],
+                    'n_chans': hparams['residual_channels'],
+                    'n_dilates': hparams['dilation_cycle_length'],
+                },
+                spec_min=[-0.1],
+                spec_max=[7]
+            )
+
         self.rr = RhythmRegulator()
         self.lr = LengthRegulator()
-        self.diffusion_type = hparams.get('diffusion_type', 'ddpm')
+
         if self.predict_pitch:
             self.use_melody_encoder = hparams.get('use_melody_encoder', False)
             if self.use_melody_encoder:
@@ -206,6 +248,7 @@ class DiffSingerVariance(CategorizedModule, ParameterAdaptorModule):
             else:
                 raise NotImplementedError(self.diffusion_type)
 
+
     def forward(
             self, txt_tokens, midi, ph2word, ph_dur=None, word_dur=None, mel2ph=None,
             note_midi=None, note_rest=None, note_dur=None, note_glide=None, mel2note=None,
@@ -224,12 +267,23 @@ class DiffSingerVariance(CategorizedModule, ParameterAdaptorModule):
         else:
             ph_spk_embed = spk_embed = None
 
+
         encoder_out, dur_pred_out = self.fs2(
             txt_tokens, midi=midi, ph2word=ph2word,
             ph_dur=ph_dur, word_dur=word_dur,
             spk_embed=ph_spk_embed, infer=infer
         )
 
+
+        if infer:
+
+            dur_pred_out = self.diffusion(dur_pred_out, infer=True).transpose( 1,2)
+            dur_pred_out=(dur_pred_out.exp()-self.log_offset).squeeze(1)
+            # dur_pred_out=((self.vae.dec(dur_pred_out)*6).exp()-self.log_offset).squeeze(1)
+        else:
+            # z = self.vae.enc(torch.log(ph_dur.unsqueeze(1) + self.log_offset) / 6).transpose( 1,2)
+            z=torch.log(ph_dur.unsqueeze(1) + self.log_offset).transpose( 1,2)
+            dur_pred_out = self.diffusion(dur_pred_out, gt_spec=z, infer=False)
         if not self.predict_pitch and not self.predict_variances:
             return dur_pred_out, None, ({} if infer else None)
 
@@ -316,3 +370,39 @@ class DiffSingerVariance(CategorizedModule, ParameterAdaptorModule):
             variances_pred_out = variance_outputs
 
         return dur_pred_out, pitch_pred_out, variances_pred_out
+class DURVAE(CategorizedModule, ParameterAdaptorModule):
+    @property
+    def category(self):
+        return 'vae'
+
+    def __init__(self,):
+        CategorizedModule.__init__(self)
+        ParameterAdaptorModule.__init__(self)
+        dur_vae_hparams = hparams['dur_vae_args']
+        self.model = VAE(in_dim=1,
+                         latent_dim=dur_vae_hparams['latent_dim'],
+                         dims=dur_vae_hparams['dims'],
+                         lays=dur_vae_hparams['lays'],
+                         intermediate_dim=None,
+                         layer_scale_init_value=1e-6,
+                 drop_out=0.)
+    def load(self,path):
+        p={}
+        sp=torch.load(path)['state_dict']
+        for i in sp:
+            p[i.replace('model.model.','')]=sp[i]
+        self.model.load_state_dict(p)
+    def enc(self,dur):
+        return self.model.enc(dur)/5
+    def dec(self,z):
+        return self.model.dec(z*5)
+
+
+    def forward(
+            self, dur,mask=None
+    ):
+        dur=dur.unsqueeze(1)
+        dur_x,m,l = self.model(dur,mask)
+        dur_x = dur_x.squeeze(1)
+
+        return dur_x,m,l

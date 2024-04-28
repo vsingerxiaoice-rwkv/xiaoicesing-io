@@ -120,13 +120,19 @@ class VarianceTask(BaseTask):
     def build_losses_and_metrics(self):
         if self.predict_dur:
             dur_hparams = hparams['dur_prediction_args']
-            self.dur_loss = DurationLoss(
-                offset=dur_hparams['log_offset'],
-                loss_type=dur_hparams['loss_type'],
-                lambda_pdur=dur_hparams['lambda_pdur_loss'],
-                lambda_wdur=dur_hparams['lambda_wdur_loss'],
-                lambda_sdur=dur_hparams['lambda_sdur_loss']
-            )
+            # self.dur_loss = DurationLoss(
+            #     offset=dur_hparams['log_offset'],
+            #     loss_type=dur_hparams['loss_type'],
+            #     lambda_pdur=dur_hparams['lambda_pdur_loss'],
+            #     lambda_wdur=dur_hparams['lambda_wdur_loss'],
+            #     lambda_sdur=dur_hparams['lambda_sdur_loss']
+            # )
+            if self.diffusion_type == 'ddpm':
+                self.dur_loss = DiffusionLoss(loss_type=hparams['main_loss_type'])
+            elif self.diffusion_type == 'reflow':
+                self.dur_loss = RectifiedFlowLoss(
+                    loss_type=hparams['main_loss_type'], log_norm=hparams['main_loss_log_norm']
+                )
             self.register_validation_loss('dur_loss')
             self.register_validation_metric('rhythm_corr', RhythmCorrectness(tolerance=0.05))
             self.register_validation_metric('ph_dur_acc', PhonemeDurationAccuracy(tolerance=0.2))
@@ -205,9 +211,24 @@ class VarianceTask(BaseTask):
             return dur_pred, pitch_pred, variances_pred  # Tensor, Tensor, Dict[str, Tensor]
         else:
             losses = {}
-            if dur_pred is not None:
-                losses['dur_loss'] = self.lambda_dur_loss * self.dur_loss(dur_pred, ph_dur, ph2word=ph2word)
+
             non_padding = (mel2ph > 0).unsqueeze(-1) if mel2ph is not None else None
+            if dur_pred is not None:
+                # losses['dur_loss'] = self.lambda_dur_loss * self.dur_loss(dur_pred, ph_dur, ph2word=ph2word)
+                if self.diffusion_type == 'ddpm':
+                    dur_x_recon, dur_noise = dur_pred
+                    dur_loss = self.dur_loss(
+                        dur_x_recon, dur_noise, non_padding=non_padding
+                    )
+                elif self.diffusion_type == 'reflow':
+                    dur_v_pred, dur_v_gt, t = dur_pred
+                    dur_loss = self.dur_loss(
+                        dur_v_pred, dur_v_gt, t=t, non_padding=non_padding
+                    )
+                else:
+                    raise ValueError(f"Unknown diffusion type: {self.diffusion_type}")
+                # losses['dur_loss'] = self.lambda_dur_loss *
+                losses['dur_loss'] = self.lambda_dur_loss *dur_loss
             if pitch_pred is not None:
                 if self.diffusion_type == 'ddpm':
                     pitch_x_recon, pitch_noise = pitch_pred
