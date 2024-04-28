@@ -84,8 +84,8 @@ class PhonemeDurationAccuracy(torchmetrics.Metric):
         wdur_target = pdur_target.new_zeros(*shape).scatter_add(
             1, ph2word, pdur_target
         )[:, 1:]  # [B, T_ph] => [B, T_w]
-        # pdur_align = self.rr(pdur_pred, ph2word=ph2word, word_dur=wdur_target)
-        pdur_align=pdur_pred
+        pdur_align = self.rr(pdur_pred, ph2word=ph2word, word_dur=wdur_target)
+        # pdur_align=pdur_pred
 
         accurate = torch.abs(pdur_align - pdur_target) <= pdur_target * self.tolerance
         if mask is not None:

@@ -180,7 +180,8 @@ class DiffSingerVariance(CategorizedModule, ParameterAdaptorModule):
                 backbone_args={
                     'n_layers': hparams['residual_layers'],
                     'n_chans': hparams['residual_channels'],
-                    'n_dilates': hparams['dilation_cycle_length'],
+                    'intermediate_dim': hparams['intermediate_dim'],
+                    'time_embed_dim': hparams['time_embed_dim'],
                 },
                 spec_min=[-0.1],
                 spec_max=[7]
