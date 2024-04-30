@@ -2,7 +2,7 @@ from typing import Optional
 
 import torch
 import torch.nn as nn
-
+import torch.utils
 from modules.backbones.wavenet import SinusoidalPosEmb
 from utils import hparams
 
@@ -69,8 +69,9 @@ class ConvNeXtBlock(nn.Module):
 
 class ConvNeXtModule(nn.Module):
     def __init__(self, dim, lays, time_embed_dim, cond_dim, intermediate_dim=None, layer_scale_init_value=1e-6,
-                 drop_out=0., n_dilates=1):
+                 drop_out=0., n_dilates=1, checkpoint=True):
         super().__init__()
+        self.checkpoint = checkpoint
         if intermediate_dim is None:
             intermediate_dim = dim * 2
         else:
@@ -85,14 +86,18 @@ class ConvNeXtModule(nn.Module):
     def forward(self, x, t, cond):
 
         for layer in self.layers:
-            x = layer(x, t, cond)
+
+            if self.checkpoint:
+                x = torch.utils.checkpoint.checkpoint(layer, x, t, cond)
+            else:
+                x = layer(x, t, cond)
 
         return x
 
 
 class ConvNeXtModel(nn.Module):
     def __init__(self, in_dim, time_embed_dim, cond_dim, dims=None, lays=None, intermediate_dim=None,
-                 layer_scale_init_value=1e-6, drop_out=0., n_dilates=None):
+                 layer_scale_init_value=1e-6, drop_out=0., n_dilates=None, checkpoint=True):
         super().__init__()
         if dims is None:
             dims = [64, 128, 256, 512]
@@ -111,7 +116,7 @@ class ConvNeXtModel(nn.Module):
             self.encoder.append(
                 ConvNeXtModule(dim=dims[i + 1], lays=lays[i], time_embed_dim=time_embed_dim, cond_dim=cond_dim,
                                intermediate_dim=intermediate_dim[i], layer_scale_init_value=layer_scale_init_value,
-                               drop_out=drop_out, n_dilates=n_dilates[i]))
+                               drop_out=drop_out, n_dilates=n_dilates[i],checkpoint=checkpoint), )
         self.output_projection = nn.Conv1d(dims[-1], in_dim, 1)
 
     def forward(self, x, t, cond, mask=None):
@@ -131,7 +136,7 @@ class ConvNeXtModel(nn.Module):
 
 class ConvNeXt(nn.Module):
     def __init__(self, in_dims, n_feats, *, n_layers=[20], time_embed_dim=512, n_chans=[256], intermediate_dim=[4],
-                 n_dilates=[2]):
+                 n_dilates=[2],use_grad_checkpoint=True,):
         super().__init__()
         self.in_dims = in_dims
         self.n_feats = n_feats
@@ -147,7 +152,7 @@ class ConvNeXt(nn.Module):
                                    intermediate_dim=intermediate_dim,
                                    layer_scale_init_value=1e-6, drop_out=0., time_embed_dim=time_embed_dim,
                                    n_dilates=n_dilates,
-                                   cond_dim=hparams['hidden_size'])
+                                   cond_dim=hparams['hidden_size'],checkpoint=use_grad_checkpoint)
 
     def forward(self, spec, diffusion_step, cond):
         """

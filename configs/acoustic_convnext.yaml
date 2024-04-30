@@ -31,6 +31,7 @@ diffusion_args:
   n_chans: [256,384,512]
   intermediate_dim: [4,4,2]
   n_dilates: [2,2,1]
+  use_grad_checkpoint: false # can save memory
 
 
 vocoder: NsfHifiGAN
