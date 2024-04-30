@@ -148,8 +148,8 @@ class DiffSingerVariance(CategorizedModule, ParameterAdaptorModule):
             vocab_size=vocab_size
         )
         self.vae=DURVAE()
-        self.vae.load('checkpoints/dv8/model_ckpt_steps_20000.ckpt')
-        self.vae.eval()
+        # self.vae.load('checkpoints/dv8/model_ckpt_steps_20000.ckpt')
+        # self.vae.eval()
         dur_vae_hparams = hparams['dur_vae_args']
         self.model = VAE(in_dim=1,
                          latent_dim=dur_vae_hparams['latent_dim'],
