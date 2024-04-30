@@ -60,11 +60,7 @@ class DiffSingerAcoustic(CategorizedModule, ParameterAdaptorModule):
                 timesteps=hparams['timesteps'],
                 k_step=hparams['K_step'],
                 backbone_type=hparams.get('backbone_type', hparams.get('diff_decoder_type')),
-                backbone_args={
-                    'n_layers': hparams['residual_layers'],
-                    'n_chans': hparams['residual_channels'],
-                    'n_dilates': hparams['dilation_cycle_length'],
-                },
+                backbone_args=hparams['diffusion_args'],
                 spec_min=hparams['spec_min'],
                 spec_max=hparams['spec_max']
             )
@@ -75,11 +71,7 @@ class DiffSingerAcoustic(CategorizedModule, ParameterAdaptorModule):
                 t_start=hparams['T_start'],
                 time_scale_factor=hparams['time_scale_factor'],
                 backbone_type=hparams.get('backbone_type', hparams.get('diff_decoder_type')),
-                backbone_args={
-                    'n_layers': hparams['residual_layers'],
-                    'n_chans': hparams['residual_channels'],
-                    'n_dilates': hparams['dilation_cycle_length'],
-                },
+                backbone_args=hparams['diffusion_args'],
                 spec_min=hparams['spec_min'],
                 spec_max=hparams['spec_max']
             )

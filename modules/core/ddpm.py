@@ -11,10 +11,10 @@ from tqdm import tqdm
 
 from modules.backbones.wavenet import WaveNet
 from utils.hparams import hparams
-
-BACKBONES = {
-    'wavenet': WaveNet
-}
+from modules.backbones import BACKBONES
+# BACKBONES = {
+#     'wavenet': WaveNet
+# }
 
 
 def extract(a, t, x_shape):
