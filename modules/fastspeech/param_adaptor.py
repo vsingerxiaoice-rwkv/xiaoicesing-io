@@ -76,11 +76,7 @@ class ParameterAdaptorModule(torch.nn.Module):
                 'timesteps': hparams.get('timesteps'),
                 'time_scale_factor': hparams.get('time_scale_factor'),
                 'backbone_type': hparams.get('backbone_type', hparams.get('diff_decoder_type')),
-                'backbone_args': {
-                    'n_layers': variances_hparams['residual_layers'],
-                    'n_chans': variances_hparams['residual_channels'],
-                    'n_dilates': variances_hparams['dilation_cycle_length'],
-                }
+                'backbone_args': variances_hparams['diffusion_args']
             },
             cls
         )
