@@ -9,12 +9,8 @@ import torch
 from torch import nn
 from tqdm import tqdm
 
-from modules.backbones.wavenet import WaveNet
+from modules.backbones import BACKBONES
 from utils.hparams import hparams
-
-BACKBONES = {
-    'wavenet': WaveNet
-}
 
 
 def extract(a, t, x_shape):
