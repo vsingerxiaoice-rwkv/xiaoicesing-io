@@ -80,6 +80,7 @@ class BaseTask(pl.LightningModule):
     def _finish_init(self):
         self.register_validation_loss('total_loss')
         self.build_losses_and_metrics()
+        assert len(self.valid_losses) > 0, "No validation loss registered. Please check your configuration file."
 
     ###########
     # Training, validation and testing
