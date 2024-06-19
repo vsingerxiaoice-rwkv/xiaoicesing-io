@@ -14,14 +14,14 @@ from basics.base_pe import BasePE
 from modules.fastspeech.tts_modules import LengthRegulator
 from modules.pe import initialize_pe
 from utils.binarizer_utils import (
-    DecomposedWaveform,
     SinusoidalSmoothingConv1d,
     get_mel2ph_torch,
     get_energy_librosa,
-    get_breathiness_pyworld,
-    get_voicing_pyworld,
+    get_breathiness,
+    get_voicing,
     get_tension_base_harmonic,
 )
+from utils.decomposed_waveform import DecomposedWaveform
 from utils.hparams import hparams
 from utils.infer_utils import resample_align_curve
 from utils.pitch_utils import interp_f0
@@ -384,10 +384,11 @@ class VarianceBinarizer(BaseBinarizer):
 
             processed_input['energy'] = energy
 
-        # create a DeconstructedWaveform object for further feature extraction
+        # create a DecomposedWaveform object for further feature extraction
         dec_waveform = DecomposedWaveform(
             waveform, samplerate=hparams['audio_sample_rate'], f0=f0 * ~uv,
-            hop_size=hparams['hop_size'], fft_size=hparams['fft_size'], win_size=hparams['win_size']
+            hop_size=hparams['hop_size'], fft_size=hparams['fft_size'], win_size=hparams['win_size'],
+            algorithm=hparams['hnsep']
         ) if waveform is not None else None
 
         # Below: extract breathiness
@@ -406,7 +407,7 @@ class VarianceBinarizer(BaseBinarizer):
                         align_length=length
                     )
             if breathiness is None:
-                breathiness = get_breathiness_pyworld(
+                breathiness = get_breathiness(
                     dec_waveform, None, None, length=length
                 )
                 breathiness_from_wav = True
@@ -437,7 +438,7 @@ class VarianceBinarizer(BaseBinarizer):
                         align_length=length
                     )
             if voicing is None:
-                voicing = get_voicing_pyworld(
+                voicing = get_voicing(
                     dec_waveform, None, None, length=length
                 )
                 voicing_from_wav = True
