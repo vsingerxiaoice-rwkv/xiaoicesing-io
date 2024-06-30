@@ -77,6 +77,8 @@ class AcousticBinarizer(BaseBinarizer):
                 }
                 assert len(temp_dict['ph_seq']) == len(temp_dict['ph_dur']), \
                     f'Lengths of ph_seq and ph_dur mismatch in \'{item_name}\'.'
+                assert all(temp_dict['ph_dur'] >= 0), \
+                    f'Negative duration found in \'{item_name}\'.'
                 meta_data_dict[f'{ds_id}:{item_name}'] = temp_dict
 
         self.items.update(meta_data_dict)
