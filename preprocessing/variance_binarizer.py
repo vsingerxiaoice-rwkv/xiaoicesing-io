@@ -139,7 +139,7 @@ class VarianceBinarizer(BaseBinarizer):
 
                 assert len(temp_dict['ph_seq']) == len(temp_dict['ph_dur']), \
                     f'Lengths of ph_seq and ph_dur mismatch in \'{item_name}\'.'
-                assert all(temp_dict['ph_dur'] >= 0), \
+                assert all(ph_dur >= 0 for ph_dur in temp_dict['ph_dur']), \
                     f'Negative duration found in \'{item_name}\'.'
 
                 if hparams['predict_dur']:
