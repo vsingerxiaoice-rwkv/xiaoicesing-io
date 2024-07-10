@@ -80,12 +80,12 @@ class DiffSingerAcousticONNX(DiffSingerAcoustic):
 
     def forward_shallow_diffusion(
             self, condition: Tensor, x_start: Tensor,
-            depth: int, speedup: int
+            depth, steps: int
     ) -> Tensor:
-        return self.diffusion(condition, x_start=x_start, depth=depth, speedup=speedup)
+        return self.diffusion(condition, x_start=x_start, depth=depth, steps=steps)
 
-    def forward_diffusion(self, condition: Tensor, speedup: int):
-        return self.diffusion(condition, speedup=speedup)
+    def forward_diffusion(self, condition: Tensor, steps: int):
+        return self.diffusion(condition, steps=steps)
 
     def forward_shallow_reflow(
             self, condition: Tensor, x_end: Tensor,
@@ -261,12 +261,6 @@ class DiffSingerVarianceONNX(DiffSingerVariance):
             pitch_cond += spk_embed
         return pitch_cond, base_pitch
 
-    def forward_pitch_diffusion(
-            self, pitch_cond, speedup: int = 1
-    ):
-        x_pred = self.pitch_predictor(pitch_cond, speedup=speedup)
-        return x_pred
-
     def forward_pitch_reflow(
             self, pitch_cond, steps: int = 10
     ):
@@ -295,10 +289,6 @@ class DiffSingerVarianceONNX(DiffSingerVariance):
         if hparams['use_spk_id'] and spk_embed is not None:
             variance_cond += spk_embed
         return variance_cond
-
-    def forward_variance_diffusion(self, variance_cond, speedup: int = 1):
-        xs_pred = self.variance_predictor(variance_cond, speedup=speedup)
-        return xs_pred
 
     def forward_variance_reflow(self, variance_cond, steps: int = 10):
         xs_pred = self.variance_predictor(variance_cond, steps=steps)
@@ -350,19 +340,7 @@ class DiffSingerVarianceONNX(DiffSingerVariance):
         model.forward = model.forward_pitch_preprocess
         return model
 
-    def view_as_pitch_diffusion(self):
-        assert self.predict_pitch
-        model = copy.deepcopy(self)
-        del model.fs2
-        del model.lr
-        if self.use_melody_encoder:
-            del model.melody_encoder
-        if self.predict_variances:
-            del model.variance_predictor
-        model.forward = model.forward_pitch_diffusion
-        return model
-
-    def view_as_pitch_reflow(self):
+    def view_as_pitch_predictor(self):
         assert self.predict_pitch
         model = copy.deepcopy(self)
         del model.fs2
@@ -396,19 +374,7 @@ class DiffSingerVarianceONNX(DiffSingerVariance):
         model.forward = model.forward_variance_preprocess
         return model
 
-    def view_as_variance_diffusion(self):
-        assert self.predict_variances
-        model = copy.deepcopy(self)
-        del model.fs2
-        del model.lr
-        if self.predict_pitch:
-            del model.pitch_predictor
-            if self.use_melody_encoder:
-                del model.melody_encoder
-        model.forward = model.forward_variance_diffusion
-        return model
-
-    def view_as_variance_reflow(self):
+    def view_as_variance_predictor(self):
         assert self.predict_variances
         model = copy.deepcopy(self)
         del model.fs2
