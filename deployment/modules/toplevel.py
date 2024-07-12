@@ -57,6 +57,13 @@ class DiffSingerAcousticONNX(DiffSingerAcoustic):
             )
         else:
             raise ValueError(f"Invalid diffusion type: {self.diffusion_type}")
+        self.mel_base = hparams.get('mel_base', '10')
+
+    def ensure_mel_base(self, mel):
+        if self.mel_base != 'e':
+            # log10 mel to log mel
+            mel = mel * 2.30259
+        return mel
 
     def forward_fs2_aux(
             self,
@@ -82,19 +89,23 @@ class DiffSingerAcousticONNX(DiffSingerAcoustic):
             self, condition: Tensor, x_start: Tensor,
             depth, steps: int
     ) -> Tensor:
-        return self.diffusion(condition, x_start=x_start, depth=depth, steps=steps)
+        mel_pred = self.diffusion(condition, x_start=x_start, depth=depth, steps=steps)
+        return self.ensure_mel_base(mel_pred)
 
     def forward_diffusion(self, condition: Tensor, steps: int):
-        return self.diffusion(condition, steps=steps)
+        mel_pred = self.diffusion(condition, steps=steps)
+        return self.ensure_mel_base(mel_pred)
 
     def forward_shallow_reflow(
             self, condition: Tensor, x_end: Tensor,
             depth, steps: int
     ):
-        return self.diffusion(condition, x_end=x_end, depth=depth, steps=steps)
+        mel_pred = self.diffusion(condition, x_end=x_end, depth=depth, steps=steps)
+        return self.ensure_mel_base(mel_pred)
 
     def forward_reflow(self, condition: Tensor, steps: int):
-        return self.diffusion(condition, steps=steps)
+        mel_pred = self.diffusion(condition, steps=steps)
+        return self.ensure_mel_base(mel_pred)
 
     def view_as_fs2_aux(self) -> nn.Module:
         model = copy.deepcopy(self)

@@ -62,6 +62,10 @@ class AcousticBinarizer(BaseBinarizer):
         self.need_breathiness = hparams['use_breathiness_embed']
         self.need_voicing = hparams['use_voicing_embed']
         self.need_tension = hparams['use_tension_embed']
+        assert hparams['mel_base'] == 'e', (
+            "Mel base must be set to \'e\' according to 2nd stage of the migration plan. "
+            "See https://github.com/openvpi/DiffSinger/releases/tag/v2.3.0 for more details."
+        )
 
     def load_meta_data(self, raw_data_dir: pathlib.Path, ds_id, spk_id):
         meta_data_dict = {}
@@ -89,7 +93,7 @@ class AcousticBinarizer(BaseBinarizer):
         mel = get_mel_torch(
             waveform, hparams['audio_sample_rate'], num_mel_bins=hparams['audio_num_mel_bins'],
             hop_size=hparams['hop_size'], win_size=hparams['win_size'], fft_size=hparams['fft_size'],
-            fmin=hparams['fmin'], fmax=hparams['fmax'], mel_base=hparams['mel_base'],
+            fmin=hparams['fmin'], fmax=hparams['fmax'],
             device=self.device
         )
         length = mel.shape[0]
