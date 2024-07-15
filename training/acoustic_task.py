@@ -92,7 +92,7 @@ class AcousticTask(BaseTask):
 
     def _build_model(self):
         return DiffSingerAcoustic(
-            vocab_size=len(self.phone_encoder),
+            vocab_size=len(self.phoneme_dictionary),
             out_dims=hparams['audio_num_mel_bins']
         )
 

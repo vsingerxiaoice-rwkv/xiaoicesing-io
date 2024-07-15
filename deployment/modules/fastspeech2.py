@@ -9,7 +9,7 @@ from modules.commons.common_layers import NormalInitEmbedding as Embedding
 from modules.fastspeech.acoustic_encoder import FastSpeech2Acoustic
 from modules.fastspeech.variance_encoder import FastSpeech2Variance
 from utils.hparams import hparams
-from utils.text_encoder import PAD_INDEX
+from utils.phoneme_utils import PAD_INDEX
 
 f0_bin = 256
 f0_max = 1100.0

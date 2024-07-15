@@ -108,7 +108,7 @@ class VarianceBinarizer(BaseBinarizer):
             ds = ds[idx]
         return ds.get(attr)
 
-    def load_meta_data(self, raw_data_dir: pathlib.Path, ds_id, spk_id):
+    def load_meta_data(self, raw_data_dir: pathlib.Path, ds_id, spk, lang):
         meta_data_dict = {}
 
         with open(raw_data_dir / 'transcriptions.csv', 'r', encoding='utf8') as f:
@@ -130,10 +130,12 @@ class VarianceBinarizer(BaseBinarizer):
 
                 temp_dict = {
                     'ds_idx': item_idx,
-                    'spk_id': spk_id,
+                    'spk_id': self.spk_map[spk],
                     'spk_name': self.speakers[ds_id],
+                    'language_id': self.lang_map[lang],
+                    'language_name': lang,
                     'wav_fn': str(raw_data_dir / 'wavs' / f'{item_name}.wav'),
-                    'ph_seq': require('ph_seq').split(),
+                    'ph_seq': self.phoneme_dictionary.encode(require('ph_seq'), lang=lang),
                     'ph_dur': [float(x) for x in require('ph_dur').split()]
                 }
 
@@ -249,7 +251,7 @@ class VarianceBinarizer(BaseBinarizer):
             'spk_name': meta_data['spk_name'],
             'seconds': seconds,
             'length': length,
-            'tokens': np.array(self.phone_encoder.encode(meta_data['ph_seq']), dtype=np.int64)
+            'tokens': np.array(meta_data['ph_seq'], dtype=np.int64)
         }
 
         ph_dur_sec = torch.FloatTensor(meta_data['ph_dur']).to(self.device)

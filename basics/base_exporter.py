@@ -1,4 +1,6 @@
 import json
+import pathlib
+import shutil
 from pathlib import Path
 from typing import Union
 
@@ -43,6 +45,19 @@ class BaseExporter:
         :param path: the target model path
         """
         raise NotImplementedError()
+
+    # noinspection PyMethodMayBeStatic
+    def export_dictionaries(self, path: Path):
+        dicts = hparams.get('dictionaries')
+        if dicts is not None:
+            for lang in dicts.keys():
+                fn = f'dictionary-{lang}.txt'
+                shutil.copy(pathlib.Path(hparams['work_dir']) / fn, path)
+                print(f'| export dictionary => {path / fn}')
+        else:
+            fn = 'dictionary.txt'
+            shutil.copy(pathlib.Path(hparams['work_dir']) / fn, path)
+            print(f'| export dictionary => {path / fn}')
 
     def export_attachments(self, path: Path):
         """

@@ -8,7 +8,7 @@ from modules.commons.common_layers import (
 )
 from modules.fastspeech.tts_modules import FastSpeech2Encoder, mel2ph_to_dur
 from utils.hparams import hparams
-from utils.text_encoder import PAD_INDEX
+from utils.phoneme_utils import PAD_INDEX
 
 
 class FastSpeech2Acoustic(nn.Module):

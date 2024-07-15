@@ -113,7 +113,7 @@ class VarianceTask(BaseTask):
 
     def _build_model(self):
         return DiffSingerVariance(
-            vocab_size=len(self.phone_encoder),
+            vocab_size=len(self.phoneme_dictionary),
         )
 
     # noinspection PyAttributeOutsideInit
@@ -295,7 +295,7 @@ class VarianceTask(BaseTask):
     def plot_dur(self, data_idx, gt_dur, pred_dur, txt=None):
         gt_dur = gt_dur[0].cpu().numpy()
         pred_dur = pred_dur[0].cpu().numpy()
-        txt = self.phone_encoder.decode(txt[0].cpu().numpy()).split()
+        txt = self.phoneme_dictionary.decode(txt[0].cpu().numpy()).split()
         title_text = f"{self.valid_dataset.metadata['spk_names'][data_idx]} - {self.valid_dataset.metadata['names'][data_idx]}"
         self.logger.all_rank_experiment.add_figure(f'dur_{data_idx}', dur_to_figure(
             gt_dur, pred_dur, txt, title_text
