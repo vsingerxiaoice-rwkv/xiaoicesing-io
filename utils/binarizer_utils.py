@@ -19,7 +19,7 @@ def get_mel_torch(
 ):
     if device is None:
         device = 'cuda' if torch.cuda.is_available() else 'cpu'
-    stft = STFT(samplerate, num_mel_bins, fft_size, win_size, hop_size, fmin, fmax)
+    stft = STFT(samplerate, num_mel_bins, fft_size, win_size, hop_size, fmin, fmax, device=device)
     with torch.no_grad():
         wav_torch = torch.from_numpy(waveform).to(device)
         mel_torch = stft.get_mel(wav_torch.unsqueeze(0), keyshift=keyshift, speed=speed).squeeze(0).T
