@@ -444,17 +444,18 @@ class BaseTask(pl.LightningModule):
             def train_payload_copy():
                 # Copy files to work_dir
                 binary_dir = pathlib.Path(hparams['binary_data_dir'])
-                spk_map = work_dir / 'spk_map.json'
+                spk_map_dst = work_dir / 'spk_map.json'
                 spk_map_src = binary_dir / 'spk_map.json'
-                if not spk_map.exists() and spk_map_src.exists():
-                    shutil.copy(spk_map_src, spk_map)
-                    print(f'| Copied spk map to {spk_map}.')
+                shutil.copy(spk_map_src, spk_map_dst)
+                lang_map_dst = work_dir / 'lang_map.json'
+                lang_map_src = binary_dir / 'lang_map.json'
+                shutil.copy(lang_map_src, lang_map_dst)
+                print(f'| Copied spk map to {spk_map_dst}.')
                 for lang in hparams['dictionaries'].keys():
                     dict_dst = work_dir / f'dictionary-{lang}.txt'
                     dict_src = binary_dir / f'dictionary-{lang}.txt'
-                    if not dict_dst.exists():
-                        shutil.copy(dict_src, dict_dst)
-                        print(f'| Copied dictionary for language \'{lang}\' to {dict_dst}.')
+                    shutil.copy(dict_src, dict_dst)
+                    print(f'| Copied dictionary for language \'{lang}\' to {dict_dst}.')
 
             train_payload_copy()
             trainer.fit(task, ckpt_path=get_latest_checkpoint_path(work_dir))

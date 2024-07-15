@@ -198,7 +198,7 @@ class BaseBinarizer:
             json.dump(self.spk_map, f, ensure_ascii=False)
         lang_map_fn = self.binary_data_dir / 'lang_map.json'
         with open(lang_map_fn, 'w', encoding='utf-8') as f:
-            json.dump(self.spk_map, f, ensure_ascii=False)
+            json.dump(self.lang_map, f, ensure_ascii=False)
         for lang, dict_path in hparams['dictionaries'].items():
             shutil.copy(dict_path, self.binary_data_dir / f'dictionary-{lang}.txt')
         self.check_coverage()
