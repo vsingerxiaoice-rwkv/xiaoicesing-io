@@ -56,6 +56,9 @@ class FastSpeech2Acoustic(nn.Module):
         self.use_spk_id = hparams['use_spk_id']
         if self.use_spk_id:
             self.spk_embed = Embedding(hparams['num_spk'], hparams['hidden_size'])
+        self.use_lang_id = hparams.get('use_lang_id', False)
+        if self.use_lang_id:
+            self.lang_embed = Embedding(hparams['num_lang'] + 1, hparams['hidden_size'], padding_idx=0)
 
     def forward_variance_embedding(self, condition, key_shift=None, speed=None, **variances):
         if self.use_variance_embeds:
@@ -78,9 +81,13 @@ class FastSpeech2Acoustic(nn.Module):
     def forward(
             self, txt_tokens, mel2ph, f0,
             key_shift=None, speed=None,
-            spk_embed_id=None, **kwargs
+            spk_embed_id=None, languages=None,
+            **kwargs
     ):
         txt_embed = self.txt_embed(txt_tokens)
+        if self.use_lang_id:
+            lang_embed = self.lang_embed(languages)
+            txt_embed += lang_embed
         dur = mel2ph_to_dur(mel2ph, txt_tokens.shape[1]).float()
         dur_embed = self.dur_embed(dur[:, :, None])
         encoder_out = self.encoder(txt_embed, dur_embed, txt_tokens == 0)

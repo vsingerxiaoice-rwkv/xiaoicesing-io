@@ -36,6 +36,7 @@ os.environ["OMP_NUM_THREADS"] = "1"
 ACOUSTIC_ITEM_ATTRIBUTES = [
     'spk_id',
     'mel',
+    'languages',
     'tokens',
     'mel2ph',
     'f0',
@@ -74,12 +75,14 @@ class AcousticBinarizer(BaseBinarizer):
                 item_name = utterance_label['name']
                 temp_dict = {
                     'wav_fn': str(raw_data_dir / 'wavs' / f'{item_name}.wav'),
+                    'lang_seq': [
+                        self.lang_map[lang if '/' not in p else p.split('/', maxsplit=1)[0]]
+                        for p in utterance_label['ph_seq'].split()
+                    ],
                     'ph_seq': self.phoneme_dictionary.encode(utterance_label['ph_seq'], lang=lang),
                     'ph_dur': [float(x) for x in utterance_label['ph_dur'].split()],
                     'spk_id': self.spk_map[spk],
                     'spk_name': spk,
-                    'language_id': self.lang_map[lang],
-                    'language_name': lang,
                 }
                 assert len(temp_dict['ph_seq']) == len(temp_dict['ph_dur']), \
                     f'Lengths of ph_seq and ph_dur mismatch in \'{item_name}\'.'
@@ -108,6 +111,7 @@ class AcousticBinarizer(BaseBinarizer):
             'seconds': seconds,
             'length': length,
             'mel': mel,
+            'languages': np.array(meta_data['lang_seq'], dtype=np.int64),
             'tokens': np.array(meta_data['ph_seq'], dtype=np.int64),
             'ph_dur': np.array(meta_data['ph_dur']).astype(np.float32),
         }

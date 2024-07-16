@@ -104,8 +104,10 @@ class BaseBinarizer:
         assert len(self.dictionaries.keys()) <= hparams['num_lang'], \
             'Number of languages must not be greater than num_lang!'
 
-        for lang_id, lang_name in enumerate(sorted(self.dictionaries.keys())):
+        for lang_id, lang_name in enumerate(sorted(self.dictionaries.keys()), start=1):
             self.lang_map[lang_name] = lang_id
+
+        print("| lang_map: ", self.lang_map)
 
     def load_meta_data(self, raw_data_dir: pathlib.Path, ds_id, spk, lang):
         raise NotImplementedError()
