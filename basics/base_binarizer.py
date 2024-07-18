@@ -235,6 +235,11 @@ class BaseBinarizer:
             for idx, count in ph_idx_count_map.items()
         }
 
+        def display_phoneme(phoneme):
+            if isinstance(phoneme, tuple):
+                return f'({", ".join(phoneme)})'
+            return phoneme
+
         print('===== Phoneme Distribution Summary =====')
         keys = sorted(ph_count_map.keys(), key=lambda v: v[0] if isinstance(v, tuple) else v)
         for i, key in enumerate(keys):
@@ -244,19 +249,16 @@ class BaseBinarizer:
                 end = ',\n'
             else:
                 end = ', '
-            if isinstance(key, tuple):
-                key_disp = '(' + ', '.join(key) + ')'
-            else:
-                key_disp = key
+            key_disp = display_phoneme(key)
             print(f'{key_disp}: {ph_count_map[key]}', end=end)
 
         # Draw graph.
-        xs = [str(k) for k in keys]
+        xs = [display_phoneme(k) for k in keys]
         ys = [ph_count_map[k] for k in keys]
         plt = distribution_to_figure(
             title='Phoneme Distribution Summary',
             x_label='Phoneme', y_label='Number of occurrences',
-            items=xs, values=ys
+            items=xs, values=ys, rotate=len(self.dictionaries) > 1
         )
         filename = self.binary_data_dir / 'phoneme_distribution.jpg'
         plt.savefig(fname=filename,
