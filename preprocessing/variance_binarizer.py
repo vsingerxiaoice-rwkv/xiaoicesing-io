@@ -30,6 +30,7 @@ from utils.plot import distribution_to_figure
 os.environ["OMP_NUM_THREADS"] = "1"
 VARIANCE_ITEM_ATTRIBUTES = [
     'spk_id',  # index number of dataset/speaker, int64
+    'languages',  # index numbers of phoneme languages, int64[T_ph,]
     'tokens',  # index numbers of phonemes, int64[T_ph,]
     'ph_dur',  # durations of phonemes, in number of frames, int64[T_ph,]
     'midi',  # phoneme-level mean MIDI pitch, int64[T_ph,]
@@ -135,7 +136,10 @@ class VarianceBinarizer(BaseBinarizer):
                     'language_id': self.lang_map[lang],
                     'language_name': lang,
                     'wav_fn': str(raw_data_dir / 'wavs' / f'{item_name}.wav'),
-                    'ph_seq': self.phoneme_dictionary.encode(require('ph_seq'), lang=lang),
+                    'lang_seq': [
+                        self.lang_map[lang if '/' not in p else p.split('/', maxsplit=1)[0]]
+                        for p in utterance_label['ph_seq'].split()
+                    ],'ph_seq': self.phoneme_dictionary.encode(require('ph_seq'), lang=lang),
                     'ph_dur': [float(x) for x in require('ph_dur').split()]
                 }
 
@@ -251,6 +255,7 @@ class VarianceBinarizer(BaseBinarizer):
             'spk_name': meta_data['spk_name'],
             'seconds': seconds,
             'length': length,
+            'languages': np.array(meta_data['lang_seq'], dtype=np.int64),
             'tokens': np.array(meta_data['ph_seq'], dtype=np.int64)
         }
 
