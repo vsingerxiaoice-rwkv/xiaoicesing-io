@@ -38,6 +38,10 @@ class DiffSingerVarianceInfer(BaseSVSInfer):
                 self.spk_map = json.load(f)
             assert isinstance(self.spk_map, dict) and len(self.spk_map) > 0, 'Invalid or empty speaker map!'
             assert len(self.spk_map) == len(set(self.spk_map.values())), 'Duplicate speaker id in speaker map!'
+        lang_map_fn = pathlib.Path(hparams['work_dir']) / 'lang_map.json'
+        if lang_map_fn.exists():
+            with open(lang_map_fn, 'r', encoding='utf8') as f:
+                self.lang_map = json.load(f)
         self.model: DiffSingerVariance = self.build_model(ckpt_steps=ckpt_steps)
         self.lr = LengthRegulator()
         self.rr = RhythmRegulator()
@@ -95,8 +99,23 @@ class DiffSingerVarianceInfer(BaseSVSInfer):
         """
         batch = {}
         summary = OrderedDict()
+
+        lang = param.get('lang')
+        if lang is None:
+            assert len(self.lang_map) <= 1, (
+                "This is a multilingual model. "
+                "Please specify a language by --lang option."
+            )
+        else:
+            assert lang in self.lang_map, f'Unrecognized language name: \'{lang}\'.'
+        if hparams.get('use_lang_id', False):
+            languages = torch.LongTensor([
+                self.lang_map[lang if '/' not in p else p.split('/', maxsplit=1)[0]]
+                for p in param['ph_seq'].split()
+            ]).to(self.device)  # [B=1, T_ph]
+            batch['languages'] = languages
         txt_tokens = torch.LongTensor([
-            self.phoneme_dictionary.encode(param['ph_seq'].split())
+            self.phoneme_dictionary.encode(param['ph_seq'], lang=lang)
         ]).to(self.device)  # [B=1, T_ph]
         T_ph = txt_tokens.shape[1]
         batch['tokens'] = txt_tokens
@@ -305,7 +324,8 @@ class DiffSingerVarianceInfer(BaseSVSInfer):
             ph_spk_mix_embed = spk_mix_embed = None
 
         dur_pred, pitch_pred, variance_pred = self.model(
-            txt_tokens, midi=midi, ph2word=ph2word, word_dur=word_dur, ph_dur=ph_dur, mel2ph=mel2ph,
+            txt_tokens, languages=sample.get('languages'),
+            midi=midi, ph2word=ph2word, word_dur=word_dur, ph_dur=ph_dur, mel2ph=mel2ph,
             note_midi=note_midi, note_rest=note_rest, note_dur=note_dur, note_glide=note_glide, mel2note=mel2note,
             base_pitch=base_pitch, pitch=pitch, pitch_expr=expr,
             ph_spk_mix_embed=ph_spk_mix_embed, spk_mix_embed=spk_mix_embed,
