@@ -262,7 +262,10 @@ class VarianceTask(BaseTask):
                         self.valid_metrics['ph_dur_acc'].update(
                             pdur_pred=pred_dur, pdur_target=gt_dur, ph2word=ph2word, mask=mask
                         )
-                        self.plot_dur(data_idx, gt_dur, pred_dur, tokens)
+                        self.plot_dur(
+                            data_idx, gt_dur, pred_dur,
+                            txt=self.valid_dataset.metadata['ph_texts'][data_idx].split()
+                        )
                     if pitch_preds is not None:
                         pitch_len = self.valid_dataset.metadata['pitch'][data_idx]
                         pred_pitch = sample_get('base_pitch', i, data_idx) + pitch_preds[i][:pitch_len].unsqueeze(0)
@@ -295,8 +298,6 @@ class VarianceTask(BaseTask):
     def plot_dur(self, data_idx, gt_dur, pred_dur, txt=None):
         gt_dur = gt_dur[0].cpu().numpy()
         pred_dur = pred_dur[0].cpu().numpy()
-        if txt is None:
-            txt = self.valid_dataset.metadata['ph_texts'][data_idx].split()
         title_text = f"{self.valid_dataset.metadata['spk_names'][data_idx]} - {self.valid_dataset.metadata['names'][data_idx]}"
         self.logger.all_rank_experiment.add_figure(f'dur_{data_idx}', dur_to_figure(
             gt_dur, pred_dur, txt, title_text
