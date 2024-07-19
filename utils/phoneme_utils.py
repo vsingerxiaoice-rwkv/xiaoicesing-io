@@ -170,21 +170,3 @@ def load_phoneme_dictionary() -> PhonemeDictionary:
         dictionaries=dicts,
         merged_groups=hparams.get('merged_phoneme_groups')
     )
-
-
-if __name__ == '__main__':
-    d = PhonemeDictionary(
-        dictionaries={
-            'zh': 'dictionaries/opencpop-extension.txt',
-            # 'en': 'dictionaries/opencpop-extension.txt',
-        },
-        merged_groups=[
-            ['zh/a', 'zh/b', 'c'],
-            ['a', 'd', 'e'],
-            ['e', 'f']
-        ]
-    )
-    ph_ids = d.encode('sh ir zh e j v y i b a SP', lang='en')
-    ph_seq = d.decode(ph_ids)
-    print(ph_ids)
-    print(ph_seq)

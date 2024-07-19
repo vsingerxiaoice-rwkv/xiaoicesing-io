@@ -139,8 +139,10 @@ class VarianceBinarizer(BaseBinarizer):
                     'lang_seq': [
                         self.lang_map[lang if '/' not in p else p.split('/', maxsplit=1)[0]]
                         for p in utterance_label['ph_seq'].split()
-                    ],'ph_seq': self.phoneme_dictionary.encode(require('ph_seq'), lang=lang),
-                    'ph_dur': [float(x) for x in require('ph_dur').split()]
+                    ],
+                    'ph_seq': self.phoneme_dictionary.encode(require('ph_seq'), lang=lang),
+                    'ph_dur': [float(x) for x in require('ph_dur').split()],
+                    'ph_text': require('ph_seq'),
                 }
 
                 assert len(temp_dict['ph_seq']) == len(temp_dict['ph_dur']), \
@@ -256,7 +258,8 @@ class VarianceBinarizer(BaseBinarizer):
             'seconds': seconds,
             'length': length,
             'languages': np.array(meta_data['lang_seq'], dtype=np.int64),
-            'tokens': np.array(meta_data['ph_seq'], dtype=np.int64)
+            'tokens': np.array(meta_data['ph_seq'], dtype=np.int64),
+            'ph_text': meta_data['ph_text'],
         }
 
         ph_dur_sec = torch.FloatTensor(meta_data['ph_dur']).to(self.device)

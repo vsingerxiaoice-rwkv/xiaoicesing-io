@@ -295,7 +295,8 @@ class VarianceTask(BaseTask):
     def plot_dur(self, data_idx, gt_dur, pred_dur, txt=None):
         gt_dur = gt_dur[0].cpu().numpy()
         pred_dur = pred_dur[0].cpu().numpy()
-        txt = self.phoneme_dictionary.decode(txt[0].cpu().numpy()).split()
+        if txt is None:
+            txt = self.valid_dataset.metadata['ph_texts'][data_idx].split()
         title_text = f"{self.valid_dataset.metadata['spk_names'][data_idx]} - {self.valid_dataset.metadata['names'][data_idx]}"
         self.logger.all_rank_experiment.add_figure(f'dur_{data_idx}', dur_to_figure(
             gt_dur, pred_dur, txt, title_text
