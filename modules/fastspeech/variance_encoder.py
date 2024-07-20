@@ -16,8 +16,11 @@ class FastSpeech2Variance(nn.Module):
         super().__init__()
         self.predict_dur = hparams['predict_dur']
         self.linguistic_mode = 'word' if hparams['predict_dur'] else 'phoneme'
+        self.use_lang_id = hparams['use_lang_id']
 
         self.txt_embed = Embedding(vocab_size, hparams['hidden_size'], PAD_INDEX)
+        if self.use_lang_id:
+            self.lang_embed = Embedding(hparams['num_lang'] + 1, hparams['hidden_size'], padding_idx=0)
 
         if self.predict_dur:
             self.onset_embed = Embedding(2, hparams['hidden_size'])
@@ -45,7 +48,12 @@ class FastSpeech2Variance(nn.Module):
                 dur_loss_type=dur_hparams['loss_type']
             )
 
-    def forward(self, txt_tokens, midi, ph2word, ph_dur=None, word_dur=None, spk_embed=None, infer=True):
+    def forward(
+            self, txt_tokens, midi, ph2word,
+            ph_dur=None, word_dur=None,
+            spk_embed=None, languages=None,
+            infer=True
+    ):
         """
         :param txt_tokens: (train, infer) [B, T_ph]
         :param midi: (train, infer) [B, T_ph]
@@ -53,10 +61,14 @@ class FastSpeech2Variance(nn.Module):
         :param ph_dur: (train, [infer]) [B, T_ph]
         :param word_dur: (infer) [B, T_w]
         :param spk_embed: (train) [B, T_ph, H]
+        :param languages (train, infer) [B, T_ph]
         :param infer: whether inference
         :return: encoder_out, ph_dur_pred
         """
         txt_embed = self.txt_embed(txt_tokens)
+        if self.use_lang_id:
+            lang_embed = self.lang_embed(languages)
+            txt_embed += lang_embed
         if self.linguistic_mode == 'word':
             b = txt_tokens.shape[0]
             onset = torch.diff(ph2word, dim=1, prepend=ph2word.new_zeros(b, 1)) > 0

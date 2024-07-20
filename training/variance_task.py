@@ -41,6 +41,8 @@ class VarianceDataset(BaseDataset):
 
         if hparams['use_spk_id']:
             batch['spk_ids'] = torch.LongTensor([s['spk_id'] for s in samples])
+        if hparams['use_lang_id']:
+            batch['languages'] = utils.collate_nd([s['languages'] for s in samples], 0)
         if hparams['predict_dur']:
             batch['ph2word'] = utils.collate_nd([s['ph2word'] for s in samples], 0)
             batch['midi'] = utils.collate_nd([s['midi'] for s in samples], 0)
@@ -85,6 +87,7 @@ class VarianceTask(BaseTask):
         self.diffusion_type = hparams['diffusion_type']
 
         self.use_spk_id = hparams['use_spk_id']
+        self.use_lang_id = hparams['use_lang_id']
 
         self.predict_dur = hparams['predict_dur']
         if self.predict_dur:
@@ -154,6 +157,7 @@ class VarianceTask(BaseTask):
 
     def run_model(self, sample, infer=False):
         spk_ids = sample['spk_ids'] if self.use_spk_id else None  # [B,]
+        languages = sample['languages'] if self.use_lang_id else None  # [B,]
         txt_tokens = sample['tokens']  # [B, T_ph]
         ph_dur = sample['ph_dur']  # [B, T_ph]
         ph2word = sample.get('ph2word')  # [B, T_ph]
@@ -188,7 +192,8 @@ class VarianceTask(BaseTask):
                 }
 
         output = self.model(
-            txt_tokens, midi=midi, ph2word=ph2word,
+            txt_tokens, languages=languages,
+            midi=midi, ph2word=ph2word,
             ph_dur=ph_dur, mel2ph=mel2ph,
             note_midi=note_midi, note_rest=note_rest,
             note_dur=note_dur, note_glide=note_glide, mel2note=mel2note,
