@@ -447,10 +447,11 @@ class BaseTask(pl.LightningModule):
                 spk_map_dst = work_dir / 'spk_map.json'
                 spk_map_src = binary_dir / 'spk_map.json'
                 shutil.copy(spk_map_src, spk_map_dst)
+                print(f'| Copied spk map to {spk_map_dst}.')
                 lang_map_dst = work_dir / 'lang_map.json'
                 lang_map_src = binary_dir / 'lang_map.json'
                 shutil.copy(lang_map_src, lang_map_dst)
-                print(f'| Copied spk map to {spk_map_dst}.')
+                print(f'| Copied lang map to {lang_map_dst}.')
                 for lang in hparams['dictionaries'].keys():
                     dict_dst = work_dir / f'dictionary-{lang}.txt'
                     dict_src = binary_dir / f'dictionary-{lang}.txt'
