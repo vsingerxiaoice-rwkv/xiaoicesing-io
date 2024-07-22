@@ -73,8 +73,10 @@ class PhonemeDictionary:
                 merged_phonemes_inverted_index[phoneme] = target_idx
             if other_idx is not None:
                 merged_groups[other_idx] |= group
+                group.clear()
         phone_to_id = {}
         id_to_phone = []
+        cross_lingual_phonemes = set()
         idx = 1
         for phoneme in sorted(all_phonemes):
             if phoneme in merged_phonemes_inverted_index:
@@ -84,14 +86,23 @@ class PhonemeDictionary:
                         has_assigned = False
                         phone_to_id[alias] = idx
                 if not has_assigned:
-                    id_to_phone.append(tuple(sorted(merged_groups[merged_phonemes_inverted_index[phoneme]])))
+                    merged_group = sorted(merged_groups[merged_phonemes_inverted_index[phoneme]])
+                    merged_from_langs = {
+                        alias.split('/', maxsplit=1)[0]
+                        for alias in merged_group
+                        if '/' in alias
+                    }
+                    id_to_phone.append(tuple(merged_group))
                     idx += 1
+                    if len(merged_from_langs) > 1:
+                        cross_lingual_phonemes.update(ph for ph in merged_group if '/' in ph)
             else:
                 phone_to_id[phoneme] = idx
                 id_to_phone.append(phoneme)
                 idx += 1
         self._phone_to_id: Dict[str, int] = phone_to_id
         self._id_to_phone: List[Union[str, tuple]] = id_to_phone
+        self._cross_lingual_phonemes = cross_lingual_phonemes
 
     @property
     def vocab_size(self):
@@ -99,6 +110,9 @@ class PhonemeDictionary:
 
     def __len__(self):
         return self.vocab_size
+
+    def is_cross_lingual(self, phone):
+        return phone in self._cross_lingual_phonemes
 
     def encode_one(self, phone, lang=None):
         if lang is None or not self._multi_langs or phone in self._phone_to_id:

@@ -78,7 +78,11 @@ class AcousticBinarizer(BaseBinarizer):
                     'spk_id': self.spk_map[spk],
                     'spk_name': spk,
                     'lang_seq': [
-                        self.lang_map[lang if '/' not in p else p.split('/', maxsplit=1)[0]]
+                        (
+                            self.lang_map[lang if '/' not in p else p.split('/', maxsplit=1)[0]]
+                            if self.phoneme_dictionary.is_cross_lingual(p)
+                            else 0
+                        )
                         for p in utterance_label['ph_seq'].split()
                     ],
                     'ph_seq': self.phoneme_dictionary.encode(utterance_label['ph_seq'], lang=lang),
