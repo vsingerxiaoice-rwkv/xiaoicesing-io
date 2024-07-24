@@ -86,7 +86,11 @@ class DiffSingerAcousticInfer(BaseSVSInfer):
             assert lang in self.lang_map, f'Unrecognized language name: \'{lang}\'.'
         if hparams.get('use_lang_id', False):
             languages = torch.LongTensor([
-                self.lang_map[lang if '/' not in p else p.split('/', maxsplit=1)[0]]
+                (
+                    self.lang_map[lang if '/' not in p else p.split('/', maxsplit=1)[0]]
+                    if self.phoneme_dictionary.is_cross_lingual(p)
+                    else 0
+                )
                 for p in param['ph_seq'].split()
             ]).to(self.device)  # => [B, T_txt]
             batch['languages'] = languages
