@@ -24,7 +24,6 @@ class FastSpeech2Variance(nn.Module):
         if self.use_lang_id:
             self.lang_embed_scale = hparams.get('lang_embed_scale', math.sqrt(hparams['hidden_size']))
             self.lang_embed = Embedding(hparams['num_lang'] + 1, hparams['hidden_size'], padding_idx=0)
-        self.lang_embed_type = hparams.get('lang_embed_type', 'before')
 
         if self.predict_dur:
             self.onset_embed = Embedding(2, hparams['hidden_size'])
@@ -85,13 +84,10 @@ class FastSpeech2Variance(nn.Module):
         else:
             ph_dur_embed = self.ph_dur_embed(ph_dur.float()[:, :, None])
             extra_embed = ph_dur_embed
-        if self.use_lang_id and self.lang_embed_type == 'before':
+        if self.use_lang_id:
             lang_embed = self.lang_embed(languages)
             extra_embed += lang_embed * self.lang_embed_scale
         encoder_out = self.encoder(txt_embed, extra_embed, txt_tokens == 0)
-        if self.use_lang_id and self.lang_embed_type == 'after':
-            lang_embed = self.lang_embed(languages)
-            encoder_out = encoder_out + lang_embed * self.lang_embed_scale
 
         if self.predict_dur:
             midi_embed = self.midi_embed(midi)  # => [B, T_ph, H]
