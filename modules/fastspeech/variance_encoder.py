@@ -1,5 +1,3 @@
-import math
-
 import torch
 import torch.nn as nn
 from torch.nn import functional as F
@@ -22,7 +20,6 @@ class FastSpeech2Variance(nn.Module):
 
         self.txt_embed = Embedding(vocab_size, hparams['hidden_size'], PAD_INDEX)
         if self.use_lang_id:
-            self.lang_embed_scale = hparams.get('lang_embed_scale', math.sqrt(hparams['hidden_size']))
             self.lang_embed = Embedding(hparams['num_lang'] + 1, hparams['hidden_size'], padding_idx=0)
 
         if self.predict_dur:
@@ -86,7 +83,7 @@ class FastSpeech2Variance(nn.Module):
             extra_embed = ph_dur_embed
         if self.use_lang_id:
             lang_embed = self.lang_embed(languages)
-            extra_embed += lang_embed * self.lang_embed_scale
+            extra_embed += lang_embed
         encoder_out = self.encoder(txt_embed, extra_embed, txt_tokens == 0)
 
         if self.predict_dur:

@@ -1,5 +1,3 @@
-import math
-
 import torch
 import torch.nn as nn
 from torch.nn import functional as F
@@ -17,6 +15,9 @@ class FastSpeech2Acoustic(nn.Module):
     def __init__(self, vocab_size):
         super().__init__()
         self.txt_embed = Embedding(vocab_size, hparams['hidden_size'], PAD_INDEX)
+        self.use_lang_id = hparams.get('use_lang_id', False)
+        if self.use_lang_id:
+            self.lang_embed = Embedding(hparams['num_lang'] + 1, hparams['hidden_size'], padding_idx=0)
         self.dur_embed = Linear(1, hparams['hidden_size'])
         self.encoder = FastSpeech2Encoder(
             hidden_size=hparams['hidden_size'], num_layers=hparams['enc_layers'],
@@ -58,10 +59,6 @@ class FastSpeech2Acoustic(nn.Module):
         self.use_spk_id = hparams['use_spk_id']
         if self.use_spk_id:
             self.spk_embed = Embedding(hparams['num_spk'], hparams['hidden_size'])
-        self.use_lang_id = hparams.get('use_lang_id', False)
-        if self.use_lang_id:
-            self.lang_embed_scale = hparams.get('lang_embed_scale', math.sqrt(hparams['hidden_size']))
-            self.lang_embed = Embedding(hparams['num_lang'] + 1, hparams['hidden_size'], padding_idx=0)
 
     def forward_variance_embedding(self, condition, key_shift=None, speed=None, **variances):
         if self.use_variance_embeds:
@@ -92,7 +89,7 @@ class FastSpeech2Acoustic(nn.Module):
         dur_embed = self.dur_embed(dur[:, :, None])
         if self.use_lang_id:
             lang_embed = self.lang_embed(languages)
-            extra_embed = dur_embed + lang_embed * self.lang_embed_scale
+            extra_embed = dur_embed + lang_embed
         else:
             extra_embed = dur_embed
         encoder_out = self.encoder(txt_embed, extra_embed, txt_tokens == 0)
