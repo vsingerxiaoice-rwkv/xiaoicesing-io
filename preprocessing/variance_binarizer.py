@@ -132,7 +132,7 @@ class VarianceBinarizer(BaseBinarizer):
                 temp_dict = {
                     'ds_idx': item_idx,
                     'spk_id': self.spk_map[spk],
-                    'spk_name': self.speakers[ds_id],
+                    'spk_name': spk,
                     'language_id': self.lang_map[lang],
                     'language_name': lang,
                     'wav_fn': str(raw_data_dir / 'wavs' / f'{item_name}.wav'),
@@ -173,7 +173,7 @@ class VarianceBinarizer(BaseBinarizer):
 
                 meta_data_dict[f'{ds_id}:{item_name}'] = temp_dict
 
-        self.items.update(meta_data_dict)
+        return meta_data_dict
 
     def check_coverage(self):
         super().check_coverage()

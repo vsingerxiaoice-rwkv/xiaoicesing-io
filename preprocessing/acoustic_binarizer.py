@@ -95,7 +95,7 @@ class AcousticBinarizer(BaseBinarizer):
                     f'Negative ph_dur found in \'{item_name}\'.'
                 meta_data_dict[f'{ds_id}:{item_name}'] = temp_dict
 
-        self.items.update(meta_data_dict)
+        return meta_data_dict
 
     @torch.no_grad()
     def process_item(self, item_name, meta_data, binarization_args):

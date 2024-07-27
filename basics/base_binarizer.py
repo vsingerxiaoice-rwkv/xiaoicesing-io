@@ -43,13 +43,11 @@ class BaseBinarizer:
             the phoneme set.
     """
 
-    def __init__(self, data_dir=None, data_attrs=None):
-        if data_dir is None:
-            data_dir = hparams['raw_data_dir']
-        if not isinstance(data_dir, list):
-            data_dir = [data_dir]
-
-        self.raw_data_dirs = [pathlib.Path(d) for d in data_dir]
+    def __init__(self, datasets=None, data_attrs=None):
+        if datasets is None:
+            datasets = hparams['datasets']
+        self.datasets = datasets
+        self.raw_data_dirs = [pathlib.Path(ds['raw_data_dir']) for ds in self.datasets]
         self.binary_data_dir = pathlib.Path(hparams['binary_data_dir'])
         self.data_attrs = [] if data_attrs is None else data_attrs
 
@@ -58,13 +56,11 @@ class BaseBinarizer:
         self.device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
 
         self.spk_map = {}
-        self.spk_ids = hparams['spk_ids']
-        self.speakers = hparams['speakers']
+        self.spk_ids = None
         self.build_spk_map()
 
         self.lang_map = {}
         self.dictionaries = hparams['dictionaries']
-        self.languages = hparams['languages']
         self.build_lang_map()
 
         self.items = {}
@@ -76,58 +72,58 @@ class BaseBinarizer:
         self.timestep = hparams['hop_size'] / hparams['audio_sample_rate']
 
     def build_spk_map(self):
-        assert isinstance(self.speakers, list), 'Speakers must be a list'
-        assert len(self.speakers) == len(self.raw_data_dirs), \
-            'Number of raw data dirs must equal number of speaker names!'
-        if len(self.spk_ids) == 0:
-            self.spk_ids = list(range(len(self.raw_data_dirs)))
-        else:
-            assert len(self.spk_ids) == len(self.raw_data_dirs), \
-                'Length of explicitly given spk_ids must equal the number of raw datasets.'
-        assert max(self.spk_ids) < hparams['num_spk'], \
-            f'Index in spk_id sequence {self.spk_ids} is out of range. All values should be smaller than num_spk.'
+        spk_ids = [ds.get('spk_id') for ds in self.datasets]
+        assigned_spk_ids = {spk_id for spk_id in spk_ids if spk_id is not None}
+        for i in range(len(spk_ids)):
+            if spk_ids[i] is not None:
+                continue
+            idx = 0
+            while idx in assigned_spk_ids:
+                idx += 1
+            spk_ids[i] = idx
+        assert max(spk_ids) < hparams['num_spk'], \
+            f'Index in spk_id sequence {spk_ids} is out of range. All values should be smaller than num_spk.'
 
-        for spk_name, spk_id in zip(self.speakers, self.spk_ids):
+        for spk_id, dataset in zip(spk_ids, self.datasets):
+            spk_name = dataset['speaker']
             if spk_name in self.spk_map and self.spk_map[spk_name] != spk_id:
                 raise ValueError(f'Invalid speaker ID assignment. Name \'{spk_name}\' is assigned '
                                  f'with different speaker IDs: {self.spk_map[spk_name]} and {spk_id}.')
             self.spk_map[spk_name] = spk_id
+        self.spk_ids = spk_ids
 
         print("| spk_map: ", self.spk_map)
 
     def build_lang_map(self):
-        assert isinstance(self.languages, list), 'Languages must be a list'
-        assert len(self.languages) == len(self.raw_data_dirs), \
-            'Number of raw data dirs must equal number of language names!'
-        for lang in self.languages:
-            assert lang in self.dictionaries, f'Unrecognized language name: {lang}'
         assert len(self.dictionaries.keys()) <= hparams['num_lang'], \
             'Number of languages must not be greater than num_lang!'
+        for dataset in self.datasets:
+            assert dataset['language'] in self.dictionaries, f'Unrecognized language name: {dataset["language"]}'
 
         for lang_id, lang_name in enumerate(sorted(self.dictionaries.keys()), start=1):
             self.lang_map[lang_name] = lang_id
 
         print("| lang_map: ", self.lang_map)
 
-    def load_meta_data(self, raw_data_dir: pathlib.Path, ds_id, spk, lang):
+    def load_meta_data(self, raw_data_dir: pathlib.Path, ds_id, spk, lang) -> dict:
         raise NotImplementedError()
 
-    def split_train_valid_set(self, item_names):
+    def split_train_valid_set(self, prefixes: list):
         """
         Split the dataset into training set and validation set.
         :return: train_item_names, valid_item_names
         """
-        prefixes = {str(pr): 1 for pr in hparams['test_prefixes']}
+        prefixes = {str(pr): 1 for pr in prefixes}
         valid_item_names = {}
         # Add prefixes that specified speaker index and matches exactly item name to test set
         for prefix in deepcopy(prefixes):
-            if prefix in item_names:
+            if prefix in self.item_names:
                 valid_item_names[prefix] = 1
                 prefixes.pop(prefix)
         # Add prefixes that exactly matches item name without speaker id to test set
         for prefix in deepcopy(prefixes):
             matched = False
-            for name in item_names:
+            for name in self.item_names:
                 if name.split(':')[-1] == prefix:
                     valid_item_names[name] = 1
                     matched = True
@@ -136,7 +132,7 @@ class BaseBinarizer:
         # Add names with one of the remaining prefixes to test set
         for prefix in deepcopy(prefixes):
             matched = False
-            for name in item_names:
+            for name in self.item_names:
                 if name.startswith(prefix):
                     valid_item_names[name] = 1
                     matched = True
@@ -144,7 +140,7 @@ class BaseBinarizer:
                 prefixes.pop(prefix)
         for prefix in deepcopy(prefixes):
             matched = False
-            for name in item_names:
+            for name in self.item_names:
                 if name.split(':')[-1].startswith(prefix):
                     valid_item_names[name] = 1
                     matched = True
@@ -160,7 +156,7 @@ class BaseBinarizer:
 
         valid_item_names = list(valid_item_names.keys())
         assert len(valid_item_names) > 0, 'Validation set is empty!'
-        train_item_names = [x for x in item_names if x not in set(valid_item_names)]
+        train_item_names = [x for x in self.item_names if x not in set(valid_item_names)]
         assert len(train_item_names) > 0, 'Training set is empty!'
 
         return train_item_names, valid_item_names
@@ -184,10 +180,19 @@ class BaseBinarizer:
 
     def process(self):
         # load each dataset
-        for ds_id, (data_dir, spk, lang) in enumerate(zip(self.raw_data_dirs, self.speakers, self.languages)):
-            self.load_meta_data(pathlib.Path(data_dir), ds_id=ds_id, spk=spk, lang=lang)
+        test_prefixes = []
+        for ds_id, dataset in enumerate(self.datasets):
+            items = self.load_meta_data(
+                pathlib.Path(dataset['raw_data_dir']),
+                ds_id=ds_id, spk=dataset['speaker'], lang=dataset['language']
+            )
+            self.items.update(items)
+            test_prefixes.extend(
+                f'{ds_id}:{prefix}'
+                for prefix in dataset.get('test_prefixes', [])
+            )
         self.item_names = sorted(list(self.items.keys()))
-        self._train_item_names, self._valid_item_names = self.split_train_valid_set(self.item_names)
+        self._train_item_names, self._valid_item_names = self.split_train_valid_set(test_prefixes)
 
         if self.binarization_args['shuffle']:
             random.shuffle(self.item_names)
