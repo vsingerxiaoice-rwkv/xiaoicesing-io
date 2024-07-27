@@ -102,7 +102,7 @@ class PhonemeDictionary:
                 idx += 1
         self._phone_to_id: Dict[str, int] = phone_to_id
         self._id_to_phone: List[Union[str, tuple]] = id_to_phone
-        self._cross_lingual_phonemes = cross_lingual_phonemes
+        self._cross_lingual_phonemes = frozenset(cross_lingual_phonemes)
 
     @property
     def vocab_size(self):
@@ -110,6 +110,10 @@ class PhonemeDictionary:
 
     def __len__(self):
         return self.vocab_size
+
+    @property
+    def cross_lingual_phonemes(self):
+        return self._cross_lingual_phonemes
 
     def is_cross_lingual(self, phone):
         return phone in self._cross_lingual_phonemes

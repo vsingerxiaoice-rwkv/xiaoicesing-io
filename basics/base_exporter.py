@@ -33,6 +33,18 @@ class BaseExporter:
         else:
             return {}
 
+    # noinspection PyMethodMayBeStatic
+    def build_lang_map(self) -> dict:
+        lang_map_fn = pathlib.Path(hparams['work_dir']) / 'lang_map.json'
+        if lang_map_fn.exists():
+            with open(lang_map_fn, 'r', encoding='utf8') as f:
+                lang_map = json.load(f)
+            assert isinstance(lang_map, dict) and len(lang_map) > 0, 'Invalid or empty language map!'
+            assert len(lang_map) == len(set(lang_map.values())), 'Duplicate language id in language map!'
+            return lang_map
+        else:
+            return {}
+
     def build_model(self) -> nn.Module:
         """
         Creates an instance of nn.Module and load its state dict on the target device.
