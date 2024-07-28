@@ -414,7 +414,7 @@ class DiffSingerAcousticExporter(BaseExporter):
         ph_path = path / f'{self.model_name}.phonemes.json'
         self.phoneme_dictionary.dump(ph_path)
         print(f'| export phonemes => {ph_path}')
-        lang_path = path / 'languages.json'
+        lang_path = path / f'{self.model_name}.languages.json'
         with open(lang_path, 'w', encoding='utf8') as f:
             json.dump(self.lang_map, f, ensure_ascii=False, indent=2)
         print(f'| export languages => {lang_path}')
