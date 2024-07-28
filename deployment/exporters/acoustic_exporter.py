@@ -124,6 +124,7 @@ class DiffSingerAcousticExporter(BaseExporter):
         dsconfig = {
             # basic configs
             'phonemes': f'{self.model_name}.phonemes.json',
+            'languages': f'{self.model_name}.languages.json',
             'use_lang_id': hparams.get('use_lang_id', False),
             'acoustic': f'{model_name}.onnx',
             'hidden_size': hparams['hidden_size'],

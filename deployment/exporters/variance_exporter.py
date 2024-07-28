@@ -155,7 +155,7 @@ class DiffSingerVarianceExporter(BaseExporter):
         dsconfig = {
             # basic configs
             'phonemes': f'{self.model_name}.phonemes.json',
-            'languages': sorted(self.lang_map.keys()),
+            'languages': f'{self.model_name}.languages.json',
             'use_lang_id': hparams.get('use_lang_id', False),
             'linguistic': f'{model_name}.linguistic.onnx',
             'hidden_size': self.model.hidden_size,
