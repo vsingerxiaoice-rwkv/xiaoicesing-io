@@ -43,6 +43,12 @@ class PhonemeDictionary:
                                 f"Invalid phoneme tag '{phoneme}' in merged group: "
                                 f"unrecognized language name '{lang}'."
                             )
+                        unique_name = phoneme if self._multi_langs else name
+                        if unique_name not in all_phonemes:
+                            raise ValueError(
+                                f"Invalid phoneme tag '{phoneme}' in merged group: "
+                                f"not found in phoneme set."
+                            )
                 merged_groups = [set(phones) for phones in merged_groups if len(phones) > 1]
             else:
                 _merged_groups = []
