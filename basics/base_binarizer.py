@@ -74,13 +74,14 @@ class BaseBinarizer:
     def build_spk_map(self):
         spk_ids = [ds.get('spk_id') for ds in self.datasets]
         assigned_spk_ids = {spk_id for spk_id in spk_ids if spk_id is not None}
+        idx = 0
         for i in range(len(spk_ids)):
             if spk_ids[i] is not None:
                 continue
-            idx = 0
             while idx in assigned_spk_ids:
                 idx += 1
             spk_ids[i] = idx
+            assigned_spk_ids.add(idx)
         assert max(spk_ids) < hparams['num_spk'], \
             f'Index in spk_id sequence {spk_ids} is out of range. All values should be smaller than num_spk.'
 
