@@ -33,6 +33,7 @@ class DiffSingerVarianceExporter(BaseExporter):
         self.spk_map: dict = self.build_spk_map()
         self.lang_map: dict = self.build_lang_map()
         self.phoneme_dictionary = load_phoneme_dictionary()
+        self.use_lang_id = hparams.get('use_lang_id', False) and len(self.phoneme_dictionary.cross_lingual_phonemes) > 0
         self.model = self.build_model()
         self.linguistic_encoder_cache_path = self.cache_dir / 'linguistic.onnx'
         self.dur_predictor_cache_path = self.cache_dir / 'dur.onnx'
@@ -156,7 +157,7 @@ class DiffSingerVarianceExporter(BaseExporter):
             # basic configs
             'phonemes': f'{self.model_name}.phonemes.json',
             'languages': f'{self.model_name}.languages.json',
-            'use_lang_id': hparams.get('use_lang_id', False),
+            'use_lang_id': self.use_lang_id,
             'linguistic': f'{model_name}.linguistic.onnx',
             'hidden_size': self.model.hidden_size,
             'predict_dur': self.model.predict_dur,
@@ -205,7 +206,7 @@ class DiffSingerVarianceExporter(BaseExporter):
                 1: 'n_tokens'
             }
         }
-        input_lang_id = hparams.get('use_lang_id', False)
+        input_lang_id = self.use_lang_id
         input_spk_embed = hparams['use_spk_id'] and not self.freeze_spk
 
         print(f'Exporting {self.fs2_class_name}...')

@@ -48,6 +48,8 @@ class FastSpeech2AcousticONNX(FastSpeech2Acoustic):
             torch.LongTensor(cross_lingual_token_idx),
             persistent=False
         )  # [N,]
+        if len(cross_lingual_token_idx) == 0:
+            self.use_lang_id = False
 
         # for temporary compatibility; will be completely removed in the future
         self.f0_embed_type = hparams.get('f0_embed_type', 'continuous')
@@ -136,6 +138,8 @@ class FastSpeech2VarianceONNX(FastSpeech2Variance):
             torch.LongTensor(cross_lingual_token_idx),
             persistent=False
         )
+        if len(cross_lingual_token_idx) == 0:
+            self.use_lang_id = False
         self.lr = LengthRegulator()
 
     def forward_encoder_word(self, tokens, word_div, word_dur, languages=None):

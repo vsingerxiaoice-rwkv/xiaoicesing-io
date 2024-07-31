@@ -33,6 +33,7 @@ class DiffSingerAcousticExporter(BaseExporter):
         self.spk_map: dict = self.build_spk_map()
         self.lang_map: dict = self.build_lang_map()
         self.phoneme_dictionary = load_phoneme_dictionary()
+        self.use_lang_id = hparams.get('use_lang_id', False) and len(self.phoneme_dictionary.cross_lingual_phonemes) > 0
         self.model = self.build_model()
         self.fs2_aux_cache_path = self.cache_dir / (
             'fs2_aux.onnx' if self.model.use_shallow_diffusion else 'fs2.onnx'
@@ -125,7 +126,7 @@ class DiffSingerAcousticExporter(BaseExporter):
             # basic configs
             'phonemes': f'{self.model_name}.phonemes.json',
             'languages': f'{self.model_name}.languages.json',
-            'use_lang_id': hparams.get('use_lang_id', False),
+            'use_lang_id': self.use_lang_id,
             'acoustic': f'{model_name}.onnx',
             'hidden_size': hparams['hidden_size'],
             'vocoder': 'nsf_hifigan_44.1k_hop512_128bin_2024.02',
@@ -217,7 +218,7 @@ class DiffSingerAcousticExporter(BaseExporter):
             dynamix_axes['spk_embed'] = {
                 1: 'n_frames'
             }
-        if hparams.get('use_lang_id'):
+        if self.use_lang_id:
             kwargs['languages'] = torch.zeros_like(tokens)
             input_names.append('languages')
             dynamix_axes['languages'] = {
