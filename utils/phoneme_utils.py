@@ -8,8 +8,23 @@ PAD_INDEX = 0
 
 
 class PhonemeDictionary:
-    def __init__(self, dictionaries: Dict[str, pathlib.Path], merged_groups: List[List[str]] = None):
+    def __init__(
+            self,
+            dictionaries: Dict[str, pathlib.Path],
+            extra_phonemes: List[str] = None,
+            merged_groups: List[List[str]] = None
+    ):
         all_phonemes = {'AP', 'SP'}
+        if extra_phonemes:
+            for ph in extra_phonemes:
+                if '/' in ph:
+                    lang, name = ph.split('/', maxsplit=1)
+                    if lang not in dictionaries:
+                        raise ValueError(
+                            f"Invalid phoneme tag '{ph}' in extra phonemes: "
+                            f"unrecognized language name '{lang}'."
+                        )
+                all_phonemes.add(ph)
         self._multi_langs = len(dictionaries) > 1
         for lang, dict_path in dictionaries.items():
             with open(dict_path, 'r', encoding='utf8') as dict_file:
@@ -192,5 +207,6 @@ def load_phoneme_dictionary() -> PhonemeDictionary:
         }
     return PhonemeDictionary(
         dictionaries=dicts,
+        extra_phonemes=hparams.get('extra_phonemes'),
         merged_groups=hparams.get('merged_phoneme_groups')
     )
