@@ -37,6 +37,8 @@ class PhonemeDictionary:
                                 f"Invalid phoneme tag '{phoneme}' in dictionary '{dict_path}': "
                                 f"should not contain the reserved character '/'."
                             )
+                        if phoneme in all_phonemes:
+                            continue
                         if self._multi_langs:
                             all_phonemes.add(f'{lang}/{phoneme}')
                         else:
@@ -186,10 +188,10 @@ def load_phoneme_dictionary() -> PhonemeDictionary:
     if config_dicts is not None:
         dicts = {}
         for lang, config_dict_path in config_dicts.items():
-            config_dict_path = pathlib.Path(hparams['work_dir']) / f'dictionary-{lang}.txt'
-            if not config_dict_path.exists():
-                config_dict_path = pathlib.Path(config_dict_path)
-            if not config_dict_path.exists():
+            dict_path = pathlib.Path(hparams['work_dir']) / f'dictionary-{lang}.txt'
+            if not dict_path.exists():
+                dict_path = pathlib.Path(config_dict_path)
+            if not dict_path.exists():
                 raise FileNotFoundError(
                     f"Could not locate dictionary for language '{lang}'."
                 )
