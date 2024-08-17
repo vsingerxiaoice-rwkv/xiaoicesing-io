@@ -195,17 +195,17 @@ def load_phoneme_dictionary() -> PhonemeDictionary:
                 raise FileNotFoundError(
                     f"Could not locate dictionary for language '{lang}'."
                 )
-            dicts[lang] = config_dict_path
+            dicts[lang] = dict_path
     else:
-        config_dict_path = pathlib.Path(hparams['dictionary'])
-        if not config_dict_path.exists():
-            config_dict_path = pathlib.Path(hparams['work_dir']) / 'dictionary.txt'
-        if not config_dict_path.exists():
+        dict_path = pathlib.Path(hparams['work_dir']) / 'dictionary.txt'
+        if not dict_path.exists():
+            dict_path = pathlib.Path(hparams['dictionary'])
+        if not dict_path.exists():
             raise FileNotFoundError(
                 f"Could not locate dictionary file."
             )
         dicts = {
-            'default': config_dict_path
+            'default': dict_path
         }
     return PhonemeDictionary(
         dictionaries=dicts,
