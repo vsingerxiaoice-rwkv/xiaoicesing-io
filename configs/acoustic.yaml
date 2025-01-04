@@ -3,21 +3,10 @@ base_config:
 
 task_cls: training.acoustic_task.AcousticTask
 
-dictionaries:
-  zh: dictionaries/opencpop-extension.txt
+dictionaries: {}
 extra_phonemes: []
 merged_phoneme_groups: []
-datasets:
-  - raw_data_dir: 'data/opencpop/raw'
-    speaker: opencpop
-    spk_id: 0
-    language: zh
-    test_prefixes:
-      - '2044'
-      - '2086'
-      - '2092'
-      - '2093'
-      - '2100'
+datasets: []
 
 vocoder: NsfHifiGAN
 vocoder_ckpt: checkpoints/nsf_hifigan_44.1k_hop512_128bin_2024.02/model.ckpt
