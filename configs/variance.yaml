@@ -32,6 +32,8 @@ dictionary: dictionaries/opencpop-extension.txt
 
 use_spk_id: false
 
+enc_ffn_kernel_size: 3
+use_rope: true
 rel_pos: true
 hidden_size: 256
 
