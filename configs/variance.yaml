@@ -26,6 +26,13 @@ use_lang_id: false
 num_lang: 1
 use_spk_id: false
 num_spk: 1
+
+enc_ffn_kernel_size: 3
+use_rope: true
+rel_pos: true
+hidden_size: 256
+
+
 predict_dur: true
 predict_pitch: true
 predict_energy: false
